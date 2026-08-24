@@ -63,7 +63,7 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
           </Pill>
         }
       >
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-5 shadow-[var(--aree-shadow-sm)] sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Fire detections"
             value={fireCount}
@@ -100,16 +100,16 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
             sub={`${data.aligned_fires ?? 0} aligned detections`}
           />
           <div className="min-w-0">
-            <div className="aree-eyebrow mb-1.5 flex items-center justify-between text-[10px]">
-              <span>Transport score</span>
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="aree-eyebrow text-[10.5px]">Transport score</span>
               <span className="aree-num text-[13px] font-bold" style={{ color: scoreColor }}>
                 {transportScore}/100
               </span>
             </div>
             <ProgressBar percent={transportScore} color={scoreColor} label="Transport score" />
             <div className="mt-3">
-              <div className="aree-eyebrow mb-1.5 flex items-center justify-between text-[10px]">
-                <span>Confidence</span>
+              <div className="mb-1.5 flex items-center justify-between">
+                <span className="aree-eyebrow text-[10.5px]">Confidence</span>
                 <span
                   className="aree-num text-[13px] font-bold"
                   style={{ color: confidenceColor(data.confidence_score) }}
@@ -127,20 +127,20 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
         </div>
 
         {data.pollution_cause ? (
-          <div className="border-aree-border mt-5 border-t pt-4">
+          <div className="mt-5 border-t border-aree-border pt-4">
             <div className="aree-eyebrow mb-2 flex items-center gap-2">
-              <Flame className="h-3.5 w-3.5" aria-hidden />
+              <Flame className="h-3.5 w-3.5 text-aree-orange" aria-hidden />
               Causal attribution (Pathway DAG)
             </div>
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="text-aree-text text-[15px] font-bold">
+              <span className="text-[15px] font-bold text-aree-text">
                 {data.pollution_cause.replace(/_/g, " ")}
               </span>
-              <span className="text-aree-muted text-[11px]">
+              <span className="text-[11px] text-aree-muted">
                 confidence {((data.cause_confidence ?? 0) * 100).toFixed(0)}%
               </span>
               {data.transport_probability !== undefined ? (
-                <span className="text-aree-muted text-[11px]">
+                <span className="text-[11px] text-aree-muted">
                   · transport probability{" "}
                   {((data.transport_probability ?? 0) * 100).toFixed(0)}%
                 </span>
@@ -149,7 +149,7 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
             {data.cause_factors && data.cause_factors.length > 0 ? (
               <ul className="mt-2.5 space-y-1">
                 {data.cause_factors.map((factor) => (
-                  <li key={factor} className="text-aree-body text-[12px] leading-relaxed">
+                  <li key={factor} className="text-[12px] leading-relaxed text-aree-body">
                     ▸ {factor}
                   </li>
                 ))}
@@ -159,16 +159,16 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
         ) : null}
 
         {data.firms_error ? (
-          <div className="mt-4 rounded-lg border border-[#7f1d1d] bg-[rgba(239,68,68,0.06)] px-4 py-3">
-            <span className="text-aree-red text-[11px] font-bold tracking-[0.08em] uppercase">
+          <div className="mt-5 rounded-[var(--aree-radius-sm)] border border-[#7f1d1d] p-4 shadow-[var(--aree-shadow-sm)]" style={{ background: "color-mix(in srgb, var(--aree-red) 6%, transparent)" }}>
+            <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-aree-red">
               ⚠ Satellite verification temporarily unavailable
             </span>
-            <span className="text-aree-muted ml-2 text-[11px]">{data.firms_error}</span>
+            <span className="ml-3 text-[11.5px] text-aree-muted">{data.firms_error}</span>
           </div>
         ) : null}
       </Panel>
 
-      <Disclosure summary="Satellite engine data" className="mt-3">
+      <Disclosure summary="Satellite engine data" className="mt-4">
         <div className="grid gap-x-8 sm:grid-cols-2">
           <KeyValue label="FIRMS status" value={orDash(data.firms_status)} color={statusColor} />
           <KeyValue label="Dataset" value={orDash(data.firms_dataset)} />

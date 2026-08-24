@@ -1,37 +1,41 @@
-// AREE visual identity. The semantic ramp (AQI bands, GRAP stages, freshness)
-// is unchanged; the surface tokens mirror the CSS custom properties in
-// globals.css so charts rendered in JS match the panels around them.
+// AREE Visual Theme — Environmental Intelligence Command Center
+// Light warm ivory/cream surface system with deep forest green brand identity.
 
 export const COLORS = {
-  bg: "#070c15",
-  bgSoft: "#0a0f1a",
-  card: "#0e1523",
-  cardRaised: "#131c2e",
-  border: "#1b2740",
-  borderStrong: "#2b3b57",
-  text: "#f1f5f9",
-  body: "#dbe4ef",
-  muted: "#94a3b8",
-  dim: "#64748b",
-  faint: "#475569",
-  accent: "#38bdf8",
-  blue: "#3b82f6",
-  cyan: "#00FFD1",
-  teal: "#2dd4bf",
-  green: "#22c55e",
-  lime: "#84cc16",
-  yellow: "#eab308",
-  orange: "#f97316",
-  red: "#ef4444",
-  crimson: "#dc2626",
-  amber: "#fbbf24",
+  bg: "#f5f4ed",
+  bgSoft: "#edebe2",
+  surface1: "#ffffff",
+  surface2: "#faf9f4",
+  surface3: "#f2efe6",
+  surface4: "#e8e4d7",
+  card: "#ffffff",
+  cardRaised: "#ffffff",
+  border: "#e4e0d4",
+  borderStrong: "#cfcaba",
+  text: "#17231c",
+  body: "#2d3748",
+  muted: "#64748b",
+  dim: "#788796",
+  faint: "#9ba8b5",
+  forest: "#143828",
+  accent: "#22c55e",
+  green: "#16a34a",
+  lime: "#65a30d",
+  yellow: "#ca8a04",
+  amber: "#d97706",
+  orange: "#ea580c",
+  red: "#dc2626",
+  crimson: "#991b1b",
+  teal: "#0d9488",
+  cyan: "#0284c7",
+  blue: "#2563eb",
 } as const;
 
 export function aqiColor(aqi: number | null | undefined): string {
   if (aqi === null || aqi === undefined) return COLORS.dim;
   if (aqi <= 50) return COLORS.green;
   if (aqi <= 100) return COLORS.lime;
-  if (aqi <= 200) return COLORS.yellow;
+  if (aqi <= 200) return COLORS.amber;
   if (aqi <= 300) return COLORS.orange;
   if (aqi <= 400) return COLORS.red;
   return COLORS.crimson;
@@ -42,7 +46,7 @@ export function grapColor(stage: string | null | undefined): string {
   if (s.includes("IV")) return COLORS.crimson;
   if (s.includes("III")) return COLORS.red;
   if (s.includes("II")) return COLORS.orange;
-  if (s.includes("I") && !s.includes("II") && !s.includes("IV")) return COLORS.yellow;
+  if (s.includes("I") && !s.includes("II") && !s.includes("IV")) return COLORS.amber;
   return COLORS.green;
 }
 
@@ -50,13 +54,13 @@ export function eriColor(score: number | null | undefined): string {
   const v = score ?? 0;
   if (v >= 76) return COLORS.crimson;
   if (v >= 51) return COLORS.red;
-  if (v >= 26) return COLORS.yellow;
+  if (v >= 26) return COLORS.amber;
   return COLORS.green;
 }
 
 export function modeColor(mode: string | null | undefined): string {
   if (mode === "TRIGGERED") return COLORS.red;
-  if (mode === "WATCH") return COLORS.orange;
+  if (mode === "WATCH") return COLORS.amber;
   return COLORS.green;
 }
 
@@ -67,7 +71,7 @@ export function riskLevelColor(level: string | null | undefined): string {
     case "high":
       return COLORS.red;
     case "moderate":
-      return COLORS.yellow;
+      return COLORS.amber;
     case "low":
       return COLORS.green;
     default:
@@ -75,16 +79,15 @@ export function riskLevelColor(level: string | null | undefined): string {
   }
 }
 
-/** Colour map used by the AI risk interpretation chips. */
 export function llmValueColor(value: string | null | undefined): string {
   const map: Record<string, string> = {
     low: COLORS.green,
-    moderate: COLORS.yellow,
+    moderate: COLORS.amber,
     high: COLORS.red,
     severe: COLORS.crimson,
     unknown: COLORS.faint,
     rising: COLORS.red,
-    stable: COLORS.yellow,
+    stable: COLORS.amber,
     falling: COLORS.green,
   };
   return map[value ?? "unknown"] ?? COLORS.faint;
@@ -110,14 +113,14 @@ export function transportLabel(label: string | null | undefined) {
 export function confidenceColor(score: number | null | undefined): string {
   const v = score ?? 0;
   if (v >= 70) return COLORS.green;
-  if (v >= 50) return COLORS.yellow;
+  if (v >= 50) return COLORS.amber;
   return COLORS.red;
 }
 
 export function trendColor(direction: string | null | undefined): string {
   if (direction === "falling") return COLORS.green;
   if (direction === "rising") return COLORS.red;
-  return COLORS.yellow;
+  return COLORS.amber;
 }
 
 export function urgencyColor(urgency: string | null | undefined): string {
@@ -127,7 +130,7 @@ export function urgencyColor(urgency: string | null | undefined): string {
     case "HIGH":
       return COLORS.red;
     case "MODERATE":
-      return COLORS.yellow;
+      return COLORS.amber;
     default:
       return COLORS.green;
   }
@@ -143,10 +146,6 @@ export function orDash(value: unknown, fallback = "—"): string {
   return String(value);
 }
 
-/**
- * Ordinal severity of a GRAP stage string, for picking the worst stage across
- * the network. The backend owns stage assignment; this only orders labels.
- */
 export function grapRank(stage: string | null | undefined): number {
   const s = String(stage ?? "").toUpperCase();
   if (s.includes("IV")) return 4;
@@ -156,7 +155,6 @@ export function grapRank(stage: string | null | undefined): number {
   return 0;
 }
 
-/** Colour for a CPCB band label as reported by the backend. */
 export function bandColor(band: string | null | undefined): string {
   const b = String(band ?? "").toLowerCase();
   if (b.includes("severe")) return COLORS.crimson;
@@ -168,7 +166,6 @@ export function bandColor(band: string | null | undefined): string {
   return COLORS.dim;
 }
 
-/** Human label for the regulatory engine mode. */
 export function modeLabel(mode: string | null | undefined): string {
   if (mode === "TRIGGERED") return "Triggered";
   if (mode === "WATCH") return "Watch";

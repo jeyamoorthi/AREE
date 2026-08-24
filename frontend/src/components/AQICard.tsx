@@ -43,18 +43,18 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
     const age = formatDuration(data.stale_seconds);
     return (
       <div
-        className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border px-4 py-3"
+        className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-[var(--aree-radius-md)] border px-4 py-3 shadow-[var(--aree-shadow-sm)]"
         style={{
-          borderColor: "color-mix(in srgb, #eab308 45%, transparent)",
-          background: "color-mix(in srgb, #eab308 6%, transparent)",
+          borderColor: "color-mix(in srgb, var(--aree-yellow) 45%, transparent)",
+          background: "color-mix(in srgb, var(--aree-yellow) 6%, transparent)",
         }}
         role="status"
       >
         <span className="text-[13px] font-bold" style={{ color: look.color }}>
           {look.marker} {look.badge}
         </span>
-        <span className="aree-num text-aree-body text-xs">WAQI reading {age} ago</span>
-        <span className="text-aree-dim text-xs">
+        <span className="aree-num text-xs text-aree-body">WAQI reading {age} ago</span>
+        <span className="text-xs text-aree-dim">
           Older than expected, still within the window for an hourly feed.
         </span>
       </div>
@@ -70,47 +70,47 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
 
   return (
     <div
-      className="mb-5 overflow-hidden rounded-xl border-2"
+      className="mb-5 overflow-hidden rounded-[var(--aree-radius-md)] border-2 shadow-[var(--aree-shadow-sm)]"
       style={{
-        borderColor: "#f97316",
+        borderColor: "var(--aree-orange)",
         background:
-          "linear-gradient(180deg, color-mix(in srgb, #f97316 11%, transparent), color-mix(in srgb, #f97316 4%, transparent))",
+          "linear-gradient(180deg, color-mix(in srgb, var(--aree-orange) 11%, transparent), color-mix(in srgb, var(--aree-orange) 4%, transparent))",
       }}
       role="alert"
     >
-      <div className="flex items-center gap-2 border-b border-[color-mix(in_srgb,#f97316_35%,transparent)] px-5 py-2.5">
-        <AlertTriangle className="text-aree-orange h-4 w-4 shrink-0" aria-hidden />
-        <span className="text-aree-orange text-[13px] font-bold tracking-[0.12em] uppercase">
+      <div className="flex items-center gap-2 border-b border-[color-mix(in_srgb,var(--aree-orange)_35%,transparent)] px-5 py-2.5">
+        <AlertTriangle className="h-4 w-4 shrink-0 text-aree-orange" aria-hidden />
+        <span className="text-[13px] font-bold uppercase tracking-[0.12em] text-aree-orange">
           Upstream data stale
         </span>
       </div>
 
       <div className="px-5 py-6 text-center">
-        <div className="aree-hero-num text-aree-orange text-[clamp(2rem,1.2rem+3.5vw,3.25rem)]">
+        <div className="aree-hero-num text-[clamp(2rem,1.2rem+3.5vw,3.25rem)] text-aree-orange">
           {age ?? "—"}
         </div>
-        <div className="text-aree-orange/80 mt-1.5 text-[11px] font-bold tracking-[0.28em] uppercase">
+        <div className="mt-1.5 text-[11px] font-bold uppercase tracking-[0.28em] text-aree-orange/80">
           Behind
         </div>
       </div>
 
-      <div className="grid gap-px bg-[color-mix(in_srgb,#f97316_25%,transparent)] sm:grid-cols-3">
-        <div className="bg-aree-bg/40 px-5 py-3">
+      <div className="grid gap-px bg-[color-mix(in_srgb,var(--aree-orange)_25%,transparent)] sm:grid-cols-3">
+        <div className="bg-[var(--aree-surface-1)] px-5 py-3">
           <div className="aree-eyebrow text-[9.5px]">Last reading</div>
-          <div className="aree-num text-aree-body mt-1 text-[12px] font-semibold">
+          <div className="aree-num mt-1 text-[12px] font-semibold text-aree-body">
             {localReading ?? "Not available"}
           </div>
           {utcReading ? (
-            <div className="aree-num text-aree-dim text-[11px]">{utcReading}</div>
+            <div className="aree-num text-[11px] text-aree-dim">{utcReading}</div>
           ) : null}
         </div>
-        <div className="bg-aree-bg/40 px-5 py-3">
+        <div className="bg-[var(--aree-surface-1)] px-5 py-3">
           <div className="aree-eyebrow text-[9.5px]">WAQI sync</div>
-          <div className="aree-num text-aree-body mt-1 text-[12px] font-semibold">
+          <div className="aree-num mt-1 text-[12px] font-semibold text-aree-body">
             {lastSync ?? "Not reported"}
           </div>
         </div>
-        <div className="bg-aree-bg/40 px-5 py-3">
+        <div className="bg-[var(--aree-surface-1)] px-5 py-3">
           <div className="aree-eyebrow text-[9.5px]">Last published AQI</div>
           <div
             className="aree-num mt-1 text-[12px] font-bold"
@@ -121,8 +121,8 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
         </div>
       </div>
 
-      <p className="text-aree-body border-t border-[color-mix(in_srgb,#f97316_30%,transparent)] px-5 py-3 text-[12px] leading-relaxed">
-        <span className="text-aree-orange font-bold">⚠</span> Regulatory decisions use the
+      <p className="border-t border-[color-mix(in_srgb,var(--aree-orange)_30%,transparent)] px-5 py-3 text-[12px] leading-relaxed text-aree-body">
+        <span className="font-bold text-aree-orange">⚠</span> Regulatory decisions use the
         last published value and should not be treated as current conditions.
       </p>
     </div>
@@ -132,11 +132,11 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
 export function IngestionErrorBanner({ data }: { data: StationDetail }) {
   if (data.ingestion_status !== "error" || !data.ingestion_error) return null;
   return (
-    <div className="mb-4 rounded-xl border border-[#7f1d1d] bg-[rgba(239,68,68,0.06)] px-4 py-3">
-      <span className="text-aree-red text-[11px] font-bold tracking-[0.1em] uppercase">
+    <div className="mb-4 rounded-[var(--aree-radius-sm)] border border-[#7f1d1d] bg-[rgba(239,68,68,0.06)] px-4 py-3 shadow-[var(--aree-shadow-sm)]">
+      <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-aree-red">
         × WAQI feed temporarily unavailable
       </span>
-      <span className="text-aree-muted ml-2 text-[11px]">{data.ingestion_error}</span>
+      <span className="ml-3 text-[11.5px] text-aree-muted">{data.ingestion_error}</span>
     </div>
   );
 }
@@ -144,7 +144,7 @@ export function IngestionErrorBanner({ data }: { data: StationDetail }) {
 /** Compact pollutant readings. Missing pollutants are stated, not hidden. */
 export function PollutantGrid({ data }: { data: StationDetail }) {
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-[var(--aree-border)] sm:grid-cols-3 lg:grid-cols-6">
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-border shadow-[var(--aree-shadow-sm)] sm:grid-cols-3 lg:grid-cols-6">
       {POLLUTANTS.map(({ name, key, waqiKey }) => {
         const value = data[key] as number | null | undefined;
         const available = value !== null && value !== undefined;
@@ -152,7 +152,7 @@ export function PollutantGrid({ data }: { data: StationDetail }) {
         return (
           <div
             key={name}
-            className="bg-aree-card px-4 py-3.5"
+            className="bg-aree-surface-1 px-4 py-3.5 transition-colors hover:bg-aree-surface-2"
             title={
               available
                 ? `${name}: WAQI sub-index ${value}`
@@ -160,10 +160,10 @@ export function PollutantGrid({ data }: { data: StationDetail }) {
             }
           >
             <div className="flex items-center gap-1.5">
-              <span className="aree-eyebrow text-[10px]">{name}</span>
+              <span className="aree-eyebrow text-[10.5px]">{name}</span>
               {dominant ? (
                 <span
-                  className="text-aree-accent text-[9px] font-bold tracking-[0.1em] uppercase"
+                  className="text-[9px] font-bold uppercase tracking-[0.1em] text-aree-accent"
                   title="Dominant pollutant reported by WAQI"
                 >
                   dom
@@ -171,13 +171,13 @@ export function PollutantGrid({ data }: { data: StationDetail }) {
               ) : null}
             </div>
             <div
-              className={`aree-num aree-tabular mt-1.5 text-xl leading-none font-bold ${
+              className={`aree-num aree-tabular mt-2 text-xl font-bold leading-none ${
                 available ? "text-aree-text" : "text-aree-faint"
               }`}
             >
               {available ? value : "—"}
             </div>
-            <div className="text-aree-dim mt-1.5 text-[10px]">
+            <div className="mt-1.5 text-[10.5px] text-aree-dim">
               {available ? "WAQI sub-index" : "not reported"}
             </div>
           </div>
@@ -242,7 +242,7 @@ export function WindowAggregates({ data }: { data: StationDetail }) {
 
   return (
     <Panel title="Pathway window aggregates" padding="p-5">
-      <div className="grid grid-cols-2 gap-5 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-5 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 shadow-[var(--aree-shadow-sm)] sm:grid-cols-4">
         {windows.map((w) => (
           <Stat
             key={w.label}
@@ -253,7 +253,7 @@ export function WindowAggregates({ data }: { data: StationDetail }) {
         ))}
       </div>
       {data.aqi_rate_of_change !== null && data.aqi_rate_of_change !== undefined ? (
-        <div className="text-aree-dim mt-4 text-[11px]">
+        <div className="mt-4 text-[11px] text-aree-dim">
           5-min window rate of change: {data.aqi_rate_of_change} AQI/min
         </div>
       ) : null}

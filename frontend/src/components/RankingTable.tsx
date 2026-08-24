@@ -30,36 +30,36 @@ export function RankingList({
   highlight?: string | null;
 }) {
   return (
-    <Panel title={title} padding="p-3">
+    <Panel title={title} padding="p-0">
       {entries.length === 0 ? (
-        <div className="text-aree-muted px-1 py-3 text-[12px]">No data yet</div>
+        <div className="px-4 py-4 text-[12.5px] text-aree-muted">No data yet</div>
       ) : (
-        <ol>
+        <ol className="divide-y divide-aree-border">
           {entries.map((entry) => {
             const isSelected = highlight === entry.station;
             return (
               <li
                 key={entry.station}
-                className={`border-aree-border/70 flex items-center justify-between gap-3 border-b px-1 py-2 last:border-b-0 ${
-                  isSelected ? "bg-aree-accent/[0.06]" : ""
+                className={`flex items-center justify-between gap-3 px-4 py-2.5 transition-colors ${
+                  isSelected ? "bg-aree-surface-2" : "hover:bg-aree-surface-1"
                 }`}
               >
                 <Link
                   href={`/stations/${encodeURIComponent(entry.station)}`}
                   className={`flex min-w-0 items-baseline gap-2 text-[12.5px] transition-colors hover:underline ${
                     isSelected
-                      ? "text-aree-text font-bold"
+                      ? "font-bold text-aree-text"
                       : "text-aree-body hover:text-aree-accent"
                   }`}
                   title={entry.station}
                 >
-                  <span className="aree-num text-aree-faint shrink-0 text-[10px]">
+                  <span className="aree-num shrink-0 text-[10px] text-aree-faint">
                     {String(entry.rank).padStart(2, "0")}
                   </span>
                   <span className="truncate">{stationLabel(entry.station)}</span>
                 </Link>
                 <span
-                  className="aree-num shrink-0 text-[13px] font-bold"
+                  className="aree-num shrink-0 text-[13.5px] font-bold"
                   style={{ color: valueColor(groupKey, entry) }}
                 >
                   {entry.value ?? "—"}
@@ -81,7 +81,7 @@ export default function RankingTable({
   highlight?: string | null;
 }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
       {rankings.map((group) => (
         <RankingList
           key={group.key}

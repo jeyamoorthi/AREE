@@ -56,14 +56,16 @@ export default function ForecastCard({
       }
     >
       <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(200px,1fr)]">
-        <AQITrendChart forecast={forecast} highThreshold={highThreshold} />
+        <div className="rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 shadow-[var(--aree-shadow-sm)]">
+          <AQITrendChart forecast={forecast} highThreshold={highThreshold} />
+        </div>
 
         <div className="flex flex-col gap-5">
           <Stat
             label="Trend"
             value={
               <span className="flex items-center gap-2">
-                <TrendIcon className="h-4 w-4" aria-hidden />
+                <TrendIcon className="h-4 w-4 text-aree-accent" aria-hidden />
                 {direction.charAt(0).toUpperCase() + direction.slice(1)}
               </span>
             }
@@ -105,21 +107,21 @@ export default function ForecastCard({
 
       {forecast.anomaly ? (
         <div
-          className="mt-4 rounded-lg border px-4 py-2.5"
+          className="mt-4 rounded-[var(--aree-radius-sm)] border px-4 py-3 shadow-[var(--aree-shadow-sm)]"
           style={{
-            borderColor: "color-mix(in srgb, #ef4444 50%, transparent)",
-            background: "color-mix(in srgb, #ef4444 7%, transparent)",
+            borderColor: "color-mix(in srgb, var(--aree-red) 50%, transparent)",
+            background: "color-mix(in srgb, var(--aree-red) 10%, transparent)",
           }}
           role="alert"
         >
-          <span className="text-aree-red text-[12px] font-bold">⚠ ANOMALY DETECTED</span>
-          <span className="text-aree-body ml-2 text-[12px]">
+          <span className="text-[12px] font-bold text-aree-red uppercase tracking-wider">⚠ ANOMALY DETECTED</span>
+          <span className="ml-3 text-[12.5px] text-aree-body">
             Current AQI deviates significantly from the recent trend (z-score &gt; 2σ).
           </span>
         </div>
       ) : null}
 
-      <div className="mt-3">
+      <div className="mt-4">
         <Note>
           Linear regression over the last {forecast.data_points} closed windows.
           Deterministic — no external model is called.

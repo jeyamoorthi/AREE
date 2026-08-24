@@ -9,10 +9,11 @@
  */
 
 import { useRouter } from "next/navigation";
+import { MapPin, Radio, Activity } from "lucide-react";
 
 import StationSelector from "@/components/StationSelector";
 import { useStations } from "@/components/providers/LiveDataProvider";
-import { Pill } from "@/components/ui/Card";
+import { Pill, StatusBadge } from "@/components/ui/Card";
 import { freshness } from "@/lib/freshness";
 import { feedLabel, stationLabel } from "@/lib/station";
 import { modeColor, modeLabel, orDash } from "@/lib/theme";
@@ -44,59 +45,74 @@ export default function StationHeader({
 
   const channel =
     liveStatus === "open"
-      ? { color: "var(--aree-green)", label: "WebSocket connected" }
+      ? { color: "var(--aree-green)", label: "WebSocket connected", pulse: true }
       : liveStatus === "connecting"
-        ? { color: "var(--aree-yellow)", label: "WebSocket connecting" }
-        : { color: "var(--aree-dim)", label: "Polling only" };
+        ? { color: "var(--aree-yellow)", label: "WebSocket connecting", pulse: true }
+        : { color: "var(--aree-dim)", label: "Polling only", pulse: false };
 
   return (
-    <div className="border-aree-border bg-aree-card mb-5 rounded-xl border px-5 py-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <h1 className="text-aree-text truncate text-2xl leading-tight font-black tracking-[0.06em] uppercase">
+    <div className="bg-aree-surface-1 border-aree-border mb-6 rounded-2xl border shadow-sm px-6 py-5 lg:px-8 lg:py-6 overflow-hidden relative">
+      {/* Decorative subtle background elements */}
+      <div className="absolute top-0 right-0 w-64 h-64 bg-aree-accent/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3 pointer-events-none" />
+      
+      <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-1">
+            <h1 className="text-aree-text truncate text-3xl leading-tight font-black tracking-[0.04em] uppercase drop-shadow-sm">
               {stationLabel(station)}
             </h1>
             {feedLabel(feedId) ? (
-              <span className="aree-num text-aree-accent text-[13px] font-semibold">
-                {feedLabel(feedId)}
+              <span className="bg-aree-surface-2 border border-aree-border/50 aree-num text-aree-accent text-[13px] font-bold px-2.5 py-1 rounded-md shadow-sm">
+                ID: {feedLabel(feedId)}
               </span>
             ) : null}
           </div>
 
-          <div className="text-aree-dim mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[11px]">
-            {lat !== null ? (
-              <span className="aree-num">
-                {lat.toFixed(6)}° N{lon !== null ? ` · ${lon.toFixed(6)}° E` : ""}
+          <div className="mt-3 flex flex-wrap items-center gap-x-6 gap-y-2 text-[12px] font-medium">
+            <div className="flex items-center gap-1.5 text-aree-dim bg-aree-surface-2 px-2.5 py-1 rounded-full border border-aree-border/50">
+              <MapPin className="h-3.5 w-3.5" />
+              {lat !== null ? (
+                <span className="aree-num">
+                  {lat.toFixed(6)}° N{lon !== null ? ` · ${lon.toFixed(6)}° E` : ""}
+                </span>
+              ) : (
+                <span>Coordinates not available</span>
+              )}
+              {city ? <span className="ml-1 pl-2 border-l border-aree-border/50">{city}</span> : null}
+            </div>
+            
+            <div className="flex items-center gap-2 bg-aree-surface-2 px-2.5 py-1 rounded-full border border-aree-border/50 text-aree-dim">
+              <Radio className="h-3.5 w-3.5" />
+              <span className="text-aree-muted font-bold">WAQI Source</span>
+            </div>
+
+            <div className="flex items-center gap-2 bg-aree-surface-2 px-2.5 py-1 rounded-full border border-aree-border/50 text-aree-dim">
+              <Activity className="h-3.5 w-3.5" />
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`inline-block h-2 w-2 rounded-full ${
+                    channel.pulse ? "animate-pulse shadow-[0_0_8px_currentColor]" : ""
+                  }`}
+                  style={{ background: channel.color, color: channel.color }}
+                  aria-hidden
+                />
+                {channel.label}
               </span>
-            ) : (
-              <span>Coordinates not available</span>
-            )}
-            {city ? <span>{city}</span> : null}
-            <span className="text-aree-muted font-semibold">WAQI</span>
-            <span className="flex items-center gap-1.5">
-              <span
-                className={`inline-block h-1.5 w-1.5 rounded-full ${
-                  liveStatus === "open" ? "aree-live-dot" : ""
-                }`}
-                style={{ background: channel.color }}
-                aria-hidden
-              />
-              {channel.label}
-            </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-col items-end gap-2.5">
-          <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-col items-start lg:items-end gap-4 shrink-0">
+          <div className="flex flex-wrap items-center justify-end gap-2.5">
             {data || summary ? (
-              <Pill
+              <StatusBadge
                 color={look.color}
-                filled={(data?.freshness_status ?? summary?.freshness_status) === "stale"}
+                pulse={(data?.freshness_status ?? summary?.freshness_status) === "current"}
               >
                 {look.marker} {look.badge}
-              </Pill>
+              </StatusBadge>
             ) : null}
+            
             {data?.engine_mode ? (
               <Pill
                 color={modeColor(data.engine_mode)}
@@ -105,9 +121,16 @@ export default function StationHeader({
                 {modeLabel(data.engine_mode)}
               </Pill>
             ) : null}
-            {data?.grap_stage ? <Pill>GRAP {orDash(data.grap_stage)}</Pill> : null}
+            
+            {data?.grap_stage ? (
+              <div className="bg-aree-surface-2 border border-aree-border font-bold text-[12px] px-3 py-1 rounded-full shadow-sm flex items-center gap-1.5">
+                <span className="text-aree-dim text-[10px] uppercase">GRAP</span>
+                <span>{orDash(data.grap_stage)}</span>
+              </div>
+            ) : null}
           </div>
-          <div className="w-full min-w-[220px]">
+          
+          <div className="w-full sm:w-[260px] lg:w-[300px]">
             <StationSelector
               id="station-switcher"
               compact

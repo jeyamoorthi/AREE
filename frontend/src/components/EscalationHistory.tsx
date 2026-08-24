@@ -9,14 +9,14 @@
  */
 
 import Link from "next/link";
-import { History } from "lucide-react";
+import { History, TrendingUp, AlertTriangle, ArrowRight } from "lucide-react";
 
 import { usePolling } from "@/hooks/usePolling";
 import { api } from "@/lib/api";
 import { stationLabel } from "@/lib/station";
 import { aqiColor, grapColor, orDash } from "@/lib/theme";
 import type { EscalationsResponse } from "@/types";
-import { Panel, Pill } from "./ui/Card";
+import { Panel, Pill, TimelineEvent } from "./ui/Card";
 import { EmptyState, SectionState } from "./ui/States";
 
 export default function EscalationHistory({
@@ -50,84 +50,88 @@ export default function EscalationHistory({
         return (
           <Panel
             title={title}
-            icon={<History className="h-3.5 w-3.5" />}
+            icon={<History className="h-4 w-4" />}
             accent="var(--aree-red)"
-            padding="p-5"
+            padding="p-6"
             right={
-              <span className="text-aree-dim text-[11px]">
+              <span className="text-aree-dim text-[12px] font-medium bg-aree-surface-2 px-2.5 py-1 rounded-full border border-aree-border">
                 {data.total} recorded
               </span>
             }
           >
-            <ol className="relative">
-              {/* Continuous rail behind the markers. */}
-              <span
-                className="bg-aree-border absolute top-1 bottom-1 left-[5px] w-px"
-                aria-hidden
-              />
-              {events.map((event, index) => (
-                <li
-                  key={`${event.timestamp}-${event.city}-${index}`}
-                  className="relative flex gap-4 pb-5 pl-6 last:pb-0"
-                >
-                  <span
-                    className="absolute top-1.5 left-0 h-[11px] w-[11px] rounded-full border-2"
-                    style={{
-                      borderColor: grapColor(event.to_stage),
-                      background: "var(--aree-bg)",
-                    }}
-                    aria-hidden
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                      <span className="aree-num text-aree-dim text-[11px]">
-                        {orDash(event.timestamp)}
-                      </span>
-                      {station ? null : (
-                        <Link
-                          href={`/stations/${encodeURIComponent(event.city ?? "")}`}
-                          className="text-aree-text hover:text-aree-accent text-[13px] font-bold transition-colors"
-                        >
-                          {stationLabel(event.city)}
-                        </Link>
-                      )}
-                    </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                      <span className="text-aree-muted text-[12px]">
-                        {orDash(event.from_stage, "—")}
-                      </span>
-                      <span className="text-aree-faint text-[12px]" aria-hidden>
-                        →
-                      </span>
-                      <Pill color={grapColor(event.to_stage)} filled>
-                        {orDash(event.to_stage)}
-                      </Pill>
-                      {event.aqi !== null && event.aqi !== undefined ? (
-                        <span className="text-aree-muted text-[12px]">
-                          AQI{" "}
-                          <span
-                            className="aree-num font-bold"
-                            style={{ color: aqiColor(event.aqi) }}
-                          >
-                            {event.aqi}
+            <div className="relative">
+              {/* Continuous vertical line for the timeline */}
+              <div className="absolute top-4 bottom-4 left-4 w-0.5 bg-aree-border rounded-full" aria-hidden />
+              
+              <div className="flex flex-col gap-1 relative">
+                {events.map((event, index) => {
+                  const isLast = index === events.length - 1;
+                  
+                  return (
+                    <TimelineEvent
+                      key={`${event.timestamp}-${event.city}-${index}`}
+                      icon={<TrendingUp className="h-4 w-4" />}
+                      iconColor={grapColor(event.to_stage)}
+                      timestamp={orDash(event.timestamp)}
+                      isLast={isLast}
+                    >
+                      <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          {station ? null : (
+                            <Link
+                              href={`/stations/${encodeURIComponent(event.city ?? "")}`}
+                              className="text-aree-text hover:text-aree-accent text-[14px] font-bold transition-colors"
+                            >
+                              {stationLabel(event.city)}
+                            </Link>
+                          )}
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-aree-muted text-[13px] font-medium bg-aree-surface-2 px-2 py-0.5 rounded">
+                            {orDash(event.from_stage, "—")}
                           </span>
-                          {event.band ? ` · ${event.band}` : ""}
-                        </span>
-                      ) : null}
-                    </div>
-                    {event.trigger ? (
-                      <div className="text-aree-dim mt-1.5 text-[11px] leading-relaxed">
-                        {event.trigger}
+                          <ArrowRight className="text-aree-faint h-3.5 w-3.5" aria-hidden />
+                          <Pill color={grapColor(event.to_stage)} filled>
+                            {orDash(event.to_stage)}
+                          </Pill>
+                          
+                          {event.aqi !== null && event.aqi !== undefined ? (
+                            <div className="ml-2 flex items-center gap-1.5 border-l border-aree-border pl-3">
+                              <span className="text-aree-muted text-[12px] uppercase tracking-wider font-semibold">
+                                AQI
+                              </span>
+                              <span
+                                className="aree-num font-bold text-[14px]"
+                                style={{ color: aqiColor(event.aqi) }}
+                              >
+                                {event.aqi}
+                              </span>
+                              {event.band ? (
+                                <span className="text-aree-dim text-[12px] bg-aree-surface-2 px-1.5 py-0.5 rounded border border-aree-border/50">
+                                  {event.band}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                        
+                        {event.trigger ? (
+                          <div className="text-aree-dim mt-1 text-[13px] leading-relaxed flex items-start gap-1.5 bg-aree-surface-1 p-2 rounded-md border border-aree-border/50">
+                            <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                            <span>{event.trigger}</span>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : null}
-                  </div>
-                </li>
-              ))}
-            </ol>
+                    </TimelineEvent>
+                  );
+                })}
+              </div>
+            </div>
 
             {data.total > limit ? (
-              <div className="text-aree-dim border-aree-border mt-2 border-t pt-3 text-center text-[11px]">
-                Showing the {limit} most recent of {data.total} recorded events
+              <div className="text-aree-dim border-aree-border mt-4 border-t pt-4 text-center text-[12px] font-medium">
+                Showing {limit} most recent of {data.total} events
               </div>
             ) : null}
           </Panel>

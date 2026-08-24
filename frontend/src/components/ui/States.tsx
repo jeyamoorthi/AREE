@@ -8,8 +8,8 @@ import { Card } from "./Card";
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
-    <Card className="flex items-center justify-center gap-3 py-8 text-center">
-      <Loader2 className="text-aree-accent h-4 w-4 animate-spin" aria-hidden />
+    <Card className="flex items-center justify-center gap-3 py-10 text-center">
+      <Loader2 className="h-5 w-5 animate-spin" style={{ color: "var(--aree-accent)" }} aria-hidden />
       <span className="text-aree-muted text-[13px]">{label}</span>
     </Card>
   );
@@ -23,9 +23,9 @@ export function EmptyState({
   icon?: ReactNode;
 }) {
   return (
-    <Card className="py-7 text-center">
+    <Card className="py-8 text-center">
       {icon ? (
-        <div className="text-aree-faint mb-2 flex justify-center" aria-hidden>
+        <div className="text-aree-faint mb-3 flex justify-center" aria-hidden>
           {icon}
         </div>
       ) : null}
@@ -36,7 +36,6 @@ export function EmptyState({
   );
 }
 
-/** Shimmering bar used to compose skeletons. */
 export function SkeletonBar({
   width = "100%",
   height = 12,
@@ -48,17 +47,13 @@ export function SkeletonBar({
 }) {
   return (
     <div
-      className={`aree-skeleton rounded ${className}`}
-      style={{ width, height }}
+      className={`aree-skeleton ${className}`}
+      style={{ width, height, borderRadius: "var(--aree-radius-sm)" }}
       aria-hidden
     />
   );
 }
 
-/**
- * Skeleton block used while a section's first payload is in flight.
- * `label` says what is loading — a blank grey box tells the operator nothing.
- */
 export function SkeletonCard({
   rows = 3,
   label,
@@ -83,12 +78,11 @@ export function SkeletonCard({
   );
 }
 
-/** Skeleton shaped like the national map while Leaflet and data load. */
 export function SkeletonMap({ height = 460 }: { height?: number }) {
   return (
     <div
-      className="border-aree-border bg-aree-card flex flex-col items-center justify-center gap-3 rounded-xl border"
-      style={{ height }}
+      className="border-aree-border bg-aree-surface-1 flex flex-col items-center justify-center gap-3 border"
+      style={{ height, borderRadius: "var(--aree-radius-lg)" }}
       role="status"
       aria-live="polite"
     >
@@ -98,10 +92,6 @@ export function SkeletonMap({ height = 460 }: { height?: number }) {
   );
 }
 
-/**
- * The AI section takes the longest. Rather than a blank card, show the actual
- * pipeline the engine runs so the wait is legible.
- */
 export function AnalysisSkeleton({
   steps = ["AQI", "Persistence", "Weather", "Policy"],
 }: {
@@ -118,8 +108,11 @@ export function AnalysisSkeleton({
           {steps.map((step, i) => (
             <li key={step} className="flex items-center gap-2">
               <span
-                className="border-aree-border text-aree-muted rounded-md border px-2.5 py-1 text-[11px] font-semibold"
-                style={{ animation: `aree-blink 1.6s ease-in-out ${i * 0.25}s infinite` }}
+                className="border-aree-border text-aree-muted border px-2.5 py-1 text-[11px] font-semibold"
+                style={{
+                  animation: `aree-blink 1.6s ease-in-out ${i * 0.25}s infinite`,
+                  borderRadius: "var(--aree-radius-sm)",
+                }}
               >
                 {step}
               </span>
@@ -147,27 +140,16 @@ export interface ErrorStateProps {
   compact?: boolean;
 }
 
-/**
- * Renders failures with their structured detail and hint.
- *
- * The three conditions are deliberately NOT collapsed into one look:
- *   backend offline  — AREE itself cannot be reached
- *   feed unavailable — the station publishes no usable AQI (HTTP 424)
- *   warming up       — the engine is up but has no closed window yet
- * Upstream staleness is not an error at all and is rendered elsewhere.
- */
 export function ErrorState({ error, onRetry, compact = false }: ErrorStateProps) {
   const isNetwork = error instanceof NetworkError;
   const apiError = error instanceof ApiError ? error : null;
   const warming = apiError?.isWarmingUp ?? false;
-  // A dormant or failing upstream feed is a station condition, not a fault of
-  // this system — it gets its own neutral presentation and no retry button.
   const feedDown = apiError?.isFeedUnavailable ?? false;
 
   const accent = warming
     ? "#eab308"
     : feedDown
-      ? "#94a3b8"
+      ? "#8a9bb4"
       : isNetwork
         ? "#ef4444"
         : "#f97316";
@@ -195,10 +177,11 @@ export function ErrorState({ error, onRetry, compact = false }: ErrorStateProps)
 
   return (
     <div
-      className={`rounded-xl border ${compact ? "px-4 py-3" : "px-6 py-5"}`}
+      className={compact ? "px-4 py-3" : "px-5 py-4"}
       style={{
-        borderColor: `color-mix(in srgb, ${accent} 55%, transparent)`,
-        background: `color-mix(in srgb, ${accent} 7%, transparent)`,
+        borderRadius: "var(--aree-radius-md)",
+        border: `1px solid color-mix(in srgb, ${accent} 45%, transparent)`,
+        background: `color-mix(in srgb, ${accent} 6%, transparent)`,
       }}
       role={warming ? "status" : "alert"}
     >
@@ -227,7 +210,11 @@ export function ErrorState({ error, onRetry, compact = false }: ErrorStateProps)
           <button
             type="button"
             onClick={onRetry}
-            className="border-aree-border-strong text-aree-body hover:border-aree-accent hover:text-aree-accent flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors"
+            className="border-aree-border-strong text-aree-body hover:text-aree-accent flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold transition-colors"
+            style={{
+              border: "1px solid var(--aree-border-strong)",
+              borderRadius: "var(--aree-radius-sm)",
+            }}
           >
             <RefreshCw className="h-3 w-3" aria-hidden />
             Retry
@@ -238,10 +225,6 @@ export function ErrorState({ error, onRetry, compact = false }: ErrorStateProps)
   );
 }
 
-/**
- * Standard render path for a polled section: skeleton, then error, then data.
- * Stale data stays on screen when a later poll fails, with the error above it.
- */
 export function SectionState<T>({
   state,
   children,
@@ -259,7 +242,6 @@ export function SectionState<T>({
   children: (data: T) => ReactNode;
   emptyMessage?: string;
   skeletonRows?: number;
-  /** Custom skeleton shaped like the section it replaces. */
   skeleton?: ReactNode;
   loadingLabel?: string;
 }) {

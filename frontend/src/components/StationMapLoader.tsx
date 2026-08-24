@@ -35,25 +35,25 @@ export function MapLegend({ className = "" }: { className?: string }) {
     { marker: "×", label: "Unavailable", detail: "no usable AQI", color: "#94a3b8" },
   ];
   return (
-    <div className={`flex flex-wrap items-center gap-x-5 gap-y-2 ${className}`}>
+    <div className={`flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-3 shadow-[var(--aree-shadow-sm)] ${className}`}>
       {items.map((item) => (
         <span key={item.label} className="flex items-center gap-1.5 text-[11px]">
           <span
-            className="flex h-4 w-4 items-center justify-center rounded-full border text-[9px] leading-none font-bold"
+            className="flex h-[18px] w-[18px] items-center justify-center rounded-full border text-[10px] font-bold leading-none shadow-[var(--aree-shadow-sm)]"
             style={{
               color: item.color,
               borderColor: item.color,
-              background: `color-mix(in srgb, ${item.color} 14%, transparent)`,
+              background: `color-mix(in srgb, ${item.color} 12%, transparent)`,
             }}
             aria-hidden
           >
             {item.marker}
           </span>
-          <span className="text-aree-body font-semibold">{item.label}</span>
+          <span className="font-semibold text-aree-body">{item.label}</span>
           <span className="text-aree-dim">{item.detail}</span>
         </span>
       ))}
-      <span className="text-aree-dim text-[11px]">
+      <span className="ml-auto text-[11px] text-aree-dim">
         Marker colour follows the CPCB AQI band.
       </span>
     </div>

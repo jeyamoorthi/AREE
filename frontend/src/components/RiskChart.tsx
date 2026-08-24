@@ -43,8 +43,8 @@ export default function RiskChart({ data }: { data: StationDetail }) {
   ];
 
   return (
-    <Panel title="Risk composition (0–100)" padding="p-4">
-      <div className="h-56 w-full">
+    <Panel title="Risk composition (0–100)" padding="p-5">
+      <div className="h-56 w-full rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-2 shadow-[var(--aree-shadow-sm)]">
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={rows} margin={{ top: 18, right: 12, bottom: 4, left: -18 }}>
             <CartesianGrid stroke={COLORS.border} strokeDasharray="3 3" vertical={false} />
@@ -66,13 +66,14 @@ export default function RiskChart({ data }: { data: StationDetail }) {
             <Tooltip
               cursor={{ fill: "rgba(148,163,184,0.08)" }}
               contentStyle={{
-                background: COLORS.card,
-                border: `1px solid ${COLORS.borderStrong}`,
-                borderRadius: 10,
+                background: "var(--aree-surface-2)",
+                border: "1px solid var(--aree-border-strong)",
+                borderRadius: "var(--aree-radius-md)",
+                boxShadow: "var(--aree-shadow-sm)",
                 fontSize: 12,
               }}
-              labelStyle={{ color: COLORS.muted }}
-              itemStyle={{ color: COLORS.body }}
+              labelStyle={{ color: "var(--aree-muted)" }}
+              itemStyle={{ color: "var(--aree-text)", fontWeight: 500 }}
             />
             <Bar dataKey="value" name="Score" radius={[4, 4, 0, 0]} isAnimationActive={false}>
               <LabelList dataKey="value" position="top" fill={COLORS.muted} fontSize={10} />
@@ -83,7 +84,7 @@ export default function RiskChart({ data }: { data: StationDetail }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      <div className="text-aree-dim mt-1 px-1 text-[11px]">
+      <div className="mt-3 px-1 text-[11px] text-aree-dim">
         Advisory only — the escalation decision uses AQI and persistence, never these
         composite scores.
       </div>

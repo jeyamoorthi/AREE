@@ -2,21 +2,17 @@
 
 /**
  * Report centre.
- *
- * Generate a report for a station, inspect what the engine will put in it,
- * then download the PDF the Python report generator produces. Report history
- * is what this session has generated — AREE does not persist a report archive,
- * so none is implied.
+ * Generate a report for a station and download the PDF.
  */
 
 import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
-import { FileText, Loader2 } from "lucide-react";
+import { FileText, Loader2, History, Database } from "lucide-react";
 
 import ReportDownload from "@/components/ReportDownload";
 import StationSelector from "@/components/StationSelector";
 import { useStations } from "@/components/providers/LiveDataProvider";
-import { KeyValue, Panel, Pill, SectionHeader, Stat } from "@/components/ui/Card";
+import { KeyValue, IntelligencePanel, StatusBadge, SectionHeader, Stat } from "@/components/ui/Card";
 import { EmptyState, ErrorState, SkeletonCard } from "@/components/ui/States";
 import { istDateTime } from "@/lib/clock";
 import { usePolling } from "@/hooks/usePolling";
@@ -62,208 +58,225 @@ export default function ReportsPage() {
   }, [selected, meta.data]);
 
   return (
-    <>
-      <div className="mb-4">
-        <h1 className="aree-page-title">Report Centre</h1>
-        <p className="text-aree-dim mt-1 text-[12px]">
+    <div className="max-w-[1400px] mx-auto space-y-8 pb-12">
+      <div className="mb-8">
+        <h1 className="text-3xl font-light tracking-tight text-[#17231c] mb-2">Report Centre</h1>
+        <p className="text-sm text-[#64748b] max-w-2xl leading-relaxed">
           Four-page municipal escalation brief: decision snapshot, technical escalation
-          detail, policy grounding and system transparency. Every value is a deterministic
-          output of live engine state — the report contains no generative narrative.
+          detail, policy grounding and system transparency.
         </p>
       </div>
 
-      <SectionHeader index="01">Generate report</SectionHeader>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1.1fr)]">
-        <Panel title="Report parameters" accent="var(--aree-accent)" padding="p-5">
-          <div className="flex flex-col gap-5">
-            <StationSelector
-              id="report-station"
-              value={selected}
-              onChange={setSelected}
-              label="Station"
-            />
-
-            <div>
-              <span className="aree-eyebrow mb-2 block">Report type</span>
-              <div className="border-aree-border bg-aree-bg-soft/50 flex items-center gap-3 rounded-lg border px-3 py-2.5">
-                <FileText className="text-aree-accent h-4 w-4 shrink-0" aria-hidden />
-                <span className="text-aree-body text-[13px] font-semibold">
-                  Regulatory intelligence brief
-                </span>
-                <span className="text-aree-dim ml-auto text-[11px]">4 pages · PDF</span>
-              </div>
-              <p className="text-aree-dim mt-2 text-[11px]">
-                The engine publishes one report format. No other type is offered because
-                none exists.
-              </p>
-            </div>
-
-            {selected ? (
-              <ReportDownload
-                station={selected}
-                label="Generate report"
-                onDownloaded={recordDownload}
+      <div className="space-y-6">
+        <SectionHeader index="01">Generate report</SectionHeader>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(320px,1.1fr)]">
+          <IntelligencePanel title="Report parameters" variant="default">
+            <div className="flex flex-col gap-6 p-6">
+              <StationSelector
+                id="report-station"
+                value={selected}
+                onChange={setSelected}
+                label="Station"
               />
-            ) : (
-              <button
-                type="button"
-                disabled
-                className="border-aree-border text-aree-faint cursor-not-allowed rounded-lg border px-4 py-2.5 text-[12.5px] font-semibold"
-              >
-                Select a station to generate
-              </button>
-            )}
-          </div>
-        </Panel>
 
-        <Panel title="Report preview" padding="p-5">
-          {!selected ? (
-            <div className="text-aree-muted flex h-full min-h-[180px] items-center justify-center text-center text-[13px]">
-              Select a station to see what its report will contain.
-            </div>
-          ) : meta.initialLoading ? (
-            <div className="text-aree-muted flex items-center gap-2 text-[13px]">
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Loading report metadata…
-            </div>
-          ) : meta.error ? (
-            <ErrorState error={meta.error} onRetry={meta.refresh} compact />
-          ) : meta.data ? (
-            <>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <span className="text-aree-text text-[15px] font-bold">
-                  {stationLabel(meta.data.station)}
+              <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-4">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-[#788796] mb-3 block">
+                  Report type
                 </span>
-                <Pill
-                  color={modeColor(meta.data.engine_mode)}
-                  filled={meta.data.engine_mode === "TRIGGERED"}
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded bg-[#143828]/10 flex items-center justify-center shrink-0">
+                    <FileText className="text-[#143828] h-4 w-4" aria-hidden />
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-[#17231c]">Regulatory intelligence brief</div>
+                    <div className="text-xs text-[#64748b]">4 pages · PDF</div>
+                  </div>
+                </div>
+                <p className="text-xs text-[#788796] mt-4 leading-relaxed border-t border-[#e4e0d4] pt-3">
+                  The engine publishes one report format.
+                </p>
+              </div>
+
+              {selected ? (
+                <ReportDownload
+                  station={selected}
+                  label="Generate Report"
+                  onDownloaded={recordDownload}
+                />
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  className="w-full bg-[#faf9f4] border border-[#e4e0d4] text-[#788796] cursor-not-allowed rounded-lg px-4 py-3 text-sm font-medium transition-colors"
                 >
-                  {modeLabel(meta.data.engine_mode)}
-                </Pill>
-              </div>
-              <div className="grid grid-cols-2 gap-5">
-                <Stat label="AQI" value={meta.data.aqi ?? "—"} color={aqiColor(meta.data.aqi)} />
-                <Stat
-                  label="GRAP stage"
-                  value={orDash(meta.data.grap_stage)}
-                  color={grapColor(meta.data.grap_stage)}
-                  mono={false}
-                  size="sm"
-                />
-              </div>
-              <div className="mt-4 grid gap-x-8">
-                <KeyValue label="Generated for" value={meta.data.generated_for} />
-                <KeyValue label="Filename" value={meta.data.filename} />
-                <KeyValue
-                  label="Availability"
-                  value={meta.data.available ? "ready" : "not available"}
-                  color={
-                    meta.data.available ? "var(--aree-green)" : "var(--aree-yellow)"
-                  }
-                />
-              </div>
-            </>
-          ) : null}
-        </Panel>
+                  Select a station to generate
+                </button>
+              )}
+            </div>
+          </IntelligencePanel>
+
+          <IntelligencePanel title="Report preview" variant="default">
+            <div className="p-6 h-full flex flex-col">
+              {!selected ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+                  <Database className="h-8 w-8 text-[#788796] mb-3" />
+                  <div className="text-sm text-[#64748b]">Select a station to see what its report will contain.</div>
+                </div>
+              ) : meta.initialLoading ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center py-12">
+                  <Loader2 className="h-6 w-6 text-[#143828] animate-spin mb-3" aria-hidden />
+                  <div className="text-sm text-[#64748b]">Loading report metadata…</div>
+                </div>
+              ) : meta.error ? (
+                <ErrorState error={meta.error} onRetry={meta.refresh} compact />
+              ) : meta.data ? (
+                <div className="space-y-6">
+                  <div className="flex flex-wrap items-start justify-between gap-3 pb-4 border-b border-[#e4e0d4]">
+                    <div>
+                      <div className="text-lg font-bold text-[#17231c] mb-2">
+                        {stationLabel(meta.data.station)}
+                      </div>
+                      <StatusBadge
+                        color={modeColor(meta.data.engine_mode)}
+                        pulse={meta.data.engine_mode === "TRIGGERED"}
+                        variant={meta.data.engine_mode === "TRIGGERED" ? "solid" : "outline"}
+                      >
+                        {modeLabel(meta.data.engine_mode)}
+                      </StatusBadge>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <Stat label="AQI" value={meta.data.aqi ?? "—"} color={aqiColor(meta.data.aqi)} />
+                    <Stat
+                      label="GRAP stage"
+                      value={orDash(meta.data.grap_stage)}
+                      color={grapColor(meta.data.grap_stage)}
+                      mono={false}
+                      size="sm"
+                    />
+                  </div>
+                  
+                  <div className="bg-[#faf9f4] p-4 rounded-lg border border-[#e4e0d4] grid gap-3">
+                    <KeyValue label="Generated for" value={meta.data.generated_for} />
+                    <KeyValue label="Filename" value={meta.data.filename} />
+                    <KeyValue
+                      label="Availability"
+                      value={meta.data.available ? "Ready for generation" : "Not available"}
+                      color={meta.data.available ? "#16a34a" : "#ca8a04"}
+                    />
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </IntelligencePanel>
+        </div>
       </div>
 
-      <SectionHeader index="02">Report history</SectionHeader>
-      {history.length === 0 ? (
-        <EmptyState icon={<FileText className="h-5 w-5" />}>
-          No report generated in this session yet. AREE does not keep a server-side report
-          archive — each report is rendered on request from current engine state.
-        </EmptyState>
-      ) : (
-        <Panel title="Generated in this session" padding="p-4">
-          {history.map((entry) => (
-            <div
-              key={`${entry.station}-${entry.generatedAt}`}
-              className="border-aree-border/70 flex flex-wrap items-center justify-between gap-3 border-b py-3 last:border-b-0"
-            >
-              <div className="min-w-0">
-                <Link
-                  href={`/stations/${encodeURIComponent(entry.station)}`}
-                  className="text-aree-body hover:text-aree-accent text-[13px] font-semibold transition-colors"
+      <div className="space-y-6">
+        <SectionHeader index="02">Report history</SectionHeader>
+        {history.length === 0 ? (
+          <EmptyState icon={<History className="h-5 w-5" />}>
+            No report generated in this session yet.
+          </EmptyState>
+        ) : (
+          <IntelligencePanel title="Generated in this session">
+            <div className="divide-y divide-[#e4e0d4]">
+              {history.map((entry) => (
+                <div
+                  key={`${entry.station}-${entry.generatedAt}`}
+                  className="flex flex-wrap items-center justify-between gap-4 p-4 hover:bg-[#faf9f4] transition-colors"
                 >
-                  {stationLabel(entry.station)}
-                </Link>
-                <div className="text-aree-dim mt-0.5 text-[11px]">
-                  {istDateTime(entry.generatedAt)} · AQI {entry.aqi ?? "—"} ·{" "}
-                  {entry.grapStage ?? "—"}
-                </div>
-              </div>
-              <ReportDownload
-                station={entry.station}
-                variant="ghost"
-                label="Download again"
-              />
-            </div>
-          ))}
-        </Panel>
-      )}
-
-      <SectionHeader index="03">Stations available for reporting</SectionHeader>
-      {stationsState.initialLoading ? (
-        <SkeletonCard rows={4} label="Loading station network…" />
-      ) : stationsState.error && !stationsState.data ? (
-        <ErrorState error={stationsState.error} onRetry={stationsState.refresh} />
-      ) : reportable.length === 0 ? (
-        <EmptyState>
-          No station has produced a closed window yet. Reports become available once the
-          engine emits state.
-        </EmptyState>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {reportable.map((station) => {
-            const look = freshness(station.freshness_status);
-            return (
-              <Panel
-                key={station.station}
-                title={stationLabel(station.station)}
-                accent={aqiColor(station.aqi)}
-                padding="p-4"
-                right={
-                  <Pill color={look.color} filled={station.freshness_status === "stale"}>
-                    {look.marker} {look.label}
-                  </Pill>
-                }
-              >
-                <div className="grid grid-cols-3 gap-4">
-                  <Stat label="AQI" value={station.aqi ?? "—"} color={aqiColor(station.aqi)} />
-                  <Stat
-                    label="GRAP"
-                    value={orDash(station.grap_stage)}
-                    color={grapColor(station.grap_stage)}
-                    mono={false}
-                    size="sm"
-                  />
-                  <Stat label="ERI" value={station.eri_score ?? 0} size="sm" />
-                </div>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelected(station.station)}
-                    className="border-aree-border text-aree-muted hover:border-aree-accent hover:text-aree-accent rounded-lg border px-3 py-2 text-[12px] font-semibold transition-colors"
-                  >
-                    Select
-                  </button>
+                  <div className="min-w-0">
+                    <Link
+                      href={`/stations/${encodeURIComponent(entry.station)}`}
+                      className="text-sm font-semibold text-[#17231c] hover:text-[#143828] transition-colors block mb-1"
+                    >
+                      {stationLabel(entry.station)}
+                    </Link>
+                    <div className="flex items-center gap-2 text-xs text-[#64748b]">
+                      <span>{istDateTime(entry.generatedAt)}</span>
+                      <span>&bull;</span>
+                      <span style={{ color: aqiColor(entry.aqi) }}>AQI {entry.aqi ?? "—"}</span>
+                      <span>&bull;</span>
+                      <span style={{ color: grapColor(entry.grapStage) }}>{entry.grapStage ?? "—"}</span>
+                    </div>
+                  </div>
                   <ReportDownload
-                    station={station.station}
+                    station={entry.station}
                     variant="ghost"
-                    label="Download PDF"
+                    label="Download Again"
                   />
-                  <Link
-                    href={`/stations/${encodeURIComponent(station.station)}`}
-                    className="text-aree-dim hover:text-aree-accent ml-auto text-[11px] transition-colors"
-                  >
-                    View station →
-                  </Link>
                 </div>
-              </Panel>
-            );
-          })}
-        </div>
-      )}
-    </>
+              ))}
+            </div>
+          </IntelligencePanel>
+        )}
+      </div>
+
+      <div className="space-y-6">
+        <SectionHeader index="03">Stations available for reporting</SectionHeader>
+        {stationsState.initialLoading ? (
+          <SkeletonCard rows={4} label="Loading station network…" />
+        ) : stationsState.error && !stationsState.data ? (
+          <ErrorState error={stationsState.error} onRetry={stationsState.refresh} />
+        ) : reportable.length === 0 ? (
+          <EmptyState>
+            No station has produced a closed window yet.
+          </EmptyState>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {reportable.map((station) => {
+              const look = freshness(station.freshness_status);
+              return (
+                <IntelligencePanel
+                  key={station.station}
+                  title={stationLabel(station.station)}
+                  headerAction={
+                    <StatusBadge color={look.color} variant={station.freshness_status === "stale" ? "solid" : "outline"}>
+                      {look.marker} {look.label}
+                    </StatusBadge>
+                  }
+                >
+                  <div className="p-4 space-y-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      <Stat label="AQI" value={station.aqi ?? "—"} color={aqiColor(station.aqi)} size="sm" />
+                      <Stat
+                        label="GRAP"
+                        value={orDash(station.grap_stage)}
+                        color={grapColor(station.grap_stage)}
+                        mono={false}
+                        size="sm"
+                      />
+                      <Stat label="ERI" value={station.eri_score ?? 0} size="sm" />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-[#e4e0d4]">
+                      <button
+                        type="button"
+                        onClick={() => setSelected(station.station)}
+                        className="bg-[#faf9f4] hover:bg-[#f0eee4] border border-[#e4e0d4] text-[#17231c] px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+                      >
+                        Select
+                      </button>
+                      <ReportDownload
+                        station={station.station}
+                        variant="ghost"
+                        label="PDF"
+                      />
+                      <Link
+                        href={`/stations/${encodeURIComponent(station.station)}`}
+                        className="ml-auto text-xs text-[#64748b] hover:text-[#143828] transition-colors flex items-center gap-1"
+                      >
+                        View Details &rarr;
+                      </Link>
+                    </div>
+                  </div>
+                </IntelligencePanel>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

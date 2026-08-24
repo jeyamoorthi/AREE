@@ -2,14 +2,10 @@
 
 /**
  * Source health.
- *
- * Every row is a real subsystem state read from the API — WAQI freshness from
- * the network classification, FIRMS/weather from the station payload, RAG and
- * Gemini from system status. A subsystem AREE cannot observe is reported as
- * "Not available" rather than guessed.
+ * Every row is a real subsystem state read from the API.
  */
 
-import { Panel } from "@/components/ui/Card";
+import { Panel, DataHealthItem } from "@/components/ui/Card";
 import { useStations, useSystemStatus } from "@/components/providers/LiveDataProvider";
 import type { AdvisoryResponse, AIResponse, StationDetail } from "@/types";
 
@@ -22,44 +18,19 @@ export interface SourceRow {
   detail?: string | null;
 }
 
-const LEVEL = {
-  ok: { color: "var(--aree-green)", marker: "●" },
-  warn: { color: "var(--aree-yellow)", marker: "◐" },
-  bad: { color: "var(--aree-orange)", marker: "⚠" },
-  unknown: { color: "var(--aree-dim)", marker: "×" },
-} as const;
-
 export function SourceHealthGrid({ rows }: { rows: SourceRow[] }) {
   return (
-    <ul className="grid gap-px overflow-hidden rounded-lg bg-[var(--aree-border)] sm:grid-cols-2 lg:grid-cols-3">
-      {rows.map((row) => {
-        const look = LEVEL[row.level];
-        return (
-          <li
-            key={row.name}
-            className="bg-aree-card flex min-w-0 items-start justify-between gap-3 px-4 py-3"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-aree-body text-[12px] font-bold tracking-[0.08em] uppercase">
-                {row.name}
-              </div>
-              {row.detail ? (
-                <div className="text-aree-dim mt-0.5 truncate text-[11px]" title={row.detail}>
-                  {row.detail}
-                </div>
-              ) : null}
-            </div>
-            <div
-              className="flex shrink-0 items-center gap-1.5 text-[11px] font-bold tracking-[0.08em] uppercase"
-              style={{ color: look.color }}
-            >
-              <span aria-hidden>{look.marker}</span>
-              {row.status}
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+      {rows.map((row) => (
+        <DataHealthItem
+          key={row.name}
+          label={row.name}
+          status={row.status}
+          level={row.level}
+          detail={row.detail ?? undefined}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -135,13 +106,14 @@ export function NationalDataHealth() {
   ];
 
   return (
-    <Panel title="Data health" padding="p-4">
+    <Panel title="Data health pipeline" padding="p-6">
       <SourceHealthGrid rows={rows} />
-      <p className="text-aree-dim mt-3 text-[11px] leading-relaxed">
-        Freshness policy — current 0–90 min · aging 90–120 min · stale over 120 min.
-        Unavailable means the upstream feed publishes no usable AQI and is never
-        counted as merely old.
-      </p>
+      <div className="mt-5 rounded-lg bg-[#faf9f4] border border-[#e4e0d4] p-3 flex items-center gap-3">
+        <div className="h-2 w-2 rounded-full bg-[#16a34a] animate-pulse" />
+        <p className="text-[#64748b] text-[12px] leading-relaxed">
+          Freshness policy: current (0–90m) · aging (90–120m) · stale (&gt;120m).
+        </p>
+      </div>
     </Panel>
   );
 }
