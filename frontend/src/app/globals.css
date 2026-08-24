@@ -1,0 +1,301 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   AREE — Environmental Command Center design tokens.
+   The identity (deep navy surfaces, cyan/teal environmental accent, semantic
+   warning ramp) is carried over from the original dashboard. What is added
+   here is depth: layered surfaces, a typographic scale and restrained motion.
+   ========================================================================== */
+:root {
+  /* Surfaces, darkest to lightest */
+  --aree-bg: #070c15;
+  --aree-bg-soft: #0a0f1a;
+  --aree-card: #0e1523;
+  --aree-card-raised: #131c2e;
+  --aree-border: #1b2740;
+  --aree-border-strong: #2b3b57;
+
+  /* Text ramp */
+  --aree-text: #f1f5f9;
+  --aree-body: #dbe4ef;
+  --aree-muted: #94a3b8;
+  --aree-dim: #64748b;
+  --aree-faint: #475569;
+
+  /* Environmental accent */
+  --aree-accent: #38bdf8;
+  --aree-blue: #3b82f6;
+  --aree-cyan: #00ffd1;
+  --aree-teal: #2dd4bf;
+
+  /* Semantic ramp — used for AQI bands, freshness and regulatory state */
+  --aree-green: #22c55e;
+  --aree-lime: #84cc16;
+  --aree-yellow: #eab308;
+  --aree-amber: #fbbf24;
+  --aree-orange: #f97316;
+  --aree-red: #ef4444;
+  --aree-crimson: #dc2626;
+}
+
+@theme inline {
+  --color-aree-bg: var(--aree-bg);
+  --color-aree-bg-soft: var(--aree-bg-soft);
+  --color-aree-card: var(--aree-card);
+  --color-aree-card-raised: var(--aree-card-raised);
+  --color-aree-border: var(--aree-border);
+  --color-aree-border-strong: var(--aree-border-strong);
+  --color-aree-text: var(--aree-text);
+  --color-aree-body: var(--aree-body);
+  --color-aree-muted: var(--aree-muted);
+  --color-aree-dim: var(--aree-dim);
+  --color-aree-faint: var(--aree-faint);
+  --color-aree-accent: var(--aree-accent);
+  --color-aree-blue: var(--aree-blue);
+  --color-aree-cyan: var(--aree-cyan);
+  --color-aree-teal: var(--aree-teal);
+  --color-aree-green: var(--aree-green);
+  --color-aree-lime: var(--aree-lime);
+  --color-aree-yellow: var(--aree-yellow);
+  --color-aree-amber: var(--aree-amber);
+  --color-aree-orange: var(--aree-orange);
+  --color-aree-red: var(--aree-red);
+  --color-aree-crimson: var(--aree-crimson);
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
+}
+
+html {
+  scrollbar-color: var(--aree-border-strong) transparent;
+}
+
+body {
+  background:
+    radial-gradient(1100px 620px at 12% -10%, rgba(56, 189, 248, 0.07), transparent 60%),
+    radial-gradient(900px 520px at 92% 0%, rgba(45, 212, 191, 0.05), transparent 62%),
+    var(--aree-bg);
+  background-attachment: fixed;
+  color: var(--aree-body);
+  font-family: var(--font-sans);
+  font-feature-settings: "cv02", "cv03", "cv04";
+}
+
+/* The command center is a dark-only operator surface, matching the original. */
+::selection {
+  background: rgba(56, 189, 248, 0.25);
+}
+
+/* Accessibility: a visible, consistent focus ring on every interactive surface. */
+:where(a, button, select, input, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--aree-accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* --- Typography scale -----------------------------------------------------
+   Hierarchy is deliberate: one hero number per view, then section titles,
+   then card titles, then metadata. Not every card is equally important. */
+
+.aree-hero-num {
+  font-family: var(--font-mono);
+  font-weight: 800;
+  line-height: 0.92;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.aree-page-title {
+  font-size: clamp(1.05rem, 0.9rem + 0.7vw, 1.45rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--aree-text);
+}
+
+.aree-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--aree-muted);
+}
+
+.aree-meta {
+  font-size: 0.6875rem;
+  color: var(--aree-dim);
+}
+
+.aree-num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Motion ---------------------------------------------------------------
+   Restrained on purpose: a live pulse, a focus pulse on the selected station,
+   a skeleton shimmer and short entrance transitions. Nothing loops loudly. */
+
+@keyframes aree-pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(34, 197, 94, 0);
+  }
+}
+
+@keyframes aree-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@keyframes aree-escalation-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 12px 2px rgba(239, 68, 68, 0.1);
+  }
+}
+
+@keyframes aree-shimmer {
+  0% {
+    background-position: -300px 0;
+  }
+  100% {
+    background-position: 300px 0;
+  }
+}
+
+@keyframes aree-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aree-marker-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.75;
+  }
+  70% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+.aree-live-dot {
+  animation: aree-pulse-dot 1.8s ease-in-out infinite;
+}
+
+.aree-blink {
+  animation: aree-blink 1.4s ease-in-out infinite;
+}
+
+.aree-escalation-glow {
+  animation: aree-escalation-glow 2.5s ease-in-out infinite;
+}
+
+.aree-rise {
+  animation: aree-rise 0.28s ease-out both;
+}
+
+.aree-skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--aree-border) 0%,
+    var(--aree-border-strong) 45%,
+    var(--aree-border) 90%
+  );
+  background-size: 300px 100%;
+  background-repeat: no-repeat;
+  animation: aree-shimmer 1.5s linear infinite;
+}
+
+/* Numbers that change on every poll should settle, not jump. */
+.aree-tabular {
+  font-variant-numeric: tabular-nums;
+  transition: color 0.35s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aree-live-dot,
+  .aree-blink,
+  .aree-escalation-glow,
+  .aree-rise,
+  .aree-skeleton,
+  .aree-marker-focus::after {
+    animation: none;
+  }
+}
+
+/* --- Leaflet dark tuning --------------------------------------------------- */
+.leaflet-container {
+  background: #070c15;
+  font-family: var(--font-sans);
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--aree-card-raised);
+  color: var(--aree-body);
+  border: 1px solid var(--aree-border-strong);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 10px;
+}
+
+.leaflet-popup-content {
+  margin: 12px 14px;
+  font-size: 12px;
+}
+
+.leaflet-control-attribution {
+  background: rgba(10, 15, 26, 0.85) !important;
+  color: #64748b !important;
+  font-size: 10px !important;
+}
+
+.leaflet-control-attribution a {
+  color: #94a3b8 !important;
+}
+
+.leaflet-bar a {
+  background: var(--aree-card-raised) !important;
+  color: var(--aree-body) !important;
+  border-color: var(--aree-border) !important;
+}
+
+.leaflet-bar a:hover {
+  background: var(--aree-border) !important;
+}
+
+/* Focus halo behind the selected station marker. */
+.aree-marker-focus {
+  position: relative;
+}
+
+.aree-marker-focus::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 2px solid var(--aree-accent);
+  animation: aree-marker-pulse 2.2s ease-out infinite;
+}

@@ -1,0 +1,42 @@
+# Environment
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtualenv
+venv/
+venv_wsl/
+
+# Streamlit
+.streamlit/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# API keys
+*.env
+
+# Large temporary files
+*.log
+
+# PDF reports
+escalation_report_*.pdf
+
+Cache/
+aqi_output.json
+
+# Next.js frontend
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+frontend/build/
+frontend/.env.local
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+
+# Migration backup (local snapshot, not source)
+backup_pre_migration/

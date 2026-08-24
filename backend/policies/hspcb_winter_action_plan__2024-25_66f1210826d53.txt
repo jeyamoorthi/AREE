@@ -1,0 +1,2320 @@
+Winter Action Plan for
+Air Pollution Control
+2024-25
+Published by Haryana State Pollution Control Board
+
+1
+
+Winter Action Plan: 2024-25
+1. Executive Summary
+
+3
+
+2. Introduction
+
+5
+
+3. State Profile
+
+8
+
+4. Regulatory framework
+
+18
+
+5. State and National level programmes for curbing air pollution
+
+20
+
+6. Sector-wise activities for emission control
+
+26
+
+6.1 Greening
+
+26
+
+6.2 Road Dust
+
+27
+
+6.3 Construction and Demolition
+
+31
+
+6.4 Emissions from Diesel Generator Sets
+
+32
+
+6.5 Emissions from Agro Residue Burning
+
+35
+
+6.6 Vehicular Emissions
+
+39
+
+6.7 Industrial Emissions
+
+42
+
+6.8 Biomass Burning
+
+45
+
+6.9 Burning of Firecrackers
+
+46
+
+6.10 Air Quality Monitoring
+
+47
+
+7. Stakeholder discussions ahead of winter for 2024-25
+
+49
+
+8. Enabling Implementation
+
+52
+
+9. Information, Education and Communication (IEC) activities
+
+54
+
+10. Actions for Citizens
+
+58
+
+11. Haryana Clean Air Project for Sustainable Development in collaboration with The World
+Bank (HCAPSD)
+64
+12. Way Forward
+
+66
+
+2
+
+1. Executive Summary
+Air pollution poses a significant challenge to public health and the environment in Haryana,
+particularly during the winter months when climatic conditions exacerbate the problem. To
+address this pressing issue, the Haryana State Pollution Control Board (HSPCB) has
+developed a comprehensive Winter Action Plan aimed at mitigating air pollution through
+targeted interventions across multiple sectors. The plan outlines a strategic approach to
+reducing air pollution in Haryana, focusing on both immediate and long-term measures,
+grounded in the state's commitment to improving air quality and enhancing the quality of life
+for its residents.
+Haryana is an agriculturally rich state with a rapidly growing industrial sector. However, the
+state also faces significant environmental challenges, including high levels of particulate
+matter (PM2.5 and PM10), especially during the winter season. The plan considers the state's
+geographical and economic profile to develop targeted solutions that are both feasible and
+impactful. Building on the existing regulatory framework, the plan aligns with national and
+state-level environmental policies, incorporating guidelines from the Central Pollution
+Control Board (CPCB) and leveraging state-specific regulations to ensure effective
+implementation of air quality management strategies.
+Haryana's Winter Action Plan integrates various state and national initiatives aimed at
+curbing air pollution, including the National Clean Air Programme (NCAP), the FAME India
+scheme, the Haryana Electric Vehicle (EV) Policy, and other relevant state-level
+interventions. These programs provide a robust foundation for the plan's strategic objectives.
+The plan details past achievements and outlines future interventions across key sectors such
+as vehicular emissions, industrial pollution, construction activities, and crop residue
+management, highlighting the successes and lessons learned from previous efforts and setting
+clear targets for the upcoming winter season.
+Recognizing the importance of a collaborative approach, the idea of stakeholder discussions
+is to increase the participation from government agencies, private sector players, NGOs, and
+community groups, ensuring that the plan is comprehensive and inclusive. A clear
+implementation strategy is outlined, supported by robust governance mechanisms. This
+includes the formation of a steering committee for regularly reviewing the progress, and
+public feedback systems, all designed to ensure that the plan is executed effectively and
+adapts to emerging challenges.
+
+3
+
+The plan also emphasises information, education, and communication (IEC) activities to raise
+public awareness and encourage behavioural change, focusing on educating citizens about the
+sources of air pollution, promoting eco-friendly practices, and involving the community in
+pollution control efforts.
+Citizens are equally responsible for contributing to lowering emissions in the state. Hence, a
+few activities for citizens have been stated in the plan to involve the public in the broader
+goal of improving air quality.
+The Haryana Clean Air Programme for Sustainable Development (HCAPSD), in
+collaboration with the World Bank, forms a critical component of the state's vision to curb air
+pollution. This project aims to strengthen the state's capacity to manage air quality through
+technical assistance, capacity building, and infrastructure development. The project is
+currently undergoing approval by the Governing Committee and the State Cabinet members.
+Concluding with a roadmap for future actions, the plan emphasises the need for sustained
+efforts and continuous improvement. It calls for ongoing collaboration among stakeholders,
+periodic reviews, and the integration of innovative solutions to ensure long-term air quality
+improvement in Haryana. Through coordinated efforts and strategic interventions, Haryana is
+committed to achieve cleaner air and a healthier environment for all its residents.
+
+4
+
+2. Introduction
+Rising air pollution has become a major concern in the recent past, particularly in winter
+months. The health impacts of air pollution are well captured. A 2019 study estimated the
+exposure to high pollution levels has reduced the lifespan of Indians by 6-9 years and caused
+premature deaths of 1.7 million Indians.1 Studies also show that air pollution poses a major
+risk for people already affected by chronic obstructive pulmonary disease, lung cancer, heart
+disease, stroke and pneumonia. This is more so for the elderly and children. Therefore, air
+pollution is as much a public health problem, as it is an environmental problem.
+The list of the most polluted countries in the world, with India ranking 3rd globally in terms
+of PM 2.5 emissions, according to standards set by the World Health Organization (WHO)2:
+PM2.5 Emissions (2019-2023) (µg/m3)
+Rank
+
+Country
+
+2023
+
+2022
+
+2021
+
+2020
+
+2019
+
+Population
+
+1
+
+Bangladesh
+
+79.9
+
+65.8
+
+76.9
+
+77.1
+
+83.3
+
+169,356,251
+
+2
+
+Pakistan
+
+73.7
+
+70.9
+
+66.8
+
+59
+
+65.8
+
+231,402,117
+
+3
+
+India
+
+54.4
+
+53.3
+
+58.1
+
+51.9
+
+58.1
+
+1,407,563,842
+
+4
+
+Tajikistan
+
+49
+
+46
+
+59.4
+
+30.9
+
+--
+
+9,750,064
+
+5
+
+Burkina
+
+46.6
+
+63
+
+--
+
+--
+
+--
+
+22,100,683
+
+Faso
+As an immediate response, over the years, we have witnessed the closure of schools &
+educational institutions, and restriction of economic activities due to very high pollution
+
+1
+2
+
+Health and economic impact of air pollution in the states of India: Global Burden of Disease Study, 2019
+World’s Most Polluted Countries, IQAir, 2023
+
+5
+
+levels.3,4 Almost all sectors - be it education, health, industries, construction sites, or
+transport, have been affected by these restrictions. In Delhi NCR area, the construction ban
+created problems for the many daily wage labour employed in the sector.5 post-COVID,
+disruptions in school learning caused by air pollution present a significant challenge,
+particularly for students who rely solely on school, lack private tuition, and likely do not have
+air purifiers at home. All air polluting industries needed to re-structure, and DG sets are also
+being tightly regulated. In other words, no one is left unaffected.
+This is also a culturally active time of the year, with many festivities as well as a largely
+favourable weather for travel and leisure. Unfortunately, this coincidence further magnifies
+the threat of air pollution during winters.
+As a response to the emerging problem, the central government responded with establishing
+the Commission for Air Quality Management (CAQM), as a high-powered statutory
+authority.6 The CAQM is India’s first experiment with a multi-sectoral air-shed level
+regulatory body.
+Now, with greater understanding, an airshed level approach is also beginning to take shape. It
+is in the context of the very real consequences of air pollution, that the HSPCB present this
+Winter Action Plan.
+Existing source apportionment studies (TERI 2016, TERI 2018) for Delhi NCR region have
+found the main contributing sectors to PM10 emissions to be transport, thermal power plants,
+industries, burning of agro residue, burning of biomass and open waste burning. For PM2.5,
+the main contributing sectors have been found to be construction dust and road dust.
+
+3
+4
+5
+6
+
+“Delhi primary schools to be closed from tomorrow”, Hindustan Times, November 4, 2022,
+“Delhi implements GRAP-4 guidelines amid rise in pollution; Here’s a list of banned activities”, Livemint.com, November 4, 2022
+“Wage cut, job loss: A ban too many for construction workers in Delhi NCR”, Times fo India, November 4, 2022
+Commission for Air Quality Management in National Capital Region and Adjoining Areas Act, 2021
+
+6
+
+Sector-wise contribution of PM2.5 in NCR in 2018
+
+Based on the existing knowledge, Haryana has been taking several steps to prevent emissions
+from major sources - like vehicles, industries, dust, biomass and agro-residue burning etc.
+Deteriorating air quality in Delhi- NCR during the winter period triggers implementation of
+the Graded Response Action Plan (GRAP). GRAP refers to a set of progressive restrictions,
+which come into force, based on the 3-day air quality forecast.
+In this context, Haryana’s Winter Action Plan 2024-25 aims to:
+1) To the extent possible, reduce the possibility of GRAP being triggered, and
+2) Reduce the number of days with ‘Poor’ or worse air quality.
+The Winter Action Plan borrows from the success of the ongoing interventions and
+introduces certain new measures to control emissions.
+
+7
+
+3. State Profile
+3.1 Geographical and demographic landscape
+Haryana is an Indian state, located in the north-western part of the country is ranked 21st in
+terms of area, with less than 1.4% of India's land share. The state capital is Chandigarh,
+which it shares with the neighbouring state of Punjab. Haryana has 6 administrative divisions,
+22 districts, 71 sub-divisions, 93 revenue tehsils, 49 sub-tehsils, 140 blocks, 154 cities and
+towns, 7,356 villages, and 6,225 villages panchayats.78
+
+910
+
+Haryana is located between 27°39' to 30°35' N latitude and between 74°28' and 77°36' E
+longitude. 11Haryana is a landlocked state, bordered by Punjab and Himachal Pradesh to the
+north, by Rajasthan to the west and south, while river Yamuna forms its eastern border with
+Uttar Pradesh. Haryana surrounds the country's capital territory of Delhi on three sides (north,
+west and south).
+The average annual rainfall varies from about 200 mm to 1,400 mm and the average annual
+temperature ranges between 1°C to 45°C.12
+
+7
+
+Revenue and Disaster Management Department, Government of Haryana
+‘About’ section, Government of Haryana
+9
+National Health Systems Resource Centre, Haryana, 2021
+10
+Haryana Budget Analysis, PRS Legislative Research, 2023
+8
+
+11
+12
+
+‘About Us’, Directorate of Census Operations, Haryana
+Haryana Forest Department, Government of Haryana
+
+8
+
+3.2 Presence in the Indo Gangetic Plain
+Haryana is located in the Indo-Gangetic plain, a contiguous airshed home to more than 40%
+of India’s population. This airshed is part of the airshed extending all the way from Pakistan
+in the West to Bangladesh in the East.13
+This means that all the pollution being measured within the state may not originate from
+within state boundaries but may have reached there due to prevalent meteorological
+conditions. As part of the World Bank study (2020), nearly 30% of Haryana’s PM levels are
+from outside Haryana, while nearly 15% is from outside India (exclusive of the 30% outside
+Haryana). 14
+
+PM2.5 in Indo Gangetic Plain in 2015
+3.3 Presence in the National Capital Region
+A large area of Haryana state is included in the economically important NCR of India for the
+purposes of planning and development. 14 districts of Haryana are part of the NCR. This
+makes the state’s air quality significantly dependent on the policies and directions of the
+Commission for Air Quality Management (CAQM) in Delhi and NCR, and their effective
+
+13
+14
+
+“Urgent Action needed in South Asia to curb deadly air pollution”, World Bank
+Striving for Clean Air: Air Pollution and Public Health in South Asia, World Bank, 2022
+
+9
+
+implementation within Haryana, as well as the neighbouring states of Delhi, Uttar Pradesh
+and Rajasthan.
+NCR region in Haryana
+
+3.4 Air Quality in Haryana (2021-2024)
+While devising the winter action plan, it is important to understand the base level of pollution
+and then set targets accordingly. As per the international best practices, such as the method
+used by the US Environmental Protection Agency (USEPA), an annual average of the
+previous three years is taken to define the base pollution level and, accordingly, targets for
+pollution reductions are set to guide action and prepare action plans. Trend analysis helps to
+understand the impact of action on long-term ambient concentration.
+Air in urban areas has numerous pollutants (of these 12 are regulated under the National
+Ambient Air Quality Standards [NAAQS]). However, in Haryana, over the past few years,
+PM2.5 and PM10 have emerged as the major pollutants. The trend of these concentrations,
+across the regions and years is shown in figure 1 and figure 2 below:
+
+10
+
+Figure 1: Trend of PM2.5 in Haryana (2020-2024); [NAAQS - 40 μg/m3]
+
+Faridabad & Gurugram
+
+Hisar & Kaithal
+
+Kurukshetra & Mandikhera
+
+11
+
+Rohtak & Sonipat
+
+Yamuna Nagar & Ambala
+
+Bhiwani & Manesar
+
+Panipat & Jind
+
+12
+
+Karnal & Panchkula
+
+Dharuhera & Ballabgarh
+
+Narnaul & Palwal
+
+13
+
+Sirsa & Fatehabad
+
+Bahadurgarh & Charkhi Dadri
+
+14
+
+Figure 2: Trend of PM10 in Haryana (2020-2024); [NAAQS - 60 μg/m3]
+
+Kurukshetra & Mandikhera
+
+Gurugram & Hisar
+
+Sonipat & Manesar
+
+15
+
+Panipat & Yamuna Nagar
+
+Bhiwani & Karnal
+
+Palwal & Sirsa
+
+16
+
+Charkhi Dadri & Faridabad
+
+Fatehabad & Ambala
+
+17
+
+4. Regulatory framework
+The Environment (Protection) Act, 1986 empowers the central government to notify emission
+norms for industries (such as cement, brick kilns, thermal power plants etc), and other
+industrial processes or operations.15 These standards are monitored for compliance by the
+Pollution Control Boards/Committees.
+The Haryana State Pollution Control Board is strictly following the various emission
+standards under the Environment Protection Act, 1986. In compliance with the Air
+(Prevention and Control of Pollution) Act, 1981, industrial emissions are regulated at the
+establishment phase and operational phase through consent management, inspections and
+
+monitoring mechanisms.16
+The consent certificate is issued only if industrial establishments / processes fulfil general as
+well as specific conditions (related to process, or technology, or inputs) to mitigate the impact
+on the environment. In case where the consent certificate conditions and the directions issued
+by the Board under the Act are violated, the Act empowers the Board to close defaulting units
+and initiate criminal prosecution against them.
+
+15
+16
+
+Section 3, Environment (Protection) Act, 1986
+Air (Prevention and Control of Pollution) Act, 1981
+
+18
+
+Further, various NGT directions have empowered the Board to levy Environmental
+Compensation (EC) from the defaulting units for the environmental damage caused.17
+Vehicular emissions are monitored by the Ministry of Road Transport and Highways at the
+central level, and the Transport Department at the state level. Vehicles must comply with
+these standards for plying on the roads. This compliance is checked by the Pollution Under
+Check Centres, which issue Pollution Under Control Certificates to the vehicles.
+The other sources of pollution including road dust, construction dust, agro-residue burning,
+and open-waste burning, which are more fugitive in nature, are generally regulated by the
+various directions from the CAQM. The CAQM is a unique body, in the sense that its
+jurisdiction is beyond the UT of Delhi, including 14 of the neighbouring districts of Haryana,
+and other districts from UP and Rajasthan.18 It is empowered with wide ranging powers to
+take policy decisions on air quality related matters.
+The CAQM has taken several policy decisions across various sectors of air pollution,
+including industrial, vehicular, construction and agro residue burning. Further, the CAQM’s
+Policy to curb pollution in the NCR Region (2022) provides guidance on the steps to be taken
+to curb air pollution.19
+In addition to existing laws, the directions of the Hon’ble Supreme Court and the National
+Green Tribunal (NGT) are also part of the regulatory framework. The ban on plying of
+overage vehicles was imposed by the NGT.
+
+17
+18
+19
+
+Methodology for calculating Environmental Compensation
+The CAQM Act, 2021
+Policy to curb pollution in the NCR Region, 2022, CAQM
+
+19
+
+5. State and National level programmes for curbing air pollution
+The central and state governments have implemented several programs to curb air pollution.
+The important programmes are listed under:
+5.1 National Clean Air Programme (NCAP)
+The NCAP is a comprehensive strategy launched by the Government of India to tackle air
+pollution across the country, with a specific focus on 131 non-attainment cities, including
+those in Haryana. The programme sets a target to reduce particulate matter (PM2.5 and PM10)
+by 40% by 2026,20 and it includes measures such as expanding the air quality monitoring
+network, implementing city-specific action plans, and enhancing public awareness.
+A total of ₹ 9,649.9 crore has been allocated to non-attainment cities of the country from
+2019 to 2024.21
+NCAP funded cities
+
+20
+21
+
+Strategies to reduce air pollution, Ministry of Environment, Forest and Climate Change, 2024
+“Allocation of funds air pollution”, Ministry of Environment, Forest and Climate Change, 2023
+
+20
+
+According to the Comprehensive Mobility Plan for Faridabad and Ballabgarh by the
+department of Town and Country Planning, Government of Haryana, the projected
+population of Faridabad in 2021 is 3,291,261. Faridabad has been identified as the only nonattainment city under The National Clean Air Programme (NCAP) due to its air quality not
+meeting the National Ambient Air Quality Standards (NAAQS) between 2011 and 2015.
+Below are the details of the NCAP funds received and utilized by Faridabad from 2020 to
+202422:
+
+Particulars (INR.
+
+2020-21
+
+2021-22
+
+2022-23
+
+2023-24
+
+2024-25
+
+Total
+
+Fund allotted by XVFC
+
+48
+
+25
+
+25
+
+27
+
+28
+
+153
+
+Funds received
+
+24
+
+6.25
+
+0
+
+48.45
+
+–
+
+78.7
+
+Funds spent
+
+0
+
+6.05
+
+6.15
+
+16.4
+
+0
+
+28.6
+
+Balance
+
+24
+
+24.2
+
+18.05
+
+50.1
+
+–
+
+50.1
+
+Utilisation (%)
+
+0%
+
+97%
+
+–
+
+34%
+
+–
+
+36%
+
+crore)
+
+To address these air quality challenges, several initiatives have been funded under the NCAP
+for Faridabad. These initiatives focus on improving traffic management, enhancing public
+awareness, promoting urban greening, and controlling dust and waste. The aim is to create a
+cleaner, healthier environment for residents and to bring the city’s air quality within
+acceptable limits.
+The key activities funded under the NCAP include:
+1.
+
+22
+
+Traffic and Vehicle Management:
+a.
+
+Preventing parking in non-designated areas.
+
+b.
+
+Establishing charging infrastructure for electric vehicles (E-vehicles).
+
+Municipal Corporation, Faridabad
+
+21
+
+2.
+
+Capacity Building:
+a. Training and skill development for public officials.
+
+3.
+
+Public Information and Awareness:
+
+4.
+
+a.
+
+Implementing a daily air quality public information dissemination system.
+
+b.
+
+Creating public awareness on pollution sources and control measures.
+
+Urban Greening and Dust Control:
+a.
+
+Greening of traffic corridors, open areas, gardens, community places, schools,
+and housing societies.
+
+b.
+
+Urban greening with vertical gardens.
+
+c.
+
+Road stretches with high dust generation.
+
+d.
+
+Using sprinklers and mechanical road sweeping machines.
+
+e.
+
+Widening roads and ensuring end-to-end paving along with black-topping to
+maintain pothole-free roads.
+
+5.
+
+Waste Management:
+a.
+
+6.
+
+Regular collection, segregation, and scientific disposal of waste.
+
+Other Measures:
+a.
+
+Introducing water fountains at major traffic intersections.
+
+5.2 Pradhan Mantri Ujjwala Yojana (PMUY)
+The Pradhan Mantri Ujjwala Yojana (PMUY), launched on May 1, 2016, aims to provide
+clean cooking fuel to rural and underprivileged households by offering free LPG connections
+to women belonging to Below Poverty Line (BPL) families. By replacing traditional cooking
+methods that rely on biomass and other polluting fuels, PMUY significantly reduces indoor
+air pollution, which is a major health hazard in rural areas. As of August 2024, a total of
+10,33,43,64923 beneficiaries have received connections in the whole of the country, and
+Haryana has successfully provided over 11 lakh connections under the Pradhan Mantri
+
+23
+
+PMUY, Ministry of Petroleum and Natural Gas, 2024
+
+22
+
+Ujjwala Yojana (PMUY). Around 10 lakh households have availed themselves of at least one
+refill, reflecting the widespread adoption and utilization of the scheme across the state.24
+
+5.3 Faster Adoption of Manufacturing of Hybrid and Electric Vehicles (FAME)
+The FAME India Scheme aims to reduce vehicular emissions by promoting the adoption of
+electric and hybrid vehicles. Through financial incentives for consumers and manufacturers,
+as well as the development of supporting infrastructure like charging stations, FAME
+contributes to reducing air pollution by encouraging a shift from traditional fossil fuelpowered vehicles to cleaner, electric alternatives. This initiative is crucial for mitigating
+vehicular pollution, particularly in urban areas, which is a significant concern for air quality
+in Haryana.
+The Faster Adoption and Manufacturing of (Hybrid) & Electric Vehicles in India (FAME
+India) implemented by the Ministry of Heavy Industries, commenced on 1st April 2019 and
+spans five years, with a total budgetary support of ₹ 10,000 crore. The primary focus is on the
+electrification of public and shared transportation, offering purchase incentives for 7,090 ebuses, 5 lakh e-3 wheelers, 55,000 e-4 wheeler passenger cars, and 10 lakh e-2 wheelers.
+Additionally, the scheme supports the creation of charging infrastructure. Under FAME India
+Scheme, the Ministry of Heavy Industries sanctioned 3,397 electric vehicle charging stations
+across 68 cities in 25 States/UTs and 1,576 charging stations across 9 expressways and 16
+highways.25
+
+24
+
+Lok Sabha, 2024
+
+25
+
+Press Information Bureau, Ministry of Heavy Industries
+
+23
+
+Moreover, the Ministry of Heavy Industries has sanctioned ₹800 crore as capital subsidy to
+three Oil Marketing Companies (OMCs) under the Ministry of Petroleum and Natural Gas
+(MoPNG) for the establishment of 7,432 electric vehicle public charging stations.26
+As of August 2024, the number of purchase incentives availed, and the total amount spent
+under FAME in Haryana is as follows:27
+
+Vehicle type
+
+No. of vehicles
+
+Total amount (Cr.)
+
+E-2W
+
+9173
+
+29.66
+
+E-3W
+
+3258
+
+19.62
+
+E-4W
+
+1381
+
+35.01
+
+5.4 Swachh Bharat Abhiyan (Clean India Mission)
+The Swachh Bharat Mission focuses on eliminating open defecation and improving solid waste
+management across India. By promoting sanitation infrastructure and encouraging behavioural
+change, this mission plays a crucial role in reducing environmental pollution, including air
+pollution from the burning of waste. In Haryana, the Swachh Bharat Mission is integral to
+creating cleaner urban and rural environments, thereby contributing to the state’s efforts to
+manage and mitigate air pollution, particularly during the winter season when waste burning is
+more prevalent.
+
+26
+27
+
+FAME India scheme, Ministry of Heavy Industries, 2023
+FAME India Dashboard, Ministry of Heavy Industries, August, 2024
+
+24
+
+Key achievements of Swachh Bharat Abhiyan28
+
+5.5 PM e-Bus Seva
+The PM e-Bus Sewa initiative is a national programme aimed at expanding and enhancing
+electric bus services across India’s cities, including those in Haryana. This program is
+designed to reduce urban air pollution by promoting the use of electric buses, which produce
+zero tailpipe emissions. Under the initiative, financial support is provided to state
+governments and urban local bodies to procure electric buses and develop the necessary
+charging infrastructure. By integrating these eco-friendly buses into public transportation
+systems, the PM E-Bus Sewa seeks to offer a sustainable alternative to conventional dieselpowered buses, thereby significantly cutting down on urban vehicular emissions and
+improving overall air quality in Haryana's cities.
+5.6 Haryana EV Policy, 2022
+The Haryana Electric Vehicle (EV) Policy is a forward-looking initiative aimed at
+accelerating the adoption of electric vehicles in the state to combat air pollution and promote
+sustainable transportation. The policy offers a range of incentives, including subsidies on
+electric vehicle purchases, tax exemptions, and support for establishing EV charging
+infrastructure. It also encourages the manufacturing of electric vehicles and components
+within the state, positioning Haryana as a hub for EV development.
+Haryana has supported the purchase of more than 1,200 EVs, by disbursing financial
+incentives of more than Rs 34 crore till March 2024.
+28
+
+Press Information Bureau, Ministry of Finance, July 2019
+
+25
+
+6. Sector-wise activities for emission control
+6.1 Greening
+As per the National Forest Policy, 1988, one-third of the total land area of the country should
+be under forest or tree cover. As per the 2021 report of the Forest Survey of India, Haryana
+has about 3.6% of its land area under forests.29
+Further, as Haryana lies in the semi-arid region, the prevalence of loose soil dust is more.
+Greening helps prevent erosion of topsoil from winds, especially in the summer season. This
+dust can get deposited on other surfaces (like roads), making it vulnerable to re-suspension.
+6.1.1 Ongoing actions
+For 2023-24, the state of Haryana achieved 88% of its plantation target of 98 lakh plants and
+shrubs. After a detailed identification exercise, nearly 76% of the identified hotspots have
+already been corrected, and converted to green spots by the urban local bodies and other
+agencies.30 The conversion of other identified hotspots is under progress.
+Below are the details of the department-wise plantation targets and the corresponding
+achievements in 2023-2431:
+Department
+
+Target set
+
+Target achieved
+
+Target achieved (%)
+
+Forest
+
+50,00,000
+
+36,95749
+
+74%
+
+ULB
+
+7,02,560
+
+5,18,000
+
+74%
+
+HSIIDC
+
+30,400
+
+34,500
+
+114%
+
+HSVP
+
+1,00,000
+
+1,05,700
+
+106%
+
+PWD
+
+1,09,210
+
+11,076
+
+101%
+
+GMDA
+
+10,50,000
+
+10,86,700
+
+103%
+
+FMDA
+
+5,25,000
+
+3,94,012
+
+75%
+
+NHAI
+
+5,00,000
+
+6,77,292
+
+136%
+
+School Education Department
+
+6,73,850
+
+6,61,887
+
+98%
+
+29
+30
+
+31
+
+Forest Cover in India, Ministry of Environment, Forest & Climate Change, 2022
+Based on data from the urban local bodies, 63 hotspots were identified in the first phase.
+Haryana Pollution Control Board, 2024
+
+26
+
+Panchayat Department
+
+9,25,427
+
+11,11,433
+
+120%
+
+Industrial Association
+
+2,77,350
+
+2,87,750
+
+104%
+
+Total
+
+9893797
+
+8683787
+
+88%
+
+6.1.2 Planned actions
+For 2024-25, the state has set a target of 1.3 crore plants.
+Further, the state government is also leveraging the central government’s Nagar Van Yojana,
+under which urban local bodies would receive assistance to establish Nagar Vans in 10-50
+hectares of land and vaatikas in 1-10 hectares of land.
+6.1.3 Departments/Agencies responsible for Greening
+1. Directorate of Urban Local Bodies (DULB)
+2. Municipal Corporations (MCs)
+3. Public Works Department (PWD)
+4. Haryana Shahari Vikas Pradhikaran (HSVP)
+5. Gurugram Metropolitan Development Authority (GMDA)
+6. Faridabad Metropolitan Development Authority (FMDA)
+7. Forest department
+8. Haryana State Industrial & Infrastructure Development Corporation (HSIIDC)
+and Industrial Associations
+9. National Highways Authority of India (NHAI)
+10. Development and Panchayats Department
+11. Directorate of Higher Education
+12. Directorate of School Education
+
+6.2 Road Dust
+
+6.2.1 Ongoing actions
+One of the major reasons for road dust is disintegrating road surfaces, which can lead to
+potholes.
+
+27
+
+In this context, in 2024-25, the state will be focussing on:
+1) Identifying major roads which need repair, by leveraging government resources, as
+well as citizen-to-government communication. One of the resources for this is the
+SAMEER App, developed by CPCB.32
+2) Completing the repair of the identified stretches or patches, ahead of the winter
+season.
+3) Hiring of additional mechanised sweepers/sprinklers where required, and inter-agency
+leasing of idle mechanised sweepers or sprinklers.
+Dust Control Management Cells (DCMCs) are specialized units established by the
+Commission for Air Quality Management (CAQM) to manage and mitigate dust pollution in
+various regions. In the context of the National Capital Region (NCR), where air quality issues
+are particularly severe due to high levels of particulate matter (PM), DCMCs play a crucial
+role.
+Role of Dust Control Management Cells (DCMCs):
+1. Monitoring and Assessment: DCMCs are responsible for monitoring dust emissions
+from various sources such as construction sites, roads, and industrial areas. They
+assess the effectiveness of dust control measures and identify areas requiring
+improvement.
+2. Implementation of Control Measures: DCMCs oversee the implementation of dust
+control measures. This includes enforcing regulations, promoting best practices, and
+ensuring compliance with guidelines designed to minimize dust emissions.
+3. Coordination and Collaboration: They coordinate with various stakeholders,
+including local authorities, construction companies, and industrial operators, to ensure
+that dust control measures are effectively implemented. This includes facilitating
+communication and collaboration between different entities involved in dust
+management.
+4. Public Awareness and Education: DCMCs work on raising awareness about the
+importance of dust control among the public and stakeholders. They also provide
+training and resources to help in the adoption of effective dust management practices.
+32
+
+SAMEER App
+
+28
+
+5. Reporting and Data Collection: DCMCs collect data on dust levels and the
+effectiveness of control measures. They report this data to regulatory bodies and use it
+to refine strategies and policies.
+Dust Portal
+The Haryana State Pollution Control Board (HSPCB) has developed a Dust Portal for the remote
+monitoring of dust pollution at Construction and Demolition (C&D) sites exceeding 500 square
+meters within the National Capital Region (NCR) and under the jurisdiction of urban local
+bodies.
+
+These sites are mandated to install CCTV cameras, low-cost sensors, and submit a self-audit report
+to facilitate effective remote monitoring. The self-audit report, which is assessed by the HSPCB
+officers, requires sites to document their compliance with mandatory and recommended dust
+mitigation practices. These practices include, but are not limited to, installing green screens around
+the construction site, utilizing water sprinkling to suppress dust, and covering stored construction
+materials.
+
+29
+
+Officers review the audit reports based on the attached photographs and videos, score the reports,
+and either accept or reject them based on the site's adherence to the required dust control
+measures.
+6.2.2 Planned actions
+Even though roads may be in good condition, dust from nearby sources often tends to get
+deposited on the road. This dust is susceptible to re-suspension, mainly due to vehicular
+movement. In this context, in 2024-25, the state will focus on:
+1) Undertaking preventive maintenance of all sprinkling and sweeping machines, to
+ensure they are in working condition.
+2) Efficiently operating the existing sprinkling and sweeping machines, to minimise resuspension of road dust due to movement of vehicles.
+3) Procuring new machines at the municipal authorities’ level, based on the gap to
+achieve the 50% road sweeping / sprinkling target by 31-12-2023 (as per CAQM
+Policy for NCR region, 2022).33
+4) Ensuring that the road sweeping machines are effectively cleaning the road, through
+surprise inspections and test runs.
+
+6.2.3 Departments responsible for controlling Road Dust
+1. Directorate Urban Local Bodies (DULB)
+2. Haryana Shahari Vikas Pradhikaran (HSVP)
+3. Municipal Corporations (MCs)
+4. Public Work Department (PwD)
+5. Gurugram Metropolitan Development Authority (GMDA)
+6. Faridabad Metropolitan Development Authority (FMDA)
+
+33
+
+Page 90, CAQM Policy for NCR Region (2022)
+
+30
+
+6.3 Construction and Demolition
+
+6.3.1 Ongoing actions
+All active construction projects are mandated to comply with CAQM Direction No. 69.34 This
+direction mandates the use of Anti-Smog Guns (ASGs) at construction sites, based on the
+following area slabs:
+Table 2: Area slabs and Anti-Smog Guns (ASGs) as per CAQM Direction 1135
+#
+
+Area slab
+
+Minimum no. of ASGs
+
+1
+
+5,000 sqm to 10,000 sqm
+
+1
+
+2
+
+10,000 sqm to 15,000 sqm
+
+2
+
+3
+
+15,000 sqm to 20,000 sqm
+
+3
+
+5
+
+Above 20,000 sqm
+
+4
+
+Since July 2024, district-level teams have increased the inspections of construction projects
+in their jurisdictions, to ensure that ASGs are deployed on the ground. This is an ongoing
+activity and will be intensified in the upcoming weeks.
+
+6.3.2 Planned actions
+In 2024-25, the state will focus on increased adoption of clean construction practices, remote
+monitoring through Dust Portal, and increased inspections. To achieve this, the district
+administration and the Regional Offices of the HSPCB will:
+1) Sensitize project proponents on clean construction practices through workshops.
+2) Get the project proponents registered on the Dust Portal and ensure timely submission
+of fortnightly self-audits.
+
+34
+35
+
+CAQM Direction No. 69
+
+CAQM Direction No. 11
+
+31
+
+3) Ensure that project proponents provide a web-camera with working web link and lowcost sensors on site for remote monitoring.
+4) Increase the frequency of construction projects of all areas, to ensure deployment and
+usage of Anti-Smog Guns.
+5) HSPCB has established a Web Portal for Dust Pollution Control Self-Assessment, for
+registration by construction projects on plot area 500 square metres and above in
+NCR. Till date 1044 sites have been registered on the Web portal.
+6) Deployment of Low-cost sensors act as a dual verification tool in the state.
+
+6.3.3 Departments primarily responsible for controlling emissions from Construction &
+Demolition sites in NCR
+1. Directorate Urban Local Bodies (DULB)
+2. Municipal Corporations (MCs)
+3. Public Work Department (PWD)
+4. Gurugram Metropolitan Development Authority (GMDA)
+5. Faridabad Metropolitan Development Authority (FMDA)
+
+6.4 Emissions from Diesel Generator Sets
+
+6.4.1 Ongoing actions
+Many commercial, industrial and residential establishments keep generator sets as a backup
+source for electricity supply. While proving to be a critical backup source, diesel generator
+(DG) sets are found to be the most polluting.
+Throughout the year, in various review meetings, the power distribution companies of the
+state have been directed to undertake all measures (such as upgrading power infrastructure) to
+provide 24 X 7 uninterrupted supply of power.36,37 This would prevent the need to operate
+generator sets in the first place. In the short term, in the context of generator sets, all
+establishments must comply with the CAQM Direction No. 73.38 This direction mandates DG
+
+36
+
+37
+38
+
+UHBVN districts: Panchkula, Ambala, Yamunanagar, Kurukhsetra, Kaithal, Karnal, Panipat, Sonepat, Rohtak and Jhajjar
+DHBVN districts: Faridabad, Palwal, Nuh, Gurugram, Mohindergarh, Rewari, Bhiwani, Charkhi Dadri, Hisar, Fatehabad, Sirsa and Jind
+CAQM Direction No. 73
+
+32
+
+sets in industrial, residential, commercial, and office establishments to adhere to the
+following emission control system, based on their capacity (by 30.09.2023):
+1. Below 19 kW – No emission control system required
+2. 19 to 125 kW – Dual fuel mode (Natural gas & diesel)
+3. 125 to 800 kW – Dual fuel mode Or RECD through certified vendors / agencies
+4. 800 kW and above – Dual fuel mode or any other emission control device system
+
+Apart from above no additional emission control device required in case of gas-based
+generator sets.
+Further, there are no restrictions on new generator sets (up to 800 KW) which are compliant
+with November 2022 emissions standards.39 Note that the emission limits for new engines
+used in generator sets (up to 800 kW Gross Mechanical Power), are applicable on:
+1. Diesel engines,
+2. Engines based on dedicated alternate fuels,
+3. Engines based on Bi fuels run either on Gasoline or on any one of the alternate fuels,
+4. (Engines based on Dual Fuel run on Diesel and any of the alternate fuels, and
+5. Portable Generator sets (PI engines below 19kW and up to 800 cc displacement) run on
+Gasoline fuel, dedicated alternate fuels and Bi fuel run either on Gasoline or on any one of
+the alternate fuels
+> Above 800 kW – any emission control mechanism, strictly subject to compliance of
+emission standards as indicated below:12
+Table 3: Standards for stack emissions for 8OO kW and above DG sets40
+#
+
+39
+40
+
+Parameter
+
+Standards
+
+1
+
+PM (at 15% O2)
+
+50 mg / Nm3
+
+2
+
+NOx (at 15% O2)
+
+650 mg / Nm3
+
+3
+
+CO (at 15% O2)
+
+100 mg / Nm3
+
+MoEFCC notification GSR 804(E) dated 03.1 1 .2022
+CAQM Direction No. 73
+
+33
+
+4
+
+Stack height
+
+Maximum of the following (in metres):
+a) Minimum 6 m above the building where DG set is
+installed, or
+b) 30 m
+For example, if the building height where such DG
+sets are installed is 20m, stack height for DG sets
+should be 30 m. from ground level; while if the
+building height itself is 27m, the minimum stack
+height for the DG sets should be 33m from the
+ground level.
+
+6.4.2 Planned actions
+As a part of ongoing efforts, the state will continue its efforts to ensure 24 X 7 uninterrupted
+power supply. Further, the state government will make efforts to expedite supply of gas
+connections to industries. There will be continuous dialogue between different departments,
+gas agencies, and industries. Ensuring uninterrupted supply of gas and electricity to industries
+is a top priority for the state government, and will be reviewed more frequently, going
+forward.
+The quantum of assistance to be provided in the following table:
+Table 4: Applicability criteria for availing financial assistance
+
+34
+
+#
+1
+
+Type of purchase
+Dual fuel kit only
+
+Eligibility conditions
+
+Quantum of assistance
+
+>PNG infrastructure/network 100% cost of dual fuel kit
+is available.
+
+2
+
+RECD or dual fuel kits
+
+>PNG infrastructure/network 100% cost of RECD or dual
+is available.
+
+fuel kit
+
+>DG set is at least 5 years
+old.
+2
+
+New gas-based
+
+>PNG is available in the
+
+generator set (capacity
+
+area.
+
+up to 250 kVA)
+
+>DG set is older than 13
+
+40% of the generator cost
+
+years old.
+> DG set has been operated
+for more than 44,000 hours.
+
+6.4.3 Departments/Agencies responsible for reducing emissions from Diesel Generator Sets
+1. Department of Industries and Commerce
+2. Haryana State Pollution Control Board (HSPCB)
+6.5 Emissions from Agro Residue Burning
+
+6.5.1 Ongoing actions
+During the period 2018 and 2023, the state was able to reduce its Active Fire Locations by
+nearly 37% across all districts.
+
+35
+
+Fire Incidents reported by HARSAC (2016-23)
+
+The measures taken by the State Government to control paddy stubble burning include:
+1) Providing an incentive @ Rs. 1000/- per acre for in-situ / ex-situ management of
+paddy crop residue.
+2) Providing an incentive @ Rs. 7000/- per acre for diversification of paddy area with
+alternative crops under Mera Pani Meri Virasat Scheme.
+3) Providing an incentive @ Rs. 4000/- per acre for adoption of direct sowing of rice.
+4) The New and Renewable Energy Department already identified & formed a cluster of
+villages, producing biomass in the vicinity of various industries in consultation with
+the Agriculture & Farmer Welfare Department.
+5) Red Zone Panchayat to receive Rs. 1,00,000/- for achieving Zero Burning.
+6) Yellow zone Panchayat to receive Rs. 50,000/- for achieving Zero Burning.
+7) Transportation charges of Bales @ 500/- per acre limited to max of Rs. 15,000/- to
+Gaushalas.
+8) Various IEC activities for farmer training through farmer vans, wall paintings etc.
+Haryana is making substantial progress in managing paddy straw, a major contributor to air
+pollution, particularly due to stubble burning. The state has initiated several large-scale
+projects aimed at converting paddy straw into bio-energy, thereby mitigating environmental
+impacts while also generating economic opportunities. One significant project is the
+Compressed Biogas (CBG) Plant located in Jhajjar, which processes 20 Metric Tons per Day
+(MTD) of paddy straw, consuming a total of 150 MTD. Another notable initiative is the 2G
+Ethanol Plant in Panipat, with a capacity of 100 Kilo Litres per Day (KLPD) and using 52.5
+MTD of paddy straw. Thermal power stations in Haryana are expected to utilize 2.75 Lakh
+36
+
+Metric Tons (LMT) of paddy straw annually in 2024-25. Additionally, biomass-based power
+plants are actively contributing to paddy straw management. As of May 2024, there are six
+operational plants with a combined capacity of 65.4 MW and an annual paddy straw
+consumption of 4.9 LMT. Moreover, four more plants are in the pipeline, which will add a
+total capacity of 31.8 MW.
+In the realm of briquetting, Haryana is establishing 23 new plants, which together will have
+an annual paddy straw consumption capacity of 2.30 LMT.
+Bio- Energy Policy, 2018:
+The Haryana Bio-Energy Policy, introduced on December 7, 2018, by the Haryana
+Department of New and Renewable Energy (DNRE), is aimed at enhancing the utilization of
+biomass resources to produce renewable energy. The primary goal of the policy is to reduce
+reliance on fossil fuels and address environmental challenges by promoting the development
+of bio-energy projects. This includes the establishment of biomass-based power plants,
+biogas plants, and ethanol production facilities, which help in managing agricultural waste
+more effectively and mitigating pollution from stubble burning.
+The policy supports the advancement of technologies such as Compressed Biogas (CBG) and
+2G ethanol production, encouraging research and development to improve efficiency and
+lower costs. It provides financial incentives and subsidies to stimulate investment in bioenergy projects and the development of necessary infrastructure.
+Regulation and standardization are central to the policy, with clear guidelines and standards
+established for biomass energy production, including emissions norms and quality criteria for
+biomass fuels. The policy also includes mechanisms for monitoring and enforcement to
+ensure compliance and assess project performance.
+Furthermore, the policy emphasizes integration with broader environmental and agricultural
+policies, ensuring a cohesive approach to biomass resource management. Engaging with
+stakeholders—such as farmers, industry players, and local communities—is crucial for
+effective implementation. Overall, the Haryana Bio-Energy Policy aims to contribute to
+sustainable energy production, improved waste management, and economic development.
+
+37
+
+6.5.2 Planned actions
+For the 2024-25 season, the state has devised a comprehensive strategy to manage the paddy
+straw and stubble generated. With an estimated 7,314,440 metric tons (MT) of straw to be
+managed, the state will employ a combination of in-situ and ex-situ strategies, alongside
+promoting its use as fodder. Specifically, around 2,462,882 MT of the straw will be utilised
+as fodder, supporting the livestock sector. In-situ management practices, which involve the
+incorporation of straw back into the soil, will handle approximately 3,141,892 MT, thereby
+improving soil health and reducing the need for burning. The remaining 1,709,666 MT will
+be managed through ex-situ methods, which include using straw for industrial applications
+and energy production, ensuring that the stubble is effectively and sustainably managed
+across the state.
+1) An estimated quantity of 13.54 Lakh metric tons of paddy stubble is likely to be
+consumed in the major industries.
+2) Deploying more than 80,000 Crop Residue Machines to manage more than 14 lakh
+hectares of paddy straw, with most of these machines going to small and marginal
+farmers.
+3) Department has taken initiative to target 5 Lakhs acre paddy area through Pusa Bio
+Decomposer.
+4) State government will provide Pusa bio decomposer kits to the farmers free of cost.
+5) Increased use of IEC activities to make farmers aware about the existing schemes and
+incentives to avoid stubble burning.
+6) Identifying and leveraging champions from each village and block as change agents,
+who have availed the benefits of the existing schemes.
+7) Increasing the use of satellite-based monitoring from HARSAC to identify active fire
+locations.
+8) Deploying task forces at District, Block, and Panchayat level in advance of the
+harvesting season, to create a ‘presence of the administration’ in hotspots, and
+9) After exhausting the above measures, levying Environmental Compensation on the
+defaulting farmers as per the following schedule:41
+
+41
+
+The Commission for Air Quality Management in National Capital Region and Adjoining Areas (Imposition, Collection and Utilisation of
+Environmental Compensation for Stubble Burning) Rules, 2023
+
+38
+
+Table 5: Environmental Compensation for stubble burning
+#
+
+Land area
+
+Fine amount
+
+1
+
+Less than 2 acres
+
+Rs 2,500
+
+2
+
+2-5 acres
+
+Rs 5,000
+
+3
+
+More than 5 acres
+
+Rs 15,000
+
+6.5.3 Departments and Agencies responsible for controlling Agro Residue Burning
+1. Department of Agriculture
+2. Department of revenue
+3. Deputy Commissioners of all districts
+4. Haryana State Pollution Control Board
+5. Haryana Space Applications Centre, Hisar
+6. Chief Fire Officers of each district
+7. Department of Rural Development and Panchayat
+
+6.6 Vehicular Emissions
+
+6.6.1 Ongoing actions
+In 2022, the state notified two important policies - the Haryana Electric Vehicle (EV) Policy
+and the Vehicle Scrapping Policy.42,43 As of August 2024, Haryana has more than 1,000,00
+EVs. More than 70% of these EVs were registered after the notification of EV Policy. By
+ensuring speedy implementation of a web portal, Haryana has already supported the purchase
+of more than 1,200 EVs, by disbursing incentives of more than Rs 34 crore.44 Notably, the
+
+42
+43
+44
+
+The Haryana Electric Vehicle Policy, 2022
+The Haryana Vehicle Scrappage Policy, 2022
+Based on data from VAHAN Dashboard and the Dept of Industries and Commerce for September 2023.
+
+39
+
+demand for certain segments has already exceeded the 5-year limit. A proposal for increasing
+this limit is under consideration of the state government.
+EV registration trend in Haryana (2019-24)
+
+*2024 is up to the month of August
+
+For the Vehicle Scrapping Policy to be successful, the state needs two key enabling
+infrastructures - Automated Testing Stations (ATS) and Registered Vehicle Scrapping
+Facilities (RVSFs). The state government is in the process of establishing these ATS on PPP
+mode. As of September 2023, Haryana has 5 RVSFs.
+Once a vehicle is handed over to the RVSF, the earlier vehicle owner is given a Certificate of
+Deposit (CoD). So far, 1,250 certificates of deposit (CoD) have been issued. When the same
+person buys a new vehicle and submits this CoD at the time of vehicle registration, the person
+shall receive a rebate on motor vehicle tax. The rebate shall be equal to lesser among 10% of
+the motor vehicle tax, or 50% of the scrap value (mentioned in the CoD).
+Further, all Regional Transport Offices (RTOs) in the NCR region are inspecting the
+calibration of the equipment at Pollution Under Control Certificate (PUCC) centres. Noncompliant PUCC centres have been challaned, or shut down, based on the degree of noncompliance.
+Further, NCR districts in Haryana are implementing CAQM Direction No. 70.45 This
+direction mandates the registration of only CNG/electric autos in NCR districts.
+45
+
+CAQM Direction No. 70
+
+40
+
+For the seamless and efficient traffic management and minimising traffic congestion in the
+jurisdiction of the NCR, the State has constituted dedicated task forces with representatives of
+the Departments concerned to continuously monitor and take corrective steps towards smooth
+traffic management. An “Intelligent Traffic Management System” (ITMS) is operational in
+the State.
+The Haryana government has implemented a ban on older vehicles to address rising air
+pollution levels in the state. Under this regulation, diesel vehicles that are 10 years or older
+and petrol vehicles that are 15 years or older are prohibited from operating on the roads.
+Breakup of vehicle type which is older than 10 years diesel and 15 years older petrol as
+on 30.04.2024
+Type
+
+Registered vehicle from
+
+Registered vehicle from
+
+1.1.1990 to 30.4.2014
+
+1.1.1990 to 30.4.2009
+
+Diesel
+
+Petrol
+
+2-wheeler
+
+1,934
+
+13,65,396
+
+3-wheeler
+
+72,942
+
+73
+
+4-wheeler
+
+49,44,464
+
+3,23,329
+
+Buses
+
+24,220
+
+38
+
+Goods Carrier
+
+3,01,861
+
+8,851
+
+Total
+
+8,95,430
+
+16,97,687
+
+6.6.2 Planned actions
+Under Stage I of the revised GRAP (AQI of Delhi ranging from 200-300), over-aged
+petrol/diesel vehicles found plying on the roads will have to be impounded, in compliance
+with the Hon’ble Supreme Court & NGT orders.46 In this context, the state will:
+
+46
+
+Revised GRAP for 2023-24
+
+41
+
+1) Spread awareness about the motor vehicle tax rebate available under the Haryana
+Vehicle Scrapping Policy, to ensure that people get their end-of-life or close to endof-life vehicles scrapped.
+2) Spread awareness about the directions of the Hon’ble Supreme Court & NGT orders
+regarding ban on plying of end-of-life vehicles.
+3) ICE activities to be undertaken for E-trucks and Tractors to increase their adoption in
+the state.
+4) Focus on the deregistration and scrapping of older vehicles, as well as those polluting
+above permissible limits.
+Further, efforts will be made to minimise traffic congestion in NCR areas. To achieve this,
+the state will:
+1) Encourage government and private offices to have staggered office timings, to
+distribute the flow of traffic.
+2) Review the working of traffic light systems, ahead of the winter season.
+3) Ensure deployment of traffic police at points prone to congestion.
+4) Deploy anti-smog guns on congestion points, especially at peak hours.
+5) Low Emission Zones pilot implementation in hotspot cities i.e. Gurugram and
+Faridabad.
+6.6.3 Departments responsible for controlling Vehicular Emissions:
+1. Department of Transport
+2. Haryana State Pollution Control Board (HSPCB)
+3. Traffic Police
+4. Gurugram Metropolitan Development Authority (GMDA)
+5. Faridabad Metropolitan Development Authority (FMDA)
+
+6.7 Industrial Emissions
+6.7.1 Ongoing actions
+The HSPCB, through its Regional Offices, has held a series of sensitization and stock-taking
+
+42
+
+meetings, to make stakeholders aware of various CAQM directions. The state government
+and concerned agencies are speeding up providing Piped Natural Gas connections, to allow
+operation of generator sets on dual fuel mode.
+Although, industries are an integral part of Haryana’s economy, they also contribute to air
+pollution within the state. In compliance with the CAQM directions and CAQM Policy for
+NCR region (2022), the state is taking the following measures to abate industrial emissions:
+1) Clean fuel strategy: As of today, all industries in industrial clusters in NCR are
+running on approved fuels. Most of such industries are operating on biomass fuels.
+Further, in March 2023, the state government announced a scheme to provide
+financial assistance of 30% of the total cost of conversion of boilers to run on
+PNG/CNG, for MSMEs.47
+Status of shifting of industries to cleaner/approved fuels in NCR (2023-24)
+#
+
+Particulars
+
+Total
+
+1
+
+Total No. of fuel-based industries
+
+4966
+
+2
+
+No. of industries running on PNG / CNG / LPG / LNG
+
+825
+
+3
+
+No. of industries running on biomass fuels
+
+3178
+
+4
+
+No. of industries running on electricity
+
+384
+
+5
+
+No. of industries running on L.S.H.S Family fuels
+
+277
+
+No. of industries running on other approved fuels, if any
+
+0
+
+Bio- Diesel
+
+6
+
+Hydrogen
+
+1
+
+Metallurgical coke
+
+89
+
+Wood / Charcoal (for Lead recycling units only)
+
+53
+
+Solar System
+
+1
+
+7
+
+Thermal Power Plants
+
+3
+
+8
+
+No. of industries still running on unapproved fuels
+
+0
+
+9
+
+Industries closed of their own
+
+108
+
+6
+
+47
+
+Notification of “Assistance in conversion of boiler to run on cleaner fuel”, Dept of Industries and Commerce
+
+43
+
+10
+
+Industries closed by Board
+
+41
+
+2) Process upgradation: More than 99% of brick kilns in the state have shifted to zig-zag
+technology. This has helped reduce the contribution of brick kilns to air pollution.
+3) Emissions monitoring: The HSPCB monitors the emission stacks of all red category
+industries using Online Continuous Emissions Monitoring System (OCEMS). In cases
+of exceedance and delays, the industrial units are notified and asked to take corrective
+action. As of now, 291 industries in Haryana have installed the Continuous
+Emissions Monitoring System (CEMS). Additionally, The Haryana State Pollution
+Control Board (HSPCB) has implemented a dedicated portal to monitor industry
+compliance with the Continuous Emissions Monitoring System (CEMS). This portal
+plays a crucial role in tracking and ensuring that industries provide real-time
+emissions data to the Pollution Control Board.
+The portal is designed to facilitate continuous oversight of industrial emissions,
+ensuring that industries adhere to the emission standards prescribed by the regulatory
+authorities. By receiving real-time data, the PCB can promptly identify any deviations
+from the standards and take necessary corrective actions to mitigate pollution.
+4) Inspections and monitoring: The HSPCB has a roster of inspections for red, orange
+and green categories of industries. Through these inspections, the HSPCB monitors
+emissions from industrial units. Action is being taken on defaulting units as per
+procedure prescribed under the law.
+6.7.2 Planned actions
+The HSPCB through its Regional Offices will intensify the inspections and monitoring of
+industries. Further, the state government will increase its extension activities to ensure that
+financial incentives for clean fuel transition are known and availed by MSMEs.
+
+6.7.3 Departments responsible for controlling for Industrial Emissions
+1. Department of Industries and Commerce
+44
+
+2. Directorate of Micro, Small & Medium Enterprises (MSME)
+3. Haryana State Pollution Control Board (HSPCB)
+4. Department of Labour
+6.8 Biomass Burning
+6.8.1 Ongoing actions
+Household combustion emits more than half of all global black carbon emissions, a major
+component of fine particulate matter.48 A significant section of the population of the state, are
+dependent on cooking using: (i) easily available but polluting fuels (such as wood, animal
+dung and crop waste and coal), or (ii) inefficient stoves. Both result in harmful household air
+pollution.
+The state government is implementing the PM Ujjwala Yojana, aiming to ensure access to
+clean cooking fuel to all eligible households.
+
+6.8.2 Planned actions
+Apart from biomass burning for cooking, biomass burning for heating has also emerged as a
+problem, especially for the poor and vulnerable. In peak winter, the poor and vulnerable
+segments of society resort to burning of biomass, to keep themselves warm. In the winter
+season, this too contributes to the high pollutant concentrations in the air. To prevent this
+situation, the state will:
+1) Ensure that all government shelters for the poor and vulnerable are well stocked with
+warm clothes and heating coils.
+2) Create awareness among civil society organisations to contribute clean, warm clothes
+for the poorer segments in society.
+Further, unauthorised burning of open waste will be monitored, and penalised by teams from
+the urban local bodies.
+6.8.3 Departments responsible for controlling emissions from Household
+1. Department of Agriculture
+
+48
+
+Integrating Air Quality Management and Climate Change Mitigation, World Bank, 2023
+
+45
+
+2. Department of Food and Civil Supplies
+6.9 Burning of Firecrackers
+
+6.9.1 Ongoing actions
+Ahead of the festive season, the state will be implementing a total ban on manufacturing,
+sale, and distribution of firecrackers.
+6.9.2 Planned actions
+By taking this decision in September (a month in advance of the ban), the state has
+proactively tried to reduce the ‘sunk cost’ in the firecracker supply chain, thereby protecting
+lives of its residents, and of those employed in the firecracker sector as well.
+In 2024-25, inspection teams constituted under the Deputy Commissioners will shortly start
+inspections, to check establishment of the firecracker supply chain. Further, wide publicity
+will be given to the ban, to make the citizens aware.
+6.9.3 Departments responsible for taking actions on burning of Firecrackers
+1. Haryana State Pollution Control Board (HSPCB)
+2. Directorate of Urban Local Bodies (DULBs)
+3. Municipal Corporations (MCs)
+4. District Administration
+5. Department of Explosive
+6. Chief Fire Officers of each district
+
+46
+
+6.10 Air Quality Monitoring
+
+6.10.1 Ongoing actions
+Air quality monitoring enables us to track changes in air quality over time, identify pollution
+hotspots and exposure patterns, and inform action plans. HSPCB monitors criteria pollutants
+regularly. Currently, there are 29 real-time monitoring stations and 39 manual monitoring
+stations in Haryana.
+Source apportionment and emission inventory studies (in combination) help us to understand
+local sources of air pollution and their relative contributions. So far, source apportionment
+studies for Faridabad, Gurugram, Sonipat, and Panipat are in progress. An interim report for
+Faridabad (being done by TERI) found construction and road dust to be the major
+contributors for high PM10 levels and Road Dust and Industries for PM2.5. The status of the
+source apportionment studies in the state is captured below:
+Table 6: Status of source apportionment studies in Haryana
+
+47
+
+#
+1
+
+City
+Faridabad
+
+Executing Agency
+
+Starting time
+
+TERI
+
+March 2021
+
+Status
+Nearing
+completion.
+
+2
+
+Gurugram, Sonipat,
+
+ARAI, Pune
+
+March 2023
+
+In progress
+
+Not yet selected
+
+Not yet
+
+Under tendering
+
+and Panipat
+3
+
+Rewari, Jhajjar,
+Charkhi Dadri,
+
+started
+
+Rohtak, and Jind
+6.10.2 Planned actions
+The state is focused on expanding its ambient air quality monitoring network. Further, NGT
+directed CPCB to install 10 new real-time stations- 5 each in Charkhi Dadri and
+Mahendergarh districts. A proposal for procurement of additional real-time monitoring
+stations is under consideration.
+The expression of interest for conducting the source apportionment studies in another 5 NCR
+districts i.e. Rewari, Jhajjar, Charkhi Dadri, Rohtak and Jind, have been floated.
+The HSPCB will continue to hold regular reviews of the ongoing studies, to ensure adherence
+to agree upon timelines. Further, any actionable insights from these studies will be leveraged
+in the Winter Action Plan.
+6.10.3 Departments responsible for Air Quality Monitoring
+1. Haryana State Pollution Control Board (HSPCB)
+2. Urban local bodies and Metropolitan development authorities
+3. Gurugram Metropolitan Development Authority (GMDA)
+4. Faridabad Metropolitan Development Authority (FMDA)
+
+48
+
+7. Stakeholder discussions ahead of winter for 2024-25
+The HSPCB aims to undertake measures which, to the extent possible, prevent the AQI
+forecast to breach the thresholds for Stage I of the Graded Response Action Plan (GRAP). To
+achieve this, the pollution sources in the state must be abated with greater intensity. This is
+because in winter, due to temperature inversion, pollutants tend to remain suspended in the
+atmosphere at lower heights.
+To that extent, a series of review meetings at district headquarters, will be held under the
+chairmanship of Chairperson, Haryana State Pollution Control Board (HSPCB) from October
+to December, to review the enforcement of air pollution abatement actions across
+departments in all the 14 NCR districts of Haryana. In each of these meetings, a total review
+of the contributing sectors will be taken, which includes, construction and demolition
+activities, road dust, vehicular emissions, and emissions from DG sets, etc.
+The state will undertake comprehensive stakeholder consultations across various sectors to
+ensure a holistic approach to address air pollution. These consultations will involve active
+participation from both government agencies and private sector players, including industry
+representatives, environmental NGOs, and community organisations. The goal is to gather
+diverse perspectives, leverage sector-specific expertise, and foster collaborative solutions that
+align with the state's environmental objectives. Through these discussions, the state aims to
+create a unified and actionable plan that addresses the challenges faced by different sectors,
+ensuring broad-based support and effective implementation of air pollution control measures.
+Here are some key topics for stakeholder discussions that can be done as part of the Winter
+Action Plan to curb air pollution:
+7.1 Vehicular Emissions Control:
+Discussion Points: Strengthening the Pollution Under Control (PUC) certification process,
+promoting electric vehicles (EVs), improving public transportation, and refilling off the
+potholes and implementing stricter emission norms for private and commercial vehicles.
+
+49
+
+7.2 Industrial Emission Standards:
+Discussion Points: Enhancing emission control technologies, monitoring compliance with
+existing standards, and incentivizing cleaner production methods,.
+7.3 Construction and Demolition Waste Management:
+Discussion Points: Implementing dust control measures at construction sites, promoting the
+use of green building materials, enforcing regulations on waste disposal, and fostering
+collaboration between government bodies and private construction firms.
+7.4 Agricultural Practices and Crop Residue Management:
+Discussion Points: Encouraging sustainable farming practices, promoting alternatives to
+stubble burning, and facilitating access to eco-friendly agricultural technologies for farmers.
+7.5 Urban Planning and Green Spaces:
+Discussion Points: Integrating green infrastructure in urban planning, expanding urban green
+cover, and involving private developers in creating and maintaining green spaces within
+cities.
+7.6 Public Awareness and Behaviour Change:
+Discussion Points: Designing effective public awareness campaigns, promoting eco-friendly
+behaviours, leveraging social media for outreach, and engaging community leaders in air
+pollution prevention efforts.
+7.7 Monitoring and Data Sharing:
+Discussion Points: Enhancing air quality monitoring infrastructure, ensuring real-time data
+sharing among stakeholders, developing a unified database for air quality data, and involving
+tech companies in creating innovative monitoring solutions.
+
+50
+
+7.8 Regulatory Framework and Policy Implementation:
+Discussion Points: Reviewing existing air pollution regulations, identifying gaps in
+enforcement, exploring new policy initiatives, and discussing the role of private sector
+compliance.
+These topics provide a broad framework for stakeholder discussions, ensuring that all
+relevant aspects of air pollution control are addressed through collaborative efforts.
+
+51
+
+8. Enabling Implementation
+8.1 Graded Response Action Plan (GRAP)
+Currently, Delhi’s AQI is the reference point for implementation of GRAP. Acknowledging
+the presence of Haryana in the same airshed as Delhi, this Winter Action Plan aims to
+minimise Haryana’s contribution to air pollution. However, the transboundary nature of air
+means that the state government must be prepared for effective implementation of GRAP. It
+should be noted that many of the measures under GRAP are part of existing control measures
+that are being taken. These include measures related to mitigation of dust and vehicular
+emissions.
+GRAP’s objective is to balance protection of public health and maintaining livelihoods. This
+can only be achieved if GRAP restriction period is minimal but implemented effectively. To
+ensure speedy and effective implementation of GRAP, the state government/HSPCB will:
+1) Monitor the 3-day forecast of air quality from System of Air Quality and Weather
+Forecasting and Research (SAFAR)49 daily.
+2) Constitute district-level task forces with representation from all stakeholder
+departments to review the actions corresponding to the GRAP stages.
+3) Streamline reporting and monitoring of on-ground actions by departments.
+4) Review the implementation of GRAP at regular intervals
+8.2 Review and Monitoring Mechanism for the Winter Action Plan
+To ensure the effective implementation and success of the Winter Action Plan, a robust
+review and monitoring mechanism will be established. This mechanism will be structured
+around continuous assessment, data-driven decision-making, and transparent reporting. The
+following components will be integral to the process:
+1. Formation of a Steering Committee:
+A high-level steering committee will be constituted under the chairmanship of Member
+Secretary, HSPCB and Senior Environmental Engineer (in charge of Air Cell) as convener,
+comprising representatives from key government departments, experts from environmental
+organisations, industry stakeholders, and academic institutions.
+
+49
+
+SAFAR is an air quality forecasting system, developed by the Indian Institute of Tropical Meteorology (IITM). Using existing air quality
+data as well as meteorological information, SAFAR can provide air quality forecasts of 1-3 days for Delhi, Pune, Mumbai, and Ahmedabad.
+
+52
+
+The committee will oversee the overall implementation of the Winter Action Plan, provide
+strategic guidance, and ensure inter-departmental coordination.
+2. Regular Progress Reviews:
+Quarterly review meetings will be conducted by the steering committee to assess the progress
+of various initiatives outlined in the Winter Action Plan. These meetings will focus on
+identifying bottlenecks, challenges and reviewing the performance of different sectors, and
+making necessary adjustments to the plan.
+3. Public Feedback and Engagement:
+Mechanisms for public feedback will be established, including online portals and community
+meetings. Citizen feedback on air quality and the effectiveness of local interventions will be
+an important input for the review process.
+This review and monitoring mechanism is designed to ensure that the Winter Action Plan is
+implemented effectively, with continuous oversight and the flexibility to adapt to evolving
+challenges.
+
+53
+
+9. Information, Education and Communication (IEC) activities
+The government can implement various types of Information, Education, and Communication
+(IEC) strategies to effectively raise awareness and drive behavioural change related to air
+pollution.
+Here are the few types of IEC initiatives:
+9.1 Mass Media Campaigns:
+a) Television and Radio Broadcasts: Airing public service announcements, educational
+programs, and interviews with experts on air pollution and its impacts.
+b) Print Media: Publishing articles, advertisements, and informational inserts in
+newspapers, magazines, and newsletters to reach a broad audience.
+c) Social Media Campaigns: Using platforms like Facebook, Twitter, Instagram, and
+YouTube to share infographics, videos, real-time air quality updates, and engage with
+the public through interactive content.
+9.2 Community Outreach Programs:
+a) Workshops and Seminars: Conducting educational sessions in schools, colleges,
+community centres, and workplaces to discuss air pollution, its health impacts, and
+preventive measures.
+b) Public Meetings: Organising town hall meetings and community discussions where
+residents can learn about air pollution and voice their concerns or suggestions.
+c) Street Plays: Using street plays to creatively communicate messages about air
+pollution to local communities.
+9.3 Educational Initiatives:
+a) School and College Programs: Integrating air pollution topics into school curricula,
+conducting eco-clubs, and organising contests or quizzes to engage students.
+b) Educational Materials: Developing and distributing brochures, posters, booklets, and
+comic strips that provide information on air pollution in an easy-to-understand format.
+9.4 Digital and Mobile Platforms:
+
+54
+
+a) Mobile Applications: Creating apps that provide real-time air quality data, tips for
+reducing pollution, and alerts on high pollution days.
+b) Websites and Portals: Developing dedicated websites with resources, updates, and
+interactive tools related to air pollution and its management.
+c) SMS and WhatsApp Campaigns: Sending regular updates, tips, and alerts via SMS or
+messaging platforms like WhatsApp to reach people directly on their phones.
+9.5 Public Events and Campaigns:
+a) Awareness Rallies and Marches: Organising events like marathons, bicycle rallies,
+and walks to raise awareness about the importance of clean air.
+b) Thematic Days: Observing days like World Environment Day, Clean Air Day, and
+Earth Day with special events, campaigns, and activities focused on air pollution.
+c) Green Drives: Initiating tree plantation campaigns, distribution of medicinal plants to
+the public, waste management drives, and other community actions to directly involve
+the public in pollution control efforts.
+9.6 Policy and Advocacy Initiatives:
+a) Public Consultations: Holding forums and consultations where citizens can contribute
+to policy discussions and decision-making processes related to air quality
+management.
+b) Policy Briefs and Reports: Publishing policy documents, white papers, and research
+reports that inform and guide stakeholders on air pollution control strategies.
+9.7 Partnerships and Collaborations:
+a) Public-Private Partnerships: Collaborating with businesses, NGOs, and other
+organisations to jointly address air pollution, enabling us to achieve state's goals more
+effectively and efficiently.
+
+55
+
+9.8 Incentive Programs:
+a) Competitions and Rewards: Organizing contests, such as clean air challenges, and
+providing rewards for communities, schools, or individuals who contribute
+significantly to reducing air pollution.
+b) Recognition Programs: Establishing awards and recognition for local governments,
+organisations, and individuals who demonstrate exemplary efforts in air quality
+improvement.
+By employing a mix of these IEC strategies, the government can effectively reach different
+segments of the population, educate them about air pollution, and inspire meaningful action
+to improve air quality.
+When it comes to air pollution, citizens are as much a part of the problem as they are of the
+solution. Keeping in mind both the preventive aspects and the greater health risks associated
+with pollution in winter, the state will launch a 360-degree IEC campaign. The campaign will
+urge citizens to:
+1) Avoid unnecessary use of vehicles and choose public transport wherever possible.
+Scrap personal vehicles which are nearing end-of-life.
+2) Use non-polluting modes of travel, including CNG/electric vehicles - whether public
+or private.
+3) Ensure good maintenance of personal vehicles, to minimise emissions.
+4) Ensure regular updation of the PUC certificates of the existing private vehicles.
+5) Avoid starting any new major construction/ demolition activity during the winter
+months.
+6) Undertake firecracker free festivities and use traditional non-polluting alternatives
+(such as Diyas).
+7) Avoid throwing garbage in unauthorised areas, to prevent chances of open waste
+burning.
+8) Provide electric heaters to security guards in residential societies and colonies, to help
+them keep warm.
+9) Report air pollution activities through SAMEER App.
+10) Use indoor air purifiers, in case air quality deteriorates to poor in health facilities,
+schools, public offices etc,
+56
+
+11) Undertake personal precautions (such as wearing masks etc) when air quality
+deteriorates to poor, keeping in mind the existing medical condition of individuals.
+12) Use of Public transportation and reduce the dependency on private vehicles in order to
+reduce emissions and congestion.
+13) Adoption of EVs in the state especially for promotion of E-trucks and E-Tractors.
+14) Undertake stakeholder consultations, round tables and large conclaves to increase the
+awareness of FAME and state EV incentives.
+
+57
+
+10. Actions for Citizens
+To support our collective efforts in reducing pollution and maintaining a healthy
+environment, we encourage all citizens to take the following detailed actions:
+10.1 Avoid Open Burning
+Open burning of leaves, crop residues, and other waste materials releases a significant
+amount of pollutants into the air. This practice not only deteriorates air quality but also poses
+health risks.
+
+10.1.1 Planned Actions
+•
+
+Composting: Convert organic waste such as leaves and kitchen scraps into compost,
+which can be used to enrich soil.
+
+•
+
+Waste Disposal: Use municipal waste collection services to dispose of non-organic
+waste properly.
+
+•
+
+Each household shall segregate the solid waste in the form of organic waste, inorganic waste,
+domestic hazardous waste in three different containers and the same may be delivered to the
+authorized waste pickers having vehicles of three compartments. These waste pickers shall
+do further activities as under:
+
+1. The waste pickers shall transfer the different kind of waste in the GPS enabled
+compartmentalized vehicles, which shall carry the waste to the solid waste management site.
+2. Organic Waste shall be put into the compost pits for composting and inorganic waste
+consisting of iron pieces, waste papers, wooden waste etc. shall be recycled and plastic waste
+
+58
+
+shall be used in the cement plants and waste to energy plants. Inert waste may be disposed of
+in the sanitary landfill sites.
+10.2 Limit Vehicle Use
+Vehicular emissions are a major source of air pollution. Reducing the number of vehicles on
+the road can significantly lower pollution levels.
+
+10.2.1 Planned Actions
+•
+
+Public Transportation: Opting for buses, metros, and inter-city trains to reduce
+individual vehicle use.
+
+•
+
+Carpooling: Share rides with family, friends, or colleagues to decrease the number of
+vehicles on the road.
+
+•
+
+Walking or Cycling: For short distances, consider walking or cycling, which are not
+only eco-friendly but also beneficial for your health.
+
+10.3 Maintenance of the vehicles
+Proper vehicle maintenance ensures that emissions are kept to a minimum, contributing to
+better air quality.
+
+59
+
+10.2.1 Planned Actions
+•
+
+Regular Servicing: Have your vehicle serviced regularly to ensure the engine,
+exhaust system, and fuel system are functioning efficiently.
+
+•
+
+Use Clean Fuels: If possible, switch to fuels with lower emissions such as Electric
+Vehicles, and Compressed Natural Gas (CNG).
+
+10.4 Use Cleaner Fuels
+Traditional fuels used for heating can release harmful pollutants. Opting for cleaner
+alternatives can help reduce this impact.
+LPG Gas Room Heaters
+
+60
+
+10.4.1 Planned Actions
+•
+
+CNG and LPG: Consider using CNG or LPG for heating as they produce fewer
+emissions compared to coal or wood.
+
+•
+
+Energy-Efficient Appliances: Use modern, energy-efficient appliances that require
+less fuel for the same amount of heat.
+
+10.5 Support Green Initiatives
+Green initiatives help improve air quality and overall environmental health.
+
+10.5.1 Planned Actions
+•
+
+Tree Planting: Participate in or support local tree-planting drives. Trees act as natural
+air purifiers by absorbing pollutants and providing oxygen.
+
+•
+
+Community Projects: Get involved in community efforts aimed at enhancing green
+spaces and reducing pollution.
+
+10.6 Stay Informed
+Keeping track of air quality can help you make informed decisions about when to limit
+outdoor activities.
+
+61
+
+10.6.1 Planned Actions
+•
+
+Air Quality Forecasts: Check air quality forecasts and advisories provided by the
+CPCB, HSPCB and other reliable sources.
+
+•
+
+Health Precautions: On days when pollution levels are high, limit outdoor activities,
+especially for vulnerable groups such as children, the elderly, and individuals with
+respiratory conditions.
+
+10.7 Conserve Energy
+Reducing energy consumption helps decrease the demand for power generation, which in
+turn reduces pollution from power plants.
+
+10.7.1 Planned Actions
+•
+
+Energy-Efficient Lighting: Use LED bulbs and energy-efficient lighting solutions to
+reduce energy consumption.
+
+•
+
+Smart Usage: Turn off lights and appliances when not in use. Consider using
+programmable thermostats to optimize heating.
+
+•
+
+Use of Solar Technology: Extracting electric energy.
+62
+
+10.8 Report Violations
+Addressing pollution sources promptly can prevent further environmental damage.
+10.8.1 Planned Actions
+•
+
+Report Infractions: Illegal activities such as unauthorized burning of waste or
+excessive industrial emissions, can be reported the HSPCB which may help to take
+timely action to address these issues.
+
+63
+
+11. Haryana Clean Air Project for Sustainable Development in collaboration
+with The World Bank (HCAPSD)
+
+The Government of Haryana in collaboration with World Bank aims to improve air quality
+management across eight states in the Indo-Gangetic Plain (IGP). As part of their Regional
+Action Plan, they intend to improve air quality and reduce emissions across a common
+geographic area (the Indo-Gangetic plain), irrespective of the state boundaries. This is known
+as the airshed approach. For implementation of the Regional Action Plan, the World Bank is
+extending financial and technical assistance to the eight IGP States for seven years. Given the
+geographic and strategic importance of Haryana in the IGP region and 14 out of its 22
+districts falling in the National Capital Region (NCR), the World Bank approached the State
+government on devising a project for Haryana as part of their regional action plan for the IGP
+states.
+The state has closely engaged with the World bank over the last one year and formulated the
+‘Haryana Clean Air Project for Sustainable Development’. As part of the Haryana Clean Air
+Project, the state is going to be provided financial assistance of USD 300 million (~2,498
+crore rupees) from the World Bank to implement priority interventions for improvement of
+air quality in Haryana and contribute towards the collective effort on air quality management
+in the IGP region.
+
+64
+
+The project aims to reduce air pollution through a multi-sector, airshed based approach. It
+also envisions building a pioneer model that can be replicated across India. The project will
+support in:
+1) Devising policies on air quality management
+2) Building institutional capacity
+3) Strengthening air quality monitoring infrastructure
+4) Implementing sector-specific air pollution abatement measures
+The interventions are designed with alignment of all the relevant departments including
+Transport, Industries and Commerce, HSIIDC, PWD, Rural Development, Animal
+Husbandry and Dairying, Food, Civil Supplies, and Consumer Affair Department, Municipal
+corporations, Gurugram Metropolitan Development Authority (GMDA), and Faridabad
+Metropolitan Development Authority (FMDA).
+The project is set-up to be extended with a potential investment of up to INR 10,000+ crore in
+the later phases of the project, a significant increase from the earlier proposal.
+
+65
+
+12. Way Forward
+The Winter Action Plan 2024-25 outlines sector-wise interventions aimed at addressing the
+root causes of pollution through targeted, strategic actions. Moving forward, the state will
+focus on the following key areas:
+12.1 Construction & Road Dust and Waste Management:
+To mitigate dust and manage waste effectively, the state will enhance capacity building by
+creating Standard Operating Procedures (SOPs) for key stakeholders, including officers,
+contractors, and construction workers. Comprehensive training will be provided to ensure
+adherence to best practices. The state will also engage in the measurement and collection of
+legacy Construction & Demolition (C&D) waste and will strengthen future C&D waste
+management by expanding processing capacity and promoting the use of recycled waste
+materials.
+12.2 Transport:
+The state will strengthen public transportation infrastructure by planning for the
+transportation needs of all districts and advancing the electrification of intra- and inter-city
+bus fleets. Efforts will be made to increase the adoption of electric vehicles across the state
+by promoting demand for private 3-wheelers and cab aggregator 4-wheelers. The state will
+also encourage the replacement of older fleets with cleaner vehicles by offering higher
+incentives for purchasing electric vehicles post-scrappage. Additionally, a model for setting
+up Automated Testing Stations (ATS) will be designed and implemented to monitor vehicle
+health and facilitate the phasing out of old vehicles.
+12.3 Agriculture:
+To reduce stubble burning, the state will strengthen in-situ and ex-situ crop-residue
+management by conducting a needs assessment to identify state-level requirements for Crop
+Residue Management (CRM) machines. Large-scale training programs for farmers and field
+officers will be conducted, and efforts will be made to diversify the reuse of stubble across
+industries. The state will promote the use of Bio-decomposer among farmers through
+awareness campaigns and initiate research to reduce the decomposition time from 60 to 15
+
+66
+
+days. Additionally, research will be undertaken to monitor and reduce secondary emissions
+from agricultural fields and livestock farms.
+12.4 Industries:
+The state will accelerate the transition of industrial boilers to clean fuels by providing
+financial incentives for the purchase of clean fuel boilers. To reduce emissions from diesel
+generator (DG) sets, the state will promote the use of cleaner DG sets across industries by
+incentivizing the retro fitment of emission control devices or the purchase of generators
+running on dual fuel mode.
+12.5 Institutional Strengthening:
+The deployment of new continuous ambient air quality monitoring stations (CAAQMS) will
+expand the state’s infrastructure based on population projections for 2030. Additionally, two
+mobile vans equipped with real-time source apportionment technology will be deployed to
+collect data on particulate matter (PM), metals, and other gaseous emissions across identified
+hotspots. A Command Control Centre (CCC) will be set up at HSPCB to integrate data from
+all sources, including CAAQMS, MAAQMS, mobile vans, low-cost sensors, and CCTV
+cameras, enabling real-time monitoring of all interventions and their impact on air quality.
+12.6 Clean Cooking:
+Extensive information, education, and communication (IEC) activities will be conducted to
+raise awareness about the benefits of clean cooking and encourage a shift towards cleaner
+cooking practices, fostering social behaviour change.
+In the upcoming winter season, the state government will continue to increase public
+awareness, strictly enforce existing laws and directives issued by the Hon’ble Supreme Court,
+National Green Tribunal, and the Commission for Air Quality Management (CAQM).
+Regular high-level reviews of on-ground actions will ensure that the Winter Action Plan
+2024-25 is implemented in both letter and spirit, bringing the state closer to its goal of
+significantly reducing air pollution and protecting the health and well-being of its citizens.
+12.7 Solid Waste:
+
+67
+
+Solid waste dumping sites are known to release harmful gases such as sulphur dioxide (SO₂),
+nitrogen oxides (NOx), carbon monoxide (CO), and suspended particulate matter. The dust
+emitted from these sites can contribute to a range of health issues, from common colds to
+serious diseases like cancer, as well as acute and chronic respiratory disorders, and lung damage
+due to high concentrations of pollutants. The smoke generated from the incineration of waste
+further exacerbates air pollution, affecting communities even far from the dumping sites.
+Additionally, landfill gases, primarily consisting of methane (CH₄) and carbon dioxide (CO₂),
+are potent greenhouse gases that contribute significantly to global warming.
+Given the severe health and environmental risks associated with unmanaged solid waste, the
+state will prioritize solid waste management strategies. This will include implementing
+comprehensive waste segregation, promoting recycling, adopting scientific waste disposal
+methods, and controlling emissions from landfill sites.
+
+68
+
+

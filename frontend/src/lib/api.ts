@@ -1,0 +1,219 @@
+// Single point of contact with the AREE FastAPI backend.
+// Every network call in the UI goes through here.
+
+import type {
+  AdvisoryResponse,
+  AIResponse,
+  AQIHistoryResponse,
+  AQIResponse,
+  ApiErrorBody,
+  CarbonResponse,
+  DashboardResponse,
+  EngineConfig,
+  EscalationsResponse,
+  ForecastResponse,
+  GRAPResponse,
+  HealthImpactResponse,
+  HealthResponse,
+  PolicyResponse,
+  PolicyUploadResponse,
+  ReportMetaResponse,
+  RiskResponse,
+  StationDetail,
+  StationListResponse,
+  SystemStatus,
+} from "@/types";
+
+export const API_URL =
+  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+
+/** Error carrying the backend's structured JSON body. */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly body: ApiErrorBody | null;
+
+  constructor(status: number, body: ApiErrorBody | null, message?: string) {
+    super(message ?? body?.detail ?? `Request failed with status ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+  }
+
+  /** The engine is up but this station has no closed window yet. */
+  get isWarmingUp(): boolean {
+    return this.status === 425 || this.body?.error === "engine_starting";
+  }
+
+  get isEngineDown(): boolean {
+    return this.status === 503;
+  }
+
+  /** The station's upstream WAQI feed is dormant or failing (not our fault). */
+  get isFeedUnavailable(): boolean {
+    return this.status === 424;
+  }
+
+  get hint(): string | undefined {
+    return this.body?.hint;
+  }
+}
+
+/** Thrown when the backend cannot be reached at all. */
+export class NetworkError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "NetworkError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      ...init,
+      cache: "no-store",
+      headers: { Accept: "application/json", ...(init?.headers ?? {}) },
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new NetworkError(
+      `Cannot reach the AREE API at ${API_URL}. Is the backend running?`,
+    );
+  }
+
+  if (!response.ok) {
+    let body: ApiErrorBody | null = null;
+    try {
+      body = (await response.json()) as ApiErrorBody;
+    } catch {
+      body = null;
+    }
+    throw new ApiError(response.status, body);
+  }
+
+  return (await response.json()) as T;
+}
+
+const enc = (station: string) => encodeURIComponent(station);
+
+export const api = {
+  health: (signal?: AbortSignal) =>
+    request<HealthResponse>("/api/health", { signal }),
+
+  systemStatus: (signal?: AbortSignal) =>
+    request<SystemStatus>("/api/system/status", { signal }),
+
+  systemConfig: (signal?: AbortSignal) =>
+    request<EngineConfig>("/api/system/config", { signal }),
+
+  dashboard: (signal?: AbortSignal) =>
+    request<DashboardResponse>("/api/dashboard", { signal }),
+
+  stations: (signal?: AbortSignal) =>
+    request<StationListResponse>("/api/stations", { signal }),
+
+  station: (station: string, signal?: AbortSignal) =>
+    request<StationDetail>(`/api/stations/${enc(station)}`, { signal }),
+
+  aqi: (station: string, signal?: AbortSignal) =>
+    request<AQIResponse>(`/api/aqi/${enc(station)}`, { signal }),
+
+  aqiHistory: (station: string, signal?: AbortSignal) =>
+    request<AQIHistoryResponse>(`/api/aqi/${enc(station)}/history`, { signal }),
+
+  grap: (station: string, signal?: AbortSignal) =>
+    request<GRAPResponse>(`/api/grap/${enc(station)}`, { signal }),
+
+  risk: (station: string, signal?: AbortSignal) =>
+    request<RiskResponse>(`/api/risk/${enc(station)}`, { signal }),
+
+  forecast: (station: string, signal?: AbortSignal) =>
+    request<ForecastResponse>(`/api/forecast/${enc(station)}`, { signal }),
+
+  healthImpact: (station: string, signal?: AbortSignal) =>
+    request<HealthImpactResponse>(`/api/forecast/${enc(station)}/health`, { signal }),
+
+  advisory: (station: string, signal?: AbortSignal) =>
+    request<AdvisoryResponse>(`/api/advisory/${enc(station)}`, { signal }),
+
+  ai: (station: string, signal?: AbortSignal) =>
+    request<AIResponse>(`/api/ai/${enc(station)}`, { signal }),
+
+  carbon: (signal?: AbortSignal) =>
+    request<CarbonResponse>("/api/carbon", { signal }),
+
+  escalations: (station?: string, signal?: AbortSignal) =>
+    request<EscalationsResponse>(
+      station ? `/api/escalations?station=${enc(station)}` : "/api/escalations",
+      { signal },
+    ),
+
+  policy: (signal?: AbortSignal) =>
+    request<PolicyResponse>("/api/policy", { signal }),
+
+  reportMeta: (station: string, signal?: AbortSignal) =>
+    request<ReportMetaResponse>(`/api/reports/${enc(station)}`, { signal }),
+
+  reportPdfUrl: (station: string) =>
+    `${API_URL}/api/reports/${enc(station)}/pdf`,
+
+  async uploadPolicy(file: File): Promise<PolicyUploadResponse> {
+    const form = new FormData();
+    form.append("file", file);
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}/api/policy/upload`, {
+        method: "POST",
+        body: form,
+      });
+    } catch {
+      throw new NetworkError(`Cannot reach the AREE API at ${API_URL}.`);
+    }
+
+    if (!response.ok) {
+      let body: ApiErrorBody | null = null;
+      try {
+        body = (await response.json()) as ApiErrorBody;
+      } catch {
+        body = null;
+      }
+      throw new ApiError(response.status, body);
+    }
+    return (await response.json()) as PolicyUploadResponse;
+  },
+
+  /** Download the PDF report through the browser without leaving the page. */
+  async downloadReport(station: string): Promise<void> {
+    const url = api.reportPdfUrl(station);
+    const response = await fetch(url);
+    if (!response.ok) {
+      let body: ApiErrorBody | null = null;
+      try {
+        body = (await response.json()) as ApiErrorBody;
+      } catch {
+        body = null;
+      }
+      throw new ApiError(response.status, body);
+    }
+
+    const blob = await response.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = `escalation_report_${station
+      .replace(/[^A-Za-z0-9_.-]+/g, "_")
+      .slice(0, 60)}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  },
+};
+
+export function errorMessage(err: unknown): string {
+  if (err instanceof ApiError) return err.message;
+  if (err instanceof NetworkError) return err.message;
+  if (err instanceof Error) return err.message;
+  return "Unexpected error";
+}

@@ -1,0 +1,39 @@
+# AREE — backend (Pathway engine + FastAPI) and frontend (Next.js).
+#
+# The backend runs in Linux where Pathway's wheels exist. Start with:
+#   docker compose up --build
+#
+# Secrets come from the root .env (WAQI_TOKEN, FIRMS_API_KEY, GEMINI_API_KEY).
+# They are never passed to the frontend image.
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+    env_file:
+      - .env
+    volumes:
+      # Persist uploaded policy documents across container restarts.
+      - ./backend/policies:/app/backend/policies
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 120s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend

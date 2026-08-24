@@ -1,0 +1,21 @@
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.env
+.git
+.gitignore
+Cache/
+venv/
+venv_wsl/
+docs/
+*.md
+.venv
+.venv/wsl_venv/
+
+# Migration artifacts and frontend build output (the backend image
+# does not serve the Next.js app; it is built and deployed separately).
+backup_pre_migration/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
