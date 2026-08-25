@@ -99,7 +99,9 @@ function istLabel(iso: string): string {
  * Saying so is not a caveat, it is the definition of the number above it.
  */
 function ScopeBanner({ forecast }: { forecast: VentilationForecast }) {
-  const { lat, lon } = forecast.location;
+  // location is optional in the response schema, so the coordinate pill is
+  // omitted rather than rendered as "undefined°N" when the backend omits it.
+  const loc = forecast.location;
   return (
     <div
       className="border-aree-border bg-aree-card flex flex-wrap items-start justify-between gap-4 rounded-xl border p-4"
@@ -111,9 +113,11 @@ function ScopeBanner({ forecast }: { forecast: VentilationForecast }) {
           <span className="text-aree-text text-[15px] font-bold">
             Delhi NCR airshed
           </span>
-          <Pill color="var(--aree-dim)">
-            {lat.toFixed(2)}&deg;N, {lon.toFixed(2)}&deg;E
-          </Pill>
+          {loc ? (
+            <Pill color="var(--aree-dim)">
+              {loc.lat.toFixed(2)}&deg;N, {loc.lon.toFixed(2)}&deg;E
+            </Pill>
+          ) : null}
         </div>
         <p className="text-aree-muted mt-2 max-w-2xl text-[12px] leading-relaxed">
           <strong className="text-aree-body">
