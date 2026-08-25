@@ -1,0 +1,51 @@
+{
+  "metric": "ventilation_coefficient",
+  "definition": "boundary_layer_height_m * wind_speed_10m_ms",
+  "units": "m2 s-1",
+  "outcome_window_hours": 48,
+  "auc_training": 0.736,
+  "n_train_episodes": 143,
+  "n_train_locked_in": 33,
+  "n_holdout_episodes": 11,
+  "holdout_hit_rate": 0.2,
+  "holdout_false_alarm_rate": 0.5,
+  "default_mode": "balanced",
+  "operating_points": {
+    "balanced": {
+      "mode": "balanced",
+      "threshold_m2_s": 465.9,
+      "hit_rate": 0.606,
+      "false_alarm_rate": 0.191,
+      "precision": 0.488
+    },
+    "precautionary": {
+      "mode": "precautionary",
+      "threshold_m2_s": 765.0,
+      "hit_rate": 0.818,
+      "false_alarm_rate": 0.527,
+      "precision": 0.318
+    },
+    "conservative": {
+      "mode": "conservative",
+      "threshold_m2_s": 465.9,
+      "hit_rate": 0.606,
+      "false_alarm_rate": 0.191,
+      "precision": 0.488
+    }
+  },
+  "provenance": {
+    "episodes": "research/ps26082/data/processed/episodes.parquet",
+    "panel": "research/ps26082/data/processed/panel_hourly.parquet",
+    "holdout_periods": [
+      [
+        "2023-11-01",
+        "2023-11-30"
+      ],
+      [
+        "2024-11-01",
+        "2024-11-30"
+      ]
+    ],
+    "caveat": "Derived from 5 winters of Delhi NCR data in which 64 percent of in-season hours rest on two or fewer PM2.5 stations. Sample is small; treat as a starting operating point to be re-derived once the OpenAQ 2022-2025 gap is closed from CPCB."
+  }
+}
