@@ -70,7 +70,7 @@ export default function AQITrendChart({
 
   if (points.length === 0) {
     return (
-      <div className="text-aree-muted flex h-full min-h-[200px] items-center justify-center text-[13px]">
+      <div className="flex h-full min-h-[200px] items-center justify-center text-[13px] text-aree-muted">
         Awaiting window history…
       </div>
     );
@@ -106,13 +106,14 @@ export default function AQITrendChart({
             />
             <Tooltip
               contentStyle={{
-                background: COLORS.card,
-                border: `1px solid ${COLORS.borderStrong}`,
-                borderRadius: 10,
+                background: "var(--aree-surface-2)",
+                border: "1px solid var(--aree-border-strong)",
+                borderRadius: "var(--aree-radius-md)",
+                boxShadow: "var(--aree-shadow-sm)",
                 fontSize: 12,
               }}
-              labelStyle={{ color: COLORS.muted }}
-              itemStyle={{ color: COLORS.body }}
+              labelStyle={{ color: "var(--aree-muted)" }}
+              itemStyle={{ color: "var(--aree-text)", fontWeight: 500 }}
             />
             <ReferenceLine
               y={highThreshold}
@@ -139,7 +140,8 @@ export default function AQITrendChart({
               name="Observed AQI"
               stroke={COLORS.accent}
               strokeWidth={2}
-              dot={{ r: 2, fill: COLORS.accent }}
+              dot={{ r: 2.5, fill: "var(--aree-surface-1)", stroke: COLORS.accent, strokeWidth: 2 }}
+              activeDot={{ r: 4 }}
               connectNulls={false}
               isAnimationActive={false}
             />
@@ -150,26 +152,26 @@ export default function AQITrendChart({
               stroke={COLORS.orange}
               strokeWidth={2}
               strokeDasharray="5 4"
-              dot={{ r: 2.5, fill: COLORS.orange }}
+              dot={{ r: 2.5, fill: "var(--aree-surface-1)", stroke: COLORS.orange, strokeWidth: 2 }}
               connectNulls
               isAnimationActive={false}
             />
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="text-aree-dim mt-2 flex flex-wrap gap-4 text-[10px]">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-0.5 w-4" style={{ background: COLORS.accent }} />
-          Observed (closed sliding windows)
+      <div className="mt-3 flex flex-wrap items-center gap-4 text-[11px] text-aree-muted">
+        <span className="flex items-center gap-2 rounded-full border border-aree-border bg-aree-surface-1 px-2.5 py-1 shadow-[var(--aree-shadow-sm)]">
+          <span className="inline-block h-0.5 w-3" style={{ background: COLORS.accent }} />
+          Observed (windows)
         </span>
-        <span className="flex items-center gap-1.5">
+        <span className="flex items-center gap-2 rounded-full border border-aree-border bg-aree-surface-1 px-2.5 py-1 shadow-[var(--aree-shadow-sm)]">
           <span
-            className="inline-block h-0.5 w-4"
+            className="inline-block h-0.5 w-3"
             style={{
-              backgroundImage: `repeating-linear-gradient(90deg, ${COLORS.orange} 0 5px, transparent 5px 9px)`,
+              backgroundImage: `repeating-linear-gradient(90deg, ${COLORS.orange} 0 4px, transparent 4px 7px)`,
             }}
           />
-          Linear-regression projection
+          Linear projection
         </span>
       </div>
     </div>

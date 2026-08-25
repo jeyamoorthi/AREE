@@ -1,38 +1,27 @@
 "use client";
 
 /**
- * National Regulatory Overview — the hero screen.
- *
- * The first viewport answers the operator's first three questions at once:
- * where the problem is (map), how serious it is (national summary) and
- * whether the data behind it is current (freshness split out from regulatory
- * state). Everything below adds depth, never the headline.
+ * National Regulatory Overview — Environmental Intelligence Command Center.
+ * Layout strictly matching the provided reference system design:
+ * Row 1: National Environmental Map + National Summary Grid
+ * Row 2: AQI Distribution Donut + Top 5 Stations by AQI + Data Health Overview
+ * Row 3: Recent Events Stream
  */
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowRight, Layers } from "lucide-react";
+import { Layers } from "lucide-react";
 
-import CarbonCard from "@/components/CarbonCard";
-import { NationalDataHealth } from "@/components/DataHealth";
-import EscalationHistory from "@/components/EscalationHistory";
-import RankingTable from "@/components/RankingTable";
-import StationMapLoader, { MapLegend } from "@/components/StationMapLoader";
+import StationMapLoader from "@/components/StationMapLoader";
 import {
-  AQIDistribution,
+  AQIDistributionDonut,
+  DataHealthOverviewCard,
   NationalSummaryPanel,
-  NetworkSummaryCards,
-  WorstStations,
+  RecentEventsRow,
+  Top5StationsCard,
   useNetworkFacts,
 } from "@/components/national/NationalPanels";
 import { useStations, useSystemStatus } from "@/components/providers/LiveDataProvider";
-import { Panel, Pill, SectionHeader } from "@/components/ui/Card";
 import { EmptyState, ErrorState, SkeletonMap } from "@/components/ui/States";
-import { usePolling } from "@/hooks/usePolling";
-import { api } from "@/lib/api";
-import { stationLabel } from "@/lib/station";
-import { COLORS } from "@/lib/theme";
-import type { DashboardResponse } from "@/types";
 import type { MapStation } from "@/components/StationMap";
 
 export default function HomePage() {
@@ -40,17 +29,11 @@ export default function HomePage() {
 
   const stationsState = useStations();
   const statusState = useSystemStatus();
-  const overview = usePolling<DashboardResponse>((signal) => api.dashboard(signal), {
-    intervalMs: 10000,
-  });
 
   const stations = stationsState.data;
   const status = statusState.data;
   const facts = useNetworkFacts(stations);
 
-  // The map is driven by /api/stations rather than the dashboard's map points:
-  // that payload carries the freshness classification, so unavailable and
-  // stale nodes stay visible instead of silently dropping off the map.
   const mapStations = useMemo<MapStation[]>(
     () =>
       (stations?.stations ?? [])
@@ -71,107 +54,89 @@ export default function HomePage() {
     [stations],
   );
 
-  const selected = focus ? stations?.stations.find((s) => s.station === focus) : undefined;
-
   return (
-    <>
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="aree-page-title">National Environmental Status</h1>
-          <p className="text-aree-dim mt-1 text-[12px]">
-            Live regulatory picture across every configured monitoring node.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {/* With no station payload the escalation count is unknown, and
-              claiming "none" would be a guess. */}
-          {!stations ? (
-            <Pill color={COLORS.dim}>Escalation state unknown</Pill>
-          ) : facts.triggered > 0 ? (
-            <Pill color={COLORS.red} filled>
-              {facts.triggered} escalation{facts.triggered === 1 ? "" : "s"} active
-            </Pill>
-          ) : (
-            <Pill color={COLORS.green}>No active escalation</Pill>
-          )}
-          {(status?.stale_stations ?? 0) > 0 ? (
-            <Pill color={COLORS.orange} filled>
-              ⚠ {status?.stale_stations} stations on stale upstream data
-            </Pill>
-          ) : null}
-        </div>
-      </div>
-
+    <div className="space-y-4 max-w-[1600px] mx-auto w-full">
+      {/* ── ROW 1: National Map + National Summary ── */}
       {stationsState.error && !stations ? (
         <ErrorState error={stationsState.error} onRetry={stationsState.refresh} />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
-          <Panel
-            title="Live station network"
-            icon={<Layers className="h-3.5 w-3.5" />}
-            accent={COLORS.teal}
-            padding="p-3"
-            right={
-              selected ? (
-                <Link
-                  href={`/stations/${encodeURIComponent(selected.station)}`}
-                  className="text-aree-accent hover:text-aree-cyan flex items-center gap-1.5 text-[11px] font-bold tracking-[0.08em] uppercase transition-colors"
-                >
-                  Open {stationLabel(selected.station)}
-                  <ArrowRight className="h-3 w-3" aria-hidden />
-                </Link>
-              ) : (
-                <span className="text-aree-dim text-[11px]">Select a marker</span>
-              )
-            }
-          >
-            {stationsState.initialLoading ? (
-              <SkeletonMap height={480} />
-            ) : mapStations.length === 0 ? (
-              <EmptyState>
-                No station coordinates available yet. Markers appear as nodes come online.
-              </EmptyState>
-            ) : (
-              <StationMapLoader
-                stations={mapStations}
-                selected={focus}
-                height={480}
-                onSelect={setFocus}
-              />
-            )}
-            <MapLegend className="mt-3 px-1" />
-          </Panel>
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(340px,1.15fr)]">
+          {/* Left Panel: National Environmental Map */}
+          <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
+                  NATIONAL ENVIRONMENTAL MAP
+                </h2>
+                <p className="text-[11px] text-[#788796] mt-0.5">
+                  Live air quality and regulatory status across India
+                </p>
+              </div>
+              <button
+                type="button"
+                className="p-1.5 rounded-lg border border-[#e4e0d4] bg-[#faf9f4] hover:bg-[#f0eee4] text-[#64748b] transition-colors"
+                title="Layers"
+              >
+                <Layers className="w-4 h-4" />
+              </button>
+            </div>
 
-          <NationalSummaryPanel facts={facts} status={status} stations={stations} />
+            <div className="relative rounded-lg overflow-hidden flex-1 min-h-[380px]">
+              {stationsState.initialLoading ? (
+                <SkeletonMap height={400} />
+              ) : mapStations.length === 0 ? (
+                <EmptyState>
+                  No station coordinates available yet. Markers appear as nodes come online.
+                </EmptyState>
+              ) : (
+                <StationMapLoader
+                  stations={mapStations}
+                  selected={focus}
+                  height={400}
+                  onSelect={setFocus}
+                />
+              )}
+
+              {/* Floating Bottom Freshness Legend matching image */}
+              <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 backdrop-blur-xs border border-[#e4e0d4] px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-4 text-[11px] font-semibold text-[#17231c]">
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#16a34a]" />
+                  <span>Current</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ca8a04]" />
+                  <span>Aging</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#ea580c]" />
+                  <span>Stale</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[11px] text-[#788796]">⊗</span>
+                  <span>Unavailable</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Panel: National Summary */}
+          <NationalSummaryPanel
+            facts={facts}
+            status={status}
+            stations={stations}
+          />
         </div>
       )}
 
-      <SectionHeader index="01">Network summary</SectionHeader>
-      <NetworkSummaryCards facts={facts} status={status} stations={stations} />
-
-      <SectionHeader index="02">Air quality intelligence</SectionHeader>
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(280px,1fr)]">
-        <AQIDistribution facts={facts} />
-        <WorstStations facts={facts} />
+      {/* ── ROW 2: AQI Distribution + Top 5 Stations + Data Health Overview ── */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <AQIDistributionDonut facts={facts} />
+        <Top5StationsCard facts={facts} />
+        <DataHealthOverviewCard status={status} />
       </div>
 
-      <SectionHeader index="03">Regulatory risk ranking</SectionHeader>
-      {overview.error && !overview.data ? (
-        <ErrorState error={overview.error} onRetry={overview.refresh} />
-      ) : overview.data ? (
-        <RankingTable rankings={overview.data.rankings} highlight={focus} />
-      ) : (
-        <EmptyState>Cross-station ranking becomes available once windows close.</EmptyState>
-      )}
-
-      <SectionHeader index="04">Data health</SectionHeader>
-      <NationalDataHealth />
-
-      <SectionHeader index="05">Recent escalations</SectionHeader>
-      <EscalationHistory />
-
-      <SectionHeader index="06">Compute footprint</SectionHeader>
-      <CarbonCard carbon={overview.data?.carbon ?? null} />
-    </>
+      {/* ── ROW 3: Recent Events Stream ── */}
+      <RecentEventsRow />
+    </div>
   );
 }

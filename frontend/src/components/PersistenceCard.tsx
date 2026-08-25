@@ -84,7 +84,7 @@ export default function PersistenceCard({
   return (
     <>
       <div
-        className={`rounded-xl border-2 px-5 py-4 ${banner.cls}`}
+        className={`rounded-[var(--aree-radius-lg)] border px-5 py-4 shadow-[var(--aree-shadow-sm)] ${banner.cls}`}
         style={{
           borderColor: banner.color,
           background: `color-mix(in srgb, ${banner.color} 8%, transparent)`,
@@ -97,34 +97,36 @@ export default function PersistenceCard({
         >
           {banner.title}
         </div>
-        <div className="text-aree-body mt-1.5 text-[13px]">{banner.detail}</div>
+        <div className="mt-1.5 text-[13.5px] text-aree-body">{banner.detail}</div>
       </div>
 
       <Panel title="Persistence" accent={progressColor} padding="p-5" className="mt-4">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-          <div>
+          <div className="rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 shadow-[var(--aree-shadow-sm)]">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="aree-eyebrow text-[10px]">Toward escalation threshold</span>
+              <span className="aree-eyebrow text-[11px]">Toward escalation threshold</span>
               <span
-                className="aree-num text-2xl leading-none font-bold"
+                className="aree-num text-2xl font-bold leading-none"
                 style={{ color: progressColor }}
               >
                 {percent}%
               </span>
             </div>
-            <ProgressBar
-              percent={percent}
-              color={progressColor}
-              height={12}
-              label="Persistence toward escalation threshold"
-            />
-            <div className="text-aree-dim mt-2 text-[11px]">
+            <div className="mt-3">
+              <ProgressBar
+                percent={percent}
+                color={progressColor}
+                height={12}
+                label="Persistence toward escalation threshold"
+              />
+            </div>
+            <div className="mt-3 text-[12px] text-aree-dim">
               {consecutive} of {persistenceThreshold} consecutive qualifying windows
               {remaining > 0 ? ` · ${remaining} remaining` : " · threshold met"}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-5">
+          <div className="grid grid-cols-2 gap-5 p-2">
             <Stat
               label="Window"
               value={`${consecutive} / ${persistenceThreshold}`}
@@ -133,9 +135,9 @@ export default function PersistenceCard({
             <Stat
               label="Trend"
               value={
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-2">
                   <TrendIcon className="h-4 w-4" aria-hidden />
-                  <span className="text-[13px]">{trendLabel}</span>
+                  <span className="text-[14px]">{trendLabel}</span>
                 </span>
               }
               color={trendColour}
@@ -150,7 +152,7 @@ export default function PersistenceCard({
         </div>
       </Panel>
 
-      <Disclosure summary="Advanced engine data" className="mt-3">
+      <Disclosure summary="Advanced engine data" className="mt-4">
         <div className="grid gap-x-8 sm:grid-cols-2">
           <KeyValue label="Consecutive windows" value={consecutive} />
           <KeyValue label="Remaining windows" value={remaining} />

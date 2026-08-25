@@ -1,46 +1,73 @@
 @import "tailwindcss";
 
 /* ==========================================================================
-   AREE — Environmental Command Center design tokens.
-   The identity (deep navy surfaces, cyan/teal environmental accent, semantic
-   warning ramp) is carried over from the original dashboard. What is added
-   here is depth: layered surfaces, a typographic scale and restrained motion.
+   AREE — Environmental Intelligence Command Center
+   Light Warm Sage / Clean Environmental Command Platform Theme
+   Inspired by government intelligence dashboards & high-end environmental systems.
    ========================================================================== */
 :root {
-  /* Surfaces, darkest to lightest */
-  --aree-bg: #070c15;
-  --aree-bg-soft: #0a0f1a;
-  --aree-card: #0e1523;
-  --aree-card-raised: #131c2e;
-  --aree-border: #1b2740;
-  --aree-border-strong: #2b3b57;
+  /* ── Surfaces — Warm Sand & Crisp White Paper ── */
+  --aree-bg: #f5f4ed;
+  --aree-bg-soft: #edebe2;
+  --aree-surface-1: #ffffff;
+  --aree-surface-2: #faf9f4;
+  --aree-surface-3: #f2efe6;
+  --aree-surface-4: #e8e4d7;
+  --aree-card: #ffffff;
+  --aree-card-raised: #ffffff;
+  --aree-border: #e4e0d4;
+  --aree-border-strong: #cfcaba;
 
-  /* Text ramp */
-  --aree-text: #f1f5f9;
-  --aree-body: #dbe4ef;
-  --aree-muted: #94a3b8;
-  --aree-dim: #64748b;
-  --aree-faint: #475569;
+  /* ── Text ramp ── */
+  --aree-text: #17231c;
+  --aree-body: #2d3748;
+  --aree-muted: #64748b;
+  --aree-dim: #788796;
+  --aree-faint: #9ba8b5;
 
-  /* Environmental accent */
-  --aree-accent: #38bdf8;
-  --aree-blue: #3b82f6;
-  --aree-cyan: #00ffd1;
-  --aree-teal: #2dd4bf;
+  /* ── Environmental Brand Accent — Deep Forest Green & Sage ── */
+  --aree-forest: #143828;
+  --aree-forest-hover: #1b4733;
+  --aree-accent: #22c55e;
+  --aree-accent-soft: rgba(34, 197, 94, 0.12);
+  --aree-accent-glow: rgba(34, 197, 94, 0.25);
+  --aree-teal: #0d9488;
+  --aree-cyan: #0284c7;
+  --aree-blue: #2563eb;
 
-  /* Semantic ramp — used for AQI bands, freshness and regulatory state */
-  --aree-green: #22c55e;
-  --aree-lime: #84cc16;
-  --aree-yellow: #eab308;
-  --aree-amber: #fbbf24;
-  --aree-orange: #f97316;
-  --aree-red: #ef4444;
-  --aree-crimson: #dc2626;
+  /* ── Semantic Ramp — CPCB Bands & Freshness ── */
+  --aree-green: #16a34a;
+  --aree-lime: #65a30d;
+  --aree-yellow: #ca8a04;
+  --aree-amber: #d97706;
+  --aree-orange: #ea580c;
+  --aree-red: #dc2626;
+  --aree-crimson: #991b1b;
+
+  /* ── Shadows & Elevation ── */
+  --aree-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --aree-shadow-md: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 12px -2px rgba(0, 0, 0, 0.04);
+  --aree-shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 24px -4px rgba(0, 0, 0, 0.06);
+
+  /* ── Radius ── */
+  --aree-radius-sm: 6px;
+  --aree-radius-md: 10px;
+  --aree-radius-lg: 12px;
+  --aree-radius-xl: 16px;
+
+  /* ── Layout Dimensions ── */
+  --aree-sidebar-width: 230px;
+  --aree-sidebar-collapsed: 68px;
+  --aree-commandbar-height: 70px;
 }
 
 @theme inline {
   --color-aree-bg: var(--aree-bg);
   --color-aree-bg-soft: var(--aree-bg-soft);
+  --color-aree-surface-1: var(--aree-surface-1);
+  --color-aree-surface-2: var(--aree-surface-2);
+  --color-aree-surface-3: var(--aree-surface-3);
+  --color-aree-surface-4: var(--aree-surface-4);
   --color-aree-card: var(--aree-card);
   --color-aree-card-raised: var(--aree-card-raised);
   --color-aree-border: var(--aree-border);
@@ -50,10 +77,8 @@
   --color-aree-muted: var(--aree-muted);
   --color-aree-dim: var(--aree-dim);
   --color-aree-faint: var(--aree-faint);
+  --color-aree-forest: var(--aree-forest);
   --color-aree-accent: var(--aree-accent);
-  --color-aree-blue: var(--aree-blue);
-  --color-aree-cyan: var(--aree-cyan);
-  --color-aree-teal: var(--aree-teal);
   --color-aree-green: var(--aree-green);
   --color-aree-lime: var(--aree-lime);
   --color-aree-yellow: var(--aree-yellow);
@@ -61,66 +86,83 @@
   --color-aree-orange: var(--aree-orange);
   --color-aree-red: var(--aree-red);
   --color-aree-crimson: var(--aree-crimson);
+  --color-aree-teal: var(--aree-teal);
+  --color-aree-cyan: var(--aree-cyan);
+  --color-aree-blue: var(--aree-blue);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
 
 html {
   scrollbar-color: var(--aree-border-strong) transparent;
+  scroll-behavior: smooth;
 }
 
 body {
-  background:
-    radial-gradient(1100px 620px at 12% -10%, rgba(56, 189, 248, 0.07), transparent 60%),
-    radial-gradient(900px 520px at 92% 0%, rgba(45, 212, 191, 0.05), transparent 62%),
-    var(--aree-bg);
-  background-attachment: fixed;
+  background-color: var(--aree-bg);
   color: var(--aree-body);
   font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04";
+  min-height: 100vh;
 }
 
-/* The command center is a dark-only operator surface, matching the original. */
 ::selection {
-  background: rgba(56, 189, 248, 0.25);
+  background: rgba(20, 56, 40, 0.15);
+  color: var(--aree-forest);
 }
 
-/* Accessibility: a visible, consistent focus ring on every interactive surface. */
 :where(a, button, select, input, summary, [tabindex]):focus-visible {
-  outline: 2px solid var(--aree-accent);
+  outline: 2px solid var(--aree-forest);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: var(--aree-radius-sm);
 }
 
-/* --- Typography scale -----------------------------------------------------
-   Hierarchy is deliberate: one hero number per view, then section titles,
-   then card titles, then metadata. Not every card is equally important. */
+/* ── Scrollbars ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--aree-border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--aree-dim);
+}
 
+/* ── Typography Utilities ── */
 .aree-hero-num {
   font-family: var(--font-mono);
-  font-weight: 800;
-  line-height: 0.92;
+  font-weight: 700;
+  line-height: 1;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .aree-page-title {
-  font-size: clamp(1.05rem, 0.9rem + 0.7vw, 1.45rem);
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--aree-text);
+}
+
+.aree-section-title {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--aree-text);
 }
 
 .aree-eyebrow {
   font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--aree-muted);
-}
-
-.aree-meta {
-  font-size: 0.6875rem;
   color: var(--aree-dim);
 }
 
@@ -129,173 +171,126 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* --- Motion ---------------------------------------------------------------
-   Restrained on purpose: a live pulse, a focus pulse on the selected station,
-   a skeleton shimmer and short entrance transitions. Nothing loops loudly. */
+.aree-tabular {
+  font-variant-numeric: tabular-nums;
+}
 
+/* ── Animations ── */
 @keyframes aree-pulse-dot {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.45);
-  }
-  50% {
-    box-shadow: 0 0 0 7px rgba(34, 197, 94, 0);
-  }
-}
-
-@keyframes aree-blink {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.25;
-  }
-}
-
-@keyframes aree-escalation-glow {
-  0%,
-  100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.2);
-  }
-  50% {
-    box-shadow: 0 0 12px 2px rgba(239, 68, 68, 0.1);
-  }
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.35); opacity: 0.75; }
 }
 
 @keyframes aree-shimmer {
-  0% {
-    background-position: -300px 0;
-  }
-  100% {
-    background-position: 300px 0;
-  }
-}
-
-@keyframes aree-rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes aree-marker-pulse {
-  0% {
-    transform: scale(0.85);
-    opacity: 0.75;
-  }
-  70% {
-    transform: scale(2.1);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(2.1);
-    opacity: 0;
-  }
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
 }
 
 .aree-live-dot {
-  animation: aree-pulse-dot 1.8s ease-in-out infinite;
-}
-
-.aree-blink {
-  animation: aree-blink 1.4s ease-in-out infinite;
-}
-
-.aree-escalation-glow {
-  animation: aree-escalation-glow 2.5s ease-in-out infinite;
-}
-
-.aree-rise {
-  animation: aree-rise 0.28s ease-out both;
+  animation: aree-pulse-dot 2s ease-in-out infinite;
 }
 
 .aree-skeleton {
   background-image: linear-gradient(
     90deg,
-    var(--aree-border) 0%,
-    var(--aree-border-strong) 45%,
-    var(--aree-border) 90%
+    var(--aree-surface-3) 0%,
+    var(--aree-surface-4) 50%,
+    var(--aree-surface-3) 100%
   );
-  background-size: 300px 100%;
+  background-size: 400px 100%;
   background-repeat: no-repeat;
-  animation: aree-shimmer 1.5s linear infinite;
+  animation: aree-shimmer 1.8s linear infinite;
 }
 
-/* Numbers that change on every poll should settle, not jump. */
-.aree-tabular {
-  font-variant-numeric: tabular-nums;
-  transition: color 0.35s ease;
+/* ── Sidebar & Layout ── */
+.aree-layout {
+  display: flex;
+  min-height: 100vh;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .aree-live-dot,
-  .aree-blink,
-  .aree-escalation-glow,
-  .aree-rise,
-  .aree-skeleton,
-  .aree-marker-focus::after {
-    animation: none;
+.aree-sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--aree-sidebar-width);
+  z-index: 40;
+  background-color: var(--aree-bg-soft);
+  border-right: 1px solid var(--aree-border);
+  transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+}
+
+.aree-sidebar.collapsed {
+  width: var(--aree-sidebar-collapsed);
+}
+
+.aree-main {
+  flex: 1;
+  margin-left: var(--aree-sidebar-width);
+  min-width: 0;
+  background-color: var(--aree-bg);
+  transition: margin-left 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.aree-main.sidebar-collapsed {
+  margin-left: var(--aree-sidebar-collapsed);
+}
+
+@media (max-width: 1023px) {
+  .aree-sidebar {
+    transform: translateX(-100%);
+    width: var(--aree-sidebar-width);
+    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .aree-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+  .aree-main,
+  .aree-main.sidebar-collapsed {
+    margin-left: 0;
   }
 }
 
-/* --- Leaflet dark tuning --------------------------------------------------- */
+.aree-sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 40, 30, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 39;
+}
+
+/* ── Map Overrides for Light/Terrain Look ── */
 .leaflet-container {
-  background: #070c15;
+  background: #e5e3df !important;
   font-family: var(--font-sans);
+  border-radius: var(--aree-radius-md);
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: var(--aree-card-raised);
-  color: var(--aree-body);
-  border: 1px solid var(--aree-border-strong);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  background: #ffffff;
+  color: var(--aree-text);
+  border: 1px solid var(--aree-border);
+  box-shadow: var(--aree-shadow-md);
 }
 
 .leaflet-popup-content-wrapper {
-  border-radius: 10px;
-}
-
-.leaflet-popup-content {
-  margin: 12px 14px;
-  font-size: 12px;
+  border-radius: var(--aree-radius-md);
 }
 
 .leaflet-control-attribution {
-  background: rgba(10, 15, 26, 0.85) !important;
-  color: #64748b !important;
+  background: rgba(255, 255, 255, 0.85) !important;
+  color: var(--aree-dim) !important;
   font-size: 10px !important;
 }
 
-.leaflet-control-attribution a {
-  color: #94a3b8 !important;
-}
-
 .leaflet-bar a {
-  background: var(--aree-card-raised) !important;
-  color: var(--aree-body) !important;
+  background: #ffffff !important;
+  color: var(--aree-text) !important;
   border-color: var(--aree-border) !important;
 }
 
 .leaflet-bar a:hover {
-  background: var(--aree-border) !important;
-}
-
-/* Focus halo behind the selected station marker. */
-.aree-marker-focus {
-  position: relative;
-}
-
-.aree-marker-focus::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 9999px;
-  border: 2px solid var(--aree-accent);
-  animation: aree-marker-pulse 2.2s ease-out infinite;
+  background: var(--aree-surface-2) !important;
 }

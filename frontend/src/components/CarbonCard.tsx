@@ -33,11 +33,11 @@ export default function CarbonCard({ carbon }: { carbon?: CarbonResponse | null 
   return (
     <Panel
       title="Carbon intensity"
-      icon={<Leaf className="h-3.5 w-3.5" />}
+      icon={<Leaf className="h-3.5 w-3.5 text-aree-accent" />}
       accent="var(--aree-green)"
       padding="p-5"
     >
-      <div className="grid gap-6 sm:grid-cols-3">
+      <div className="grid gap-6 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-5 shadow-[var(--aree-shadow-sm)] sm:grid-cols-3">
         <Stat
           label="Total emissions"
           value={data.total_gco2}
@@ -57,7 +57,7 @@ export default function CarbonCard({ carbon }: { carbon?: CarbonResponse | null 
           color="#86efac"
         />
       </div>
-      <div className="mt-4">
+      <div className="mt-5">
         <Note>{data.model_note}</Note>
       </div>
     </Panel>

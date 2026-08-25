@@ -10,6 +10,7 @@
 import { KeyValue, Panel, Pill, Stat } from "@/components/ui/Card";
 import { aqiColor, eriColor, grapColor, grapRank, modeColor, modeLabel, orDash } from "@/lib/theme";
 import type { EngineConfig, StationDetail } from "@/types";
+import { CheckCircle2, Circle } from "lucide-react";
 
 /** One-line answer to "how serious is it, right now". */
 export function LiveRegulatoryState({
@@ -30,14 +31,14 @@ export function LiveRegulatoryState({
     <Panel
       title="Engine verdict"
       accent={modeColor(mode)}
-      padding="p-5"
+      padding="p-6"
       right={
         <Pill color={modeColor(mode)} filled={mode === "TRIGGERED"}>
           {modeLabel(mode)}
         </Pill>
       }
     >
-      <div className="grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 lg:grid-cols-5">
         <Stat label="AQI" value={data.aqi ?? "—"} color={aqiColor(data.aqi)} size="lg" />
         <Stat
           label="Risk"
@@ -101,80 +102,86 @@ export function GRAPTimeline({
   const color = grapColor(data.grap_stage);
 
   return (
-    <Panel title="GRAP status" accent={color} padding="p-5">
+    <Panel title="GRAP stage progression" accent={color} padding="p-6">
       {stages.length === 0 ? (
-        <div className="text-aree-muted text-[13px]">
+        <div className="text-aree-muted text-[14px] bg-aree-surface-2 p-4 rounded-lg">
           Stage definitions are not available from the engine configuration.
         </div>
       ) : (
-        <ol className="flex flex-col gap-0">
-          {stages.map((stage) => {
-            const rank = grapRank(stage.stage);
-            const isCurrent = rank === currentRank;
-            const reached = rank <= currentRank && currentRank > 0;
-            const stageColor = grapColor(stage.stage);
-            return (
-              <li key={stage.stage} className="flex items-start gap-3">
-                <div className="flex flex-col items-center self-stretch">
-                  <span
-                    className={`mt-1.5 flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border-2 ${
-                      isCurrent ? "aree-live-dot" : ""
-                    }`}
-                    style={{
-                      borderColor: reached ? stageColor : "var(--aree-border-strong)",
-                      background: isCurrent ? stageColor : "transparent",
-                    }}
-                    aria-hidden
-                  />
-                  <span
-                    className="w-px flex-1"
-                    style={{
-                      background: reached ? stageColor : "var(--aree-border)",
-                      opacity: reached ? 0.5 : 1,
-                    }}
-                    aria-hidden
-                  />
-                </div>
-                <div className="min-w-0 flex-1 pb-4">
-                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                    <span
-                      className="text-[13px] font-bold"
-                      style={{
-                        color: isCurrent
-                          ? stageColor
-                          : reached
-                            ? "var(--aree-body)"
-                            : "var(--aree-dim)",
+        <div className="mb-8">
+          {/* Horizontal Progress Bar */}
+          <div className="flex w-full items-center mb-6 relative">
+            {stages.map((stage, index) => {
+              const rank = grapRank(stage.stage);
+              const isCurrent = rank === currentRank;
+              const reached = rank <= currentRank && currentRank > 0;
+              const stageColor = grapColor(stage.stage);
+              const isLast = index === stages.length - 1;
+
+              return (
+                <div key={stage.stage} className="flex-1 flex flex-col items-center relative">
+                  {/* The Line connecting stages */}
+                  {!isLast && (
+                    <div 
+                      className="absolute top-3 left-1/2 w-full h-1" 
+                      style={{ 
+                        background: (rank < currentRank && currentRank > 0) ? grapColor(stages[index+1].stage) : 'var(--aree-border)',
+                        opacity: (rank < currentRank && currentRank > 0) ? 0.6 : 1
                       }}
+                    />
+                  )}
+                  
+                  {/* The Node */}
+                  <div 
+                    className={`relative z-10 flex h-6 w-6 items-center justify-center rounded-full border-2 bg-aree-card shadow-sm`}
+                    style={{ 
+                      borderColor: reached ? stageColor : 'var(--aree-border-strong)',
+                      boxShadow: isCurrent ? `0 0 0 4px color-mix(in srgb, ${stageColor} 20%, transparent)` : undefined,
+                    }}
+                  >
+                    {reached ? (
+                      <CheckCircle2 className="h-4 w-4" style={{ color: stageColor }} />
+                    ) : (
+                      <Circle className="h-3 w-3 text-aree-border-strong" fill="currentColor" />
+                    )}
+                  </div>
+                  
+                  <div className="mt-3 flex flex-col items-center text-center">
+                    <span 
+                      className={`text-[12px] font-bold ${isCurrent ? 'scale-110' : ''} transition-transform`}
+                      style={{ color: isCurrent ? stageColor : reached ? 'var(--aree-body)' : 'var(--aree-dim)' }}
                     >
                       {stage.stage}
                     </span>
-                    <span className="aree-num text-aree-faint text-[11px]">
-                      AQI {stage.low}–{stage.high}
-                    </span>
-                    {isCurrent ? (
-                      <Pill color={stageColor} filled>
-                        current
-                      </Pill>
-                    ) : null}
-                  </div>
-                  <div className="text-aree-dim mt-1 text-[11px] leading-relaxed">
-                    {stage.description}
+                    <span className="text-[10px] text-aree-faint mt-1 whitespace-nowrap">AQI {stage.low}{stage.high !== 9999 ? `-${stage.high}` : '+'}</span>
                   </div>
                 </div>
-              </li>
-            );
-          })}
-        </ol>
+              );
+            })}
+          </div>
+          
+          {/* Active Stage Description Box */}
+          {currentRank > 0 && stages.find(s => grapRank(s.stage) === currentRank) ? (
+            <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-4 mt-2">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-bold text-[14px]" style={{ color }}>{data.grap_stage}</span>
+                <Pill color={color} filled>Active</Pill>
+              </div>
+              <p className="text-[13px] text-aree-body leading-relaxed">
+                {stages.find(s => grapRank(s.stage) === currentRank)?.description}
+              </p>
+            </div>
+          ) : null}
+        </div>
       )}
 
-      <div className="border-aree-border mt-2 grid gap-x-8 border-t pt-3 sm:grid-cols-2">
+      <div className="border-aree-border mt-4 grid gap-x-8 gap-y-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-3 bg-aree-surface-1/50 rounded-b-xl -mx-6 -mb-6 px-6 pb-6">
         <KeyValue
           label="Current stage"
           value={orDash(data.grap_stage, "Not available")}
           color={color}
         />
-        <KeyValue label="Raw stage (pre-hysteresis)" value={orDash(data.grap_raw_stage)} />
+        <KeyValue label="Raw stage" value={orDash(data.grap_raw_stage)} />
         <KeyValue label="Previous stage" value={orDash(data.previous_stage, "none")} />
         <KeyValue
           label="Transitioned this window"
@@ -187,7 +194,7 @@ export function GRAPTimeline({
             data.hysteresis_pending
               ? `${data.hysteresis_pending} · ${data.hysteresis_count ?? 0}/${
                   config?.hysteresis_confirmations ?? "?"
-                } confirmations`
+                } confirms`
               : "stable"
           }
           color={data.hysteresis_pending ? "var(--aree-yellow)" : undefined}
@@ -214,13 +221,13 @@ export function RegulatoryContext({
   config: EngineConfig | null;
 }) {
   return (
-    <div className="grid gap-x-8 sm:grid-cols-2">
+    <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 bg-aree-surface-2 p-5 rounded-lg border border-aree-border">
       <KeyValue
         label="Engine mode"
         value={orDash(data.engine_mode)}
         color={modeColor(data.engine_mode)}
       />
-      <KeyValue label="Data type" value="Real-time short window (not 24h composite)" mono={false} />
+      <KeyValue label="Data type" value="Real-time short window" mono={false} />
       <KeyValue label="Last API poll" value={`${orDash(data.api_time)} UTC`} />
       <KeyValue
         label="High-AQI threshold"
@@ -230,7 +237,7 @@ export function RegulatoryContext({
         label="Sliding window"
         value={
           config
-            ? `${config.window_duration_minutes} min duration · ${config.window_hop_minutes} min hop`
+            ? `${config.window_duration_minutes}m dur · ${config.window_hop_minutes}m hop`
             : "Not available"
         }
       />

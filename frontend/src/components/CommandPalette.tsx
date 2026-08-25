@@ -69,14 +69,14 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         id: "nav-overview",
         group: "Navigate",
         label: "Open National Overview",
-        icon: <MapPin className="h-3.5 w-3.5" />,
+        icon: <MapPin className="h-4 w-4" />,
         run: go("/"),
       },
       {
         id: "nav-command",
         group: "Navigate",
         label: "Open Command Center",
-        icon: <LayoutDashboard className="h-3.5 w-3.5" />,
+        icon: <LayoutDashboard className="h-4 w-4" />,
         run: go("/dashboard"),
       },
       {
@@ -84,7 +84,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         group: "Navigate",
         label: "Generate Report",
         hint: "Report centre",
-        icon: <FileText className="h-3.5 w-3.5" />,
+        icon: <FileText className="h-4 w-4" />,
         run: go("/reports"),
       },
       {
@@ -92,7 +92,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         group: "Navigate",
         label: "Open Policy Console",
         hint: "Command Center → Policy Intelligence",
-        icon: <FileText className="h-3.5 w-3.5" />,
+        icon: <FileText className="h-4 w-4" />,
         run: go("/dashboard#policy-intelligence"),
       },
     ];
@@ -107,7 +107,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         badge: s.has_data
           ? { text: `AQI ${s.aqi}`, color: aqiColor(s.aqi) }
           : { text: look.label, color: look.color },
-        icon: <Radio className="h-3.5 w-3.5" />,
+        icon: <Radio className="h-4 w-4" />,
         run: () => {
           onClose();
           router.push(`/stations/${encodeURIComponent(s.station)}`);
@@ -120,7 +120,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       group: "Policy documents",
       label: f.name,
       hint: `${f.type.toUpperCase()} · ${f.size_kb} KB`,
-      icon: <FileText className="h-3.5 w-3.5" />,
+      icon: <FileText className="h-4 w-4" />,
       run: go("/dashboard#policy-intelligence"),
     }));
 
@@ -131,7 +131,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       hint: [e.timestamp, e.aqi !== null ? `AQI ${e.aqi}` : null]
         .filter(Boolean)
         .join(" · "),
-      icon: <AlertTriangle className="h-3.5 w-3.5" />,
+      icon: <AlertTriangle className="h-4 w-4" />,
       run: e.city
         ? () => {
             onClose();
@@ -167,22 +167,20 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
 
   return (
     <div
-      className="fixed inset-0 z-[1000] flex items-start justify-center bg-black/65 px-4 pt-[12vh] backdrop-blur-sm"
+      className="fixed inset-0 z-[1000] flex items-start justify-center bg-black/70 px-4 pt-[15vh] backdrop-blur-md"
       onClick={onClose}
       role="presentation"
     >
       <div
-        className="border-aree-border-strong bg-aree-card aree-rise w-full max-w-xl overflow-hidden rounded-2xl border shadow-[0_24px_70px_rgba(0,0,0,0.65)]"
+        className="bg-aree-surface-2 w-full max-w-2xl overflow-hidden rounded-[var(--aree-radius-lg)] border border-aree-border shadow-[var(--aree-shadow-lg)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
       >
-        <div className="border-aree-border flex items-center gap-3 border-b px-4 py-3">
-          <Search className="text-aree-muted h-4 w-4 shrink-0" aria-hidden />
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-aree-border bg-aree-surface-1">
+          <Search className="text-aree-accent h-5 w-5 shrink-0" aria-hidden />
           <input
-            /* The palette is a modal opened by an explicit shortcut, so focus
-               belongs in its input the moment it mounts. */
             autoFocus
             value={query}
             onChange={(e) => {
@@ -204,24 +202,24 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
                 filtered[active]?.run();
               }
             }}
-            placeholder="Search station, policy, event…"
+            placeholder="Search stations, policies, events…"
             aria-label="Search station, policy, event"
-            className="text-aree-body placeholder:text-aree-faint w-full bg-transparent text-sm outline-none"
+            className="text-white placeholder:text-gray-500 w-full bg-transparent text-base outline-none font-medium"
           />
-          <kbd className="border-aree-border text-aree-faint rounded border px-1.5 py-0.5 font-mono text-[10px]">
+          <kbd className="bg-aree-surface-3 border border-aree-border text-gray-400 rounded-[var(--aree-radius-sm)] px-2 py-1 font-mono text-[11px] hidden sm:block">
             ESC
           </kbd>
         </div>
 
-        <div ref={listRef} className="max-h-[52vh] overflow-y-auto py-2">
+        <div ref={listRef} className="max-h-[50vh] overflow-y-auto py-2 bg-aree-surface-2">
           {filtered.length === 0 ? (
-            <div className="text-aree-muted px-4 py-6 text-center text-[13px]">
-              No matches{stationsState.initialLoading ? " — loading station network…" : ""}
+            <div className="text-gray-400 px-6 py-12 text-center text-sm">
+              No results found{stationsState.initialLoading ? " — loading station network…" : ""}
             </div>
           ) : (
             Object.entries(groups).map(([group, groupItems]) => (
-              <div key={group} className="mb-1">
-                <div className="aree-eyebrow px-4 py-1.5 text-[9.5px]">{group}</div>
+              <div key={group} className="mb-3 px-2">
+                <div className="text-[10px] font-bold tracking-wider text-gray-500 uppercase px-4 py-2 mt-2">{group}</div>
                 {groupItems.map((item) => {
                   runningIndex += 1;
                   const index = runningIndex;
@@ -233,33 +231,33 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
                       data-index={index}
                       onMouseEnter={() => setActive(index)}
                       onClick={item.run}
-                      className={`flex w-full items-center gap-3 px-4 py-2 text-left transition-colors ${
-                        isActive ? "bg-aree-accent/10" : "hover:bg-aree-border/40"
+                      className={`flex w-full items-center gap-4 px-4 py-3 text-left rounded-[var(--aree-radius-md)] transition-colors ${
+                        isActive ? "bg-aree-surface-3 border border-aree-border/50 shadow-sm" : "border border-transparent hover:bg-aree-surface-3/50"
                       }`}
                     >
                       <span
-                        className={isActive ? "text-aree-accent" : "text-aree-faint"}
+                        className={`flex items-center justify-center w-8 h-8 rounded-full shrink-0 ${isActive ? "bg-aree-accent/15 text-aree-accent" : "bg-aree-surface-4 text-gray-400"}`}
                         aria-hidden
                       >
                         {item.icon}
                       </span>
                       <span className="min-w-0 flex-1">
                         <span
-                          className={`block truncate text-[13px] ${
-                            isActive ? "text-aree-text font-semibold" : "text-aree-body"
+                          className={`block truncate text-[14px] ${
+                            isActive ? "text-white font-medium" : "text-gray-300"
                           }`}
                         >
                           {item.label}
                         </span>
                         {item.hint ? (
-                          <span className="text-aree-dim block truncate text-[11px]">
+                          <span className="text-gray-500 block truncate text-[12px] mt-0.5">
                             {item.hint}
                           </span>
                         ) : null}
                       </span>
                       {item.badge ? (
                         <span
-                          className="aree-num shrink-0 text-[11px] font-bold"
+                          className="shrink-0 text-[12px] font-medium px-2 py-1 rounded bg-aree-surface-4"
                           style={{ color: item.badge.color }}
                         >
                           {item.badge.text}
@@ -273,10 +271,10 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        <div className="border-aree-border text-aree-faint flex items-center gap-4 border-t px-4 py-2 text-[10px]">
-          <span>↑↓ navigate</span>
-          <span>↵ open</span>
-          <span>esc close</span>
+        <div className="bg-aree-surface-1 border-t border-aree-border text-gray-500 flex flex-wrap items-center gap-6 px-5 py-3 text-[11px] font-medium">
+          <span className="flex items-center gap-1.5"><kbd className="font-mono bg-aree-surface-3 px-1 rounded">↑</kbd><kbd className="font-mono bg-aree-surface-3 px-1 rounded">↓</kbd> navigate</span>
+          <span className="flex items-center gap-1.5"><kbd className="font-mono bg-aree-surface-3 px-1 rounded">↵</kbd> open</span>
+          <span className="flex items-center gap-1.5"><kbd className="font-mono bg-aree-surface-3 px-1 rounded">esc</kbd> close</span>
         </div>
       </div>
     </div>

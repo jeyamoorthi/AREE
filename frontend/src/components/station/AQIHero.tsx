@@ -13,6 +13,7 @@ import { freshness } from "@/lib/freshness";
 import { feedLabel, pollutantLabel } from "@/lib/station";
 import { aqiColor, orDash } from "@/lib/theme";
 import type { StationDetail } from "@/types";
+import { SeverityIndicator, LiveIndicator } from "@/components/ui/Card";
 
 const GAUGE_MAX = 500;
 
@@ -26,9 +27,9 @@ const BANDS: { from: number; to: number; color: string }[] = [
   { from: 400, to: 500, color: "#dc2626" },
 ];
 
-const CX = 110;
-const CY = 100;
-const R = 84;
+const CX = 120;
+const CY = 110;
+const R = 90;
 
 function polar(value: number, radius = R) {
   const clamped = Math.max(0, Math.min(GAUGE_MAX, value));
@@ -49,8 +50,8 @@ function AQIGauge({ aqi }: { aqi: number | null | undefined }) {
 
   return (
     <svg
-      viewBox="0 0 220 124"
-      className="h-auto w-full max-w-[240px]"
+      viewBox="0 0 240 134"
+      className="h-auto w-full max-w-[260px] drop-shadow-md"
       role="img"
       aria-label={
         value === null
@@ -58,50 +59,54 @@ function AQIGauge({ aqi }: { aqi: number | null | undefined }) {
           : `Air quality index gauge showing ${value} out of ${GAUGE_MAX}`
       }
     >
+      {/* Background track */}
+      <path
+        d={arcPath(0, 500)}
+        stroke="var(--aree-surface-3)"
+        strokeWidth={14}
+        strokeLinecap="round"
+        fill="none"
+      />
+      
       {BANDS.map((band) => (
         <path
           key={band.from}
           d={arcPath(band.from, band.to)}
           stroke={band.color}
-          strokeOpacity={value !== null && value > band.from ? 0.95 : 0.22}
-          strokeWidth={11}
+          strokeOpacity={value !== null && value > band.from ? 1 : 0.15}
+          strokeWidth={14}
           strokeLinecap="butt"
           fill="none"
+          className="transition-all duration-700 ease-out"
         />
       ))}
 
       {needle ? (
         <>
+          {/* Subtle glow behind needle */}
+          <line
+            x1={CX} y1={CY} x2={needle.x} y2={needle.y}
+            stroke={color} strokeWidth={8} strokeLinecap="round" strokeOpacity={0.2}
+            className="blur-sm"
+          />
           <line
             x1={CX}
             y1={CY}
             x2={needle.x}
             y2={needle.y}
             stroke={color}
-            strokeWidth={2.5}
+            strokeWidth={3}
             strokeLinecap="round"
           />
-          <circle cx={needle.x} cy={needle.y} r={5.5} fill={color} />
-          <circle cx={CX} cy={CY} r={5} fill="var(--aree-card)" stroke={color} strokeWidth={2} />
+          <circle cx={needle.x} cy={needle.y} r={6} fill="var(--aree-card)" stroke={color} strokeWidth={2.5} />
+          <circle cx={CX} cy={CY} r={6} fill="var(--aree-card)" stroke={color} strokeWidth={2.5} />
         </>
       ) : null}
 
-      <text
-        x={polar(0).x}
-        y={CY + 16}
-        textAnchor="middle"
-        fill="var(--aree-faint)"
-        fontSize="9"
-      >
+      <text x={polar(0).x - 10} y={CY + 18} textAnchor="middle" fill="var(--aree-faint)" fontSize="10" fontWeight="600">
         0
       </text>
-      <text
-        x={polar(GAUGE_MAX).x}
-        y={CY + 16}
-        textAnchor="middle"
-        fill="var(--aree-faint)"
-        fontSize="9"
-      >
+      <text x={polar(GAUGE_MAX).x + 10} y={CY + 18} textAnchor="middle" fill="var(--aree-faint)" fontSize="10" fontWeight="600">
         {GAUGE_MAX}
       </text>
     </svg>
@@ -122,55 +127,64 @@ export default function AQIHero({ data }: { data: StationDetail }) {
 
   return (
     <section
-      className="bg-aree-card border-aree-border relative overflow-hidden rounded-xl border shadow-[0_1px_2px_rgba(0,0,0,0.4),0_10px_30px_-20px_rgba(0,0,0,1)]"
+      className="bg-aree-card border-aree-border relative overflow-hidden rounded-2xl border shadow-lg"
       aria-label="Current air quality index"
     >
-      {/* A single restrained wash of the band colour behind the hero number. */}
+      {/* Decorative gradient wash */}
       <div
-        className="pointer-events-none absolute inset-0 opacity-[0.09]"
+        className="pointer-events-none absolute inset-0 opacity-[0.06] transition-colors duration-700"
         style={{
-          background: `radial-gradient(520px 240px at 12% 0%, ${color}, transparent 70%)`,
+          background: `radial-gradient(circle at 10% 20%, ${color}, transparent 60%)`,
         }}
         aria-hidden
       />
 
-      <div className="relative flex flex-col gap-6 p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
-        <div className="min-w-0">
-          <div className="aree-eyebrow">Current AQI</div>
-          <div
-            className="aree-hero-num mt-2 text-[clamp(3.5rem,2rem+7vw,5.5rem)]"
-            style={{ color }}
-          >
-            {data.aqi ?? "—"}
+      <div className="relative flex flex-col gap-8 p-8 sm:flex-row sm:items-center sm:justify-between lg:p-10">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-3 mb-2">
+            <h2 className="text-aree-dim text-sm font-bold tracking-widest uppercase">Current AQI</h2>
+            {status === "current" && <LiveIndicator />}
           </div>
-          <div
-            className="mt-2 text-[15px] font-bold tracking-[0.1em] uppercase"
-            style={{ color }}
-          >
-            {orDash(data.cpcb_band, "Not available")}
+          
+          <div className="flex items-baseline gap-4 mt-2">
+            <SeverityIndicator value={data.aqi ?? 0} color={color} size="xl" />
+            <div
+              className="text-[18px] font-bold tracking-[0.15em] uppercase bg-aree-surface-2 px-3 py-1 rounded-lg border border-aree-border shadow-sm"
+              style={{ color }}
+            >
+              {orDash(data.cpcb_band, "Not available")}
+            </div>
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1.5">
-            <span
-              className="flex items-center gap-1.5 text-[12px] font-bold tracking-[0.06em]"
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3 bg-aree-surface-1/50 p-3 rounded-xl border border-aree-border/50 inline-flex">
+            <div
+              className="flex items-center gap-2 text-[13px] font-bold tracking-[0.06em] bg-aree-surface-2 px-2.5 py-1 rounded-md border border-aree-border/50"
               style={{ color: look.color }}
             >
-              <span aria-hidden>{look.marker}</span>
+              <span className="flex h-2 w-2 rounded-full" style={{ background: look.color }} aria-hidden />
               WAQI · {look.badge}
-            </span>
+            </div>
             {ageText ? (
-              <span className="aree-num text-aree-muted text-[12px]">{ageText}</span>
+              <span className="aree-num text-aree-muted text-[13px] font-medium flex items-center gap-1.5">
+                <span className="text-aree-dim">Last update:</span> {ageText}
+              </span>
             ) : null}
           </div>
 
-          <div className="text-aree-dim mt-2 text-[11px]">
-            Dominant {data.dominant_pollutant ? pollutantLabel(data.dominant_pollutant) : "—"}{" "}
-            · {data.pollutants_available ?? 0} pollutants · feed{" "}
-            <span className="aree-num">{feedLabel(data.feed_id) ?? "—"}</span>
+          <div className="text-aree-dim mt-4 text-[12px] flex items-center gap-3">
+            <span className="bg-aree-surface-2 px-2 py-1 rounded border border-aree-border/50">
+              Dominant: <strong className="text-aree-body ml-1">{data.dominant_pollutant ? pollutantLabel(data.dominant_pollutant) : "—"}</strong>
+            </span>
+            <span className="bg-aree-surface-2 px-2 py-1 rounded border border-aree-border/50">
+              {data.pollutants_available ?? 0} pollutants
+            </span>
+            <span className="bg-aree-surface-2 px-2 py-1 rounded border border-aree-border/50">
+              Feed ID: <span className="aree-num font-medium text-aree-body ml-1">{feedLabel(data.feed_id) ?? "—"}</span>
+            </span>
           </div>
         </div>
 
-        <div className="flex shrink-0 justify-center sm:justify-end">
+        <div className="flex shrink-0 justify-center sm:justify-end sm:w-[280px]">
           <AQIGauge aqi={data.aqi} />
         </div>
       </div>

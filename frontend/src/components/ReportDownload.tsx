@@ -42,8 +42,8 @@ export default function ReportDownload({
 
   const styles =
     variant === "primary"
-      ? "border-aree-accent/60 text-aree-accent hover:bg-aree-accent/10 hover:border-aree-accent"
-      : "border-aree-border text-aree-muted hover:border-aree-border-strong hover:text-aree-body";
+      ? "border-aree-accent/60 text-aree-accent hover:bg-aree-accent/10 hover:border-aree-accent bg-aree-surface-1 shadow-[var(--aree-shadow-sm)]"
+      : "border-aree-border text-aree-muted hover:border-aree-border-strong hover:text-aree-body bg-transparent";
 
   return (
     <div className={className}>
@@ -51,7 +51,7 @@ export default function ReportDownload({
         type="button"
         onClick={handleDownload}
         disabled={downloading}
-        className={`flex items-center gap-2 rounded-lg border px-4 py-2.5 text-[12.5px] font-semibold transition-colors disabled:opacity-60 ${styles}`}
+        className={`flex items-center gap-2 rounded-[var(--aree-radius-md)] border px-4 py-2.5 text-[12.5px] font-semibold transition-all disabled:opacity-60 ${styles}`}
       >
         {downloading ? (
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
