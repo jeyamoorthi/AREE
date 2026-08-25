@@ -70,7 +70,10 @@ function Shell({ children }: { children: ReactNode }) {
         {/* Main content area */}
         <div className={`aree-main ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
           {/* Command bar */}
-          <CommandBar onOpenSearch={openPalette} />
+          <CommandBar
+            onOpenSearch={openPalette}
+            onOpenMobile={() => setMobileOpen(true)}
+          />
 
           {/* Page content */}
           <main id="main-content" className="flex flex-col p-4 sm:p-5">
