@@ -81,10 +81,10 @@ _cycles = 0
 # here rather than taking a vendor's composite means the number shown is
 # traceable to a published Indian standard and to one measured pollutant.
 _PM25_BREAKPOINTS = [
-    (0.0, 30.0, 0, 50),
-    (30.0, 60.0, 51, 100),
-    (60.0, 90.0, 101, 200),
-    (90.0, 120.0, 201, 300),
+    (0.0,   30.0,  0,   50),
+    (30.0,  60.0,  51,  100),
+    (60.0,  90.0,  101, 200),
+    (90.0,  120.0, 201, 300),
     (120.0, 250.0, 301, 400),
     (250.0, 500.0, 401, 500),
 ]
