@@ -19,6 +19,9 @@ POLLUTANTS = [
     ("SO2", "raw_so2"),
     ("O3", "raw_o3"),
     ("CO", "raw_co"),
+    # CPCB reports NH3 for most NCR stations and the pivot already extracts it;
+    # omitting it here dropped a pollutant the feed was actually supplying.
+    ("NH3", "raw_nh3"),
 ]
 
 

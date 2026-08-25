@@ -201,12 +201,22 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         "persistence_triggered": computed.get("persistence_triggered", False),
         "projected_trigger_time": None,
 
-        # Ground truth, straight from the monitor.
-        "raw_pm25": pm25,
-        "raw_pm10": None, "raw_no2": None, "raw_so2": None,
-        "raw_o3": None, "raw_co": None,
+        # Ground truth, straight from the monitor. raw_pm25 prefers the
+        # concentration the enrichment step attached; `pm25` is whatever the
+        # station table itself carried, which is None for CAQM rows.
+        "raw_pm25": station.get("raw_pm25", pm25),
+        "raw_pm10": station.get("raw_pm10"),
+        "raw_no2": station.get("raw_no2"),
+        "raw_so2": station.get("raw_so2"),
+        "raw_o3": station.get("raw_o3"),
+        "raw_co": station.get("raw_co"),
+        "raw_nh3": station.get("raw_nh3"),
         "dominant_pollutant": station.get("dominant_pollutant") or "pm25",
-        "pollutants_available": 1,
+        "pollutants_available": station.get("pollutants_available", 0),
+        # Concentrations come from a slower feed than the AQI above them. Both
+        # ages are published so neither can be read as the other's.
+        "pollutant_source": station.get("pollutant_source"),
+        "pollutant_age_minutes": station.get("pollutant_age_minutes"),
         "wind_speed": station.get("wind_speed"),
         "wind_direction": station.get("wind_direction"),
 
@@ -270,6 +280,72 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
     }
 
 
+# CPCB pollutant fields, as pivot_stations() names them, mapped onto the
+# raw_* keys the AQI route already reads.
+_POLLUTANT_KEYS = (
+    ("pm25", "raw_pm25"), ("pm10", "raw_pm10"), ("no2", "raw_no2"),
+    ("so2", "raw_so2"), ("o3", "raw_o3"), ("co", "raw_co"),
+    ("nh3", "raw_nh3"),
+)
+
+
+def _attach_pollutants(stations: list[dict]) -> int:
+    """Join per-pollutant concentrations onto the CAQM station table.
+
+    CAQM publishes sub-indices only - there is no concentration anywhere in its
+    payloads - so the seven pollutant values come from CPCB via data.gov.in,
+    which pivot_stations() already extracts and which nothing was reading.
+    Measured: 54 of 55 CAQM stations match a data.gov.in station by exact name.
+
+    The two halves have DIFFERENT AGES: the AQI is ~80 min old, the
+    concentrations ~5 h. That is recorded per station as pollutant_age_minutes
+    rather than smoothed over, because presenting a five-hour-old NO2 beside a
+    fresh AQI as though they were one observation is the kind of quiet
+    conflation that makes a dashboard untrustworthy.
+
+    Returns the number of stations enriched. Failure is non-fatal: the station
+    table is already complete without it.
+    """
+    try:
+        from ingestion.cpcb_stream import fetch_ncr as _cpcb_ncr
+        rows = _cpcb_ncr()
+    except Exception as exc:                                # noqa: BLE001
+        log.warning("pollutant enrichment unavailable: %s", exc)
+        return 0
+
+    by_name = {r["station"]: r for r in rows if r.get("station")}
+    now = datetime.now(timezone.utc)
+    matched = 0
+
+    for st in stations:
+        src = by_name.get(st["station"])
+        if not src:
+            continue
+        found = 0
+        for cpcb_key, raw_key in _POLLUTANT_KEYS:
+            value = src.get(cpcb_key)
+            if value is not None:
+                st[raw_key] = value
+                found += 1
+        if not found:
+            continue
+        matched += 1
+        st["pollutants_available"] = found
+        st["pollutant_source"] = "CPCB CAAQMS via data.gov.in"
+        observed = src.get("observed_at")
+        st["pollutant_age_minutes"] = (
+            round((now - observed).total_seconds() / 60.0) if observed else None
+        )
+        # CAQM already named the pollutant leading the index. Keep it: it comes
+        # from the fresher feed and is what the published AQI is defined by.
+        if not st.get("dominant_pollutant") and src.get("pm25") is not None:
+            st["dominant_pollutant"] = "pm25"
+
+    log.info("pollutants: %d/%d stations enriched from data.gov.in",
+             matched, len(stations))
+    return matched
+
+
 def _poll_once() -> int:
     """One sampling cycle across the NCR network. Returns stations updated."""
     from ingestion import ncr_observations as obs
@@ -296,6 +372,8 @@ def _poll_once() -> int:
                         composite.get("reason"))
             return 0
         stations = composite.get("stations", [])
+
+    _attach_pollutants(stations)
 
     engine = _engines_for_cycle()
     now = datetime.now(timezone.utc)
