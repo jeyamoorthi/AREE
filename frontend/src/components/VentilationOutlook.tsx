@@ -36,6 +36,7 @@ import {
   Radio,
   Satellite,
   ListFilter,
+  MapPin,
 } from "lucide-react";
 
 import { api } from "@/lib/api";
@@ -65,6 +66,77 @@ const PRIORITY_COLOR: Record<string, string> = {
   HIGH: "var(--aree-orange)",
   CRITICAL: "var(--aree-red)",
 };
+
+/**
+ * Render a UTC instant in IST.
+ *
+ * Every operational decision here is taken in India, and the page previously
+ * showed UTC only. "Collapse onset 09:00" is 14:30 local - a five and a half
+ * hour error in the one number the page exists to communicate. UTC is kept
+ * alongside because the model runs on it.
+ */
+function istLabel(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
+
+/**
+ * What this forecast covers, and where.
+ *
+ * The page previously opened straight into a countdown with no statement of
+ * scope, next to a panel citing 78 ground stations. A reader could only
+ * conclude the countdown was per-station, or belonged to whichever station
+ * the rest of the app had selected. Neither is true: ventilation is computed
+ * once, at a single point, for the whole airshed.
+ *
+ * Saying so is not a caveat, it is the definition of the number above it.
+ */
+function ScopeBanner({ forecast }: { forecast: VentilationForecast }) {
+  const { lat, lon } = forecast.location;
+  return (
+    <div
+      className="border-aree-border bg-aree-card flex flex-wrap items-start justify-between gap-4 rounded-xl border p-4"
+      style={{ borderLeft: "3px solid var(--aree-forest)" }}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <MapPin className="text-aree-forest h-4 w-4 shrink-0" aria-hidden />
+          <span className="text-aree-text text-[15px] font-bold">
+            Delhi NCR airshed
+          </span>
+          <Pill color="var(--aree-dim)">
+            {lat.toFixed(2)}&deg;N, {lon.toFixed(2)}&deg;E
+          </Pill>
+        </div>
+        <p className="text-aree-muted mt-2 max-w-2xl text-[12px] leading-relaxed">
+          <strong className="text-aree-body">
+            One outlook for the whole region — not per station.
+          </strong>{" "}
+          Ventilation is boundary-layer depth &times; wind speed, which varies
+          over roughly 100 km. Computing it per monitor would imply a spatial
+          detail the weather model does not have.
+        </p>
+      </div>
+
+      <div className="text-right">
+        <p className="aree-eyebrow text-aree-dim">Forecast issued</p>
+        <p className="text-aree-body aree-num mt-1 text-[13px] font-bold">
+          {istLabel(forecast.generated_at)} IST
+        </p>
+        <p className="text-aree-dim mt-0.5 text-[11px]">
+          covers the next {forecast.horizon_hours} h
+        </p>
+      </div>
+    </div>
+  );
+}
 
 function hourLabel(iso: string): string {
   const d = new Date(iso);
@@ -120,9 +192,15 @@ function DataSources({
               </span>
             </p>
             <p className="text-aree-muted mt-1 text-[11.5px] leading-relaxed">
-              Median of the CPCB/DPCC network, {observed.data_age_minutes} min
-              old. {observed.n_stale_discarded} stale readings were discarded
-              before the median was taken.
+              Median concentration across the CPCB network, via data.gov.in,
+              {" "}
+              {observed.data_age_minutes} min old.
+            </p>
+            <p className="text-aree-dim mt-1.5 text-[11px] leading-relaxed">
+              A different feed from the station list in the sidebar. That one is
+              CAQM, which publishes hourly; this one is the only source that
+              carries PM2.5 in µg/m³, which the episode threshold is calibrated
+              in — so it is used here despite lagging further behind.
             </p>
           </>
         ) : (
@@ -311,8 +389,15 @@ function WindowHero({ forecast }: { forecast: VentilationForecast }) {
       {forecast.collapse ? (
         <div className="border-aree-border mt-5 grid gap-3 border-t pt-4 sm:grid-cols-3">
           <KeyValue
-            label="Collapse onset (UTC)"
-            value={forecast.collapse.onset.replace("T", " ").slice(0, 16)}
+            label="Collapse onset"
+            value={
+              <>
+                {istLabel(forecast.collapse.onset)} IST
+                <span className="text-aree-dim ml-2 text-[11px] font-normal">
+                  ({forecast.collapse.onset.replace("T", " ").slice(11, 16)} UTC)
+                </span>
+              </>
+            }
           />
           <KeyValue
             label="Sustained hours below"
@@ -669,12 +754,15 @@ export default function VentilationOutlook() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="aree-page-title">Ventilation outlook</h1>
-        <p className="text-aree-dim mt-1 text-[12px]">
-          Lock-in is not diagnosable from the present state — it is set by the
-          ventilation over the following 48 hours. This forecasts that, and
-          converts it into the time remaining to act.
+        <p className="text-aree-dim mt-1 max-w-3xl text-[12px]">
+          Whether a pollution episode locks in cannot be told from today&apos;s
+          air — it is decided by how well the atmosphere clears itself over the
+          next 48 hours. This forecasts that, and turns it into the time left
+          to act.
         </p>
       </div>
+
+      <ScopeBanner forecast={f} />
 
       <DataSources forecast={f} observed={observed.data} />
 
