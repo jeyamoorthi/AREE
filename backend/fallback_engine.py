@@ -158,7 +158,14 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
 
     name = station["station"]
     pm25 = station.get("pm25_ugm3")
-    aqi = pm25_to_aqi(pm25)
+    # CAQM publishes the AQI itself - the max across every pollutant sub-index.
+    # Prefer it when the source supplies one: deriving AQI from PM2.5 alone
+    # understates any episode led by another pollutant, and CAQM's number is
+    # the one the Commission publishes. Fall back to the PM2.5 conversion for
+    # sources that carry concentrations instead (data.gov.in).
+    aqi = station.get("aqi")
+    if aqi is None:
+        aqi = pm25_to_aqi(pm25)
 
     hist = aqi_history.setdefault(name, deque(maxlen=HISTORY_LEN))
     hist.append({"timestamp": now, "aqi": aqi})
@@ -198,7 +205,7 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         "raw_pm25": pm25,
         "raw_pm10": None, "raw_no2": None, "raw_so2": None,
         "raw_o3": None, "raw_co": None,
-        "dominant_pollutant": "pm25",
+        "dominant_pollutant": station.get("dominant_pollutant") or "pm25",
         "pollutants_available": 1,
         "wind_speed": station.get("wind_speed"),
         "wind_direction": station.get("wind_direction"),
@@ -270,15 +277,29 @@ def _poll_once() -> int:
 
     global _cycles
 
-    composite = obs.composite_pm25()
-    if not composite.get("available"):
-        log.warning("direct engine: no ground observations (%s)",
-                    composite.get("reason"))
-        return 0
+    # CAQM is the regulator's own hourly feed and is measured ~4 hours fresher
+    # than the data.gov.in republication (median 79 min vs 322 min), so it is
+    # the source for the station table. data.gov.in remains the fallback, and
+    # remains the source for the ventilation composite, which needs ug/m3.
+    stations: list[dict] = []
+    try:
+        from ingestion import caqm_stream
+        stations = caqm_stream.fetch_ncr()
+    except Exception as exc:                                # noqa: BLE001
+        log.warning("direct engine: CAQM unavailable, falling back to "
+                    "data.gov.in: %s", exc)
+
+    if not stations:
+        composite = obs.composite_pm25()
+        if not composite.get("available"):
+            log.warning("direct engine: no ground observations (%s)",
+                        composite.get("reason"))
+            return 0
+        stations = composite.get("stations", [])
 
     engine = _engines_for_cycle()
     now = datetime.now(timezone.utc)
-    for st in composite.get("stations", []):
+    for st in stations:
         try:
             latest_state[st["station"]] = _build_state(st, engine, now)
         except Exception:                                   # noqa: BLE001
@@ -288,12 +309,12 @@ def _poll_once() -> int:
 
     # One decision per station state evaluated, matching how the Pathway path
     # counts closed windows.
-    carbon_state["decision_count"] += len(composite.get("stations", []))
+    carbon_state["decision_count"] += len(stations)
     carbon_state["total_gco2"] = round(
         carbon_state["decision_count"] * CARBON_COST_PER_DECISION, 4)
     carbon_state["per_decision_gco2"] = CARBON_COST_PER_DECISION
 
-    return len(composite.get("stations", []))
+    return len(stations)
 
 
 _state_engine = None
@@ -334,15 +355,6 @@ def start() -> bool:
 
     _stop.clear()
     _started_at = datetime.now(timezone.utc)
-
-    # Prime synchronously so the first request has data, but do NOT make
-    # startup contingent on it. An upstream 429 on the very first cycle used to
-    # mark the whole engine failed and leave it that way, when the correct
-    # behaviour is to come up and fill in on the next cycle.
-    try:
-        _poll_once()
-    except Exception:                                       # noqa: BLE001
-        log.exception("direct engine: priming cycle failed, will retry")
 
     _thread = threading.Thread(target=_loop, name="aree-direct-engine",
                                daemon=True)

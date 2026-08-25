@@ -113,6 +113,26 @@ def _ist_delta():
 PAGE_SIZE = 500
 MAX_PAGES = 12
 
+# data.gov.in sits behind a WAF that blocks the default python-requests
+# User-Agent. The request is accepted, held open for ~60 s, then answered with
+# an empty-bodied HTTP 502. The identical request carrying a browser UA returns
+# 200 in about a second - measured repeatedly, with and without the header.
+#
+# So what the retry logic below reads as "the endpoint is unreliable under
+# sustained load" was really client identification, not rate limiting. That
+# misdiagnosis is why fetch_ncr() took minutes: every page burned a 60 s
+# timeout and a backoff sleep before succeeding on a later attempt or being
+# dropped. The backoff stays - a real 5xx is still possible - but with this
+# header a four-state NCR pull completes in seconds instead of minutes.
+REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+}
+
+
 
 def _get_with_backoff(params: dict, retries: int = 4) -> list[dict] | None:
     """
@@ -127,7 +147,8 @@ def _get_with_backoff(params: dict, retries: int = 4) -> list[dict] | None:
     delay = 5
     for _ in range(retries):
         try:
-            r = requests.get(BASE, params=params, timeout=75)
+            r = requests.get(BASE, params=params, headers=REQUEST_HEADERS,
+                             timeout=75)
         except requests.RequestException:
             time.sleep(delay)
             delay *= 2

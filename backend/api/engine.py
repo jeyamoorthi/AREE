@@ -59,23 +59,70 @@ def load_engine() -> bool:
             return True
         _status["loading"] = True
 
+    # Local Docker runs can select the responsive direct engine explicitly.
+    # This avoids blocking API startup on Pathway's heavyweight import while
+    # retaining the full streaming path as the default elsewhere.
+    if os.getenv("AREE_ENGINE_MODE", "").lower() == "direct":
+        try:
+            import config as _cfg
+            from fallback_engine import start as _fb_start
+            import fallback_engine as _fb
+            ok = _fb_start()
+        except BaseException as exc:                         # noqa: BLE001
+            with _lock:
+                _status.update(loaded=False, loading=False,
+                               error=f"{exc}", error_type=type(exc).__name__)
+            return False
+        with _lock:
+            _engine = _fb
+            _config = _cfg
+            _status.update(loaded=bool(ok), loading=False, mode="direct",
+                           degraded=True, error=None if ok else "direct engine started with no data",
+                           error_type=None, pathway_error="direct mode selected")
+        return bool(ok)
+
     try:
         import config as _cfg
         import app as _app  # noqa: F401  (import starts the Pathway pipeline)
     except BaseException as exc:  # noqa: BLE001 - report any startup failure
+        # Pathway ships Linux/macOS wheels only. Rather than leaving three of
+        # the four views dead on Windows, fall back to the direct-mode engine:
+        # same GRAP state machine, same causal attribution, same reporting,
+        # driven by sampling the live CPCB network instead of an event-time
+        # streaming DAG. The mode is reported everywhere so nothing passes it
+        # off as the streaming engine.
+        try:
+            import config as _cfg2
+            from fallback_engine import start as _fb_start
+            import fallback_engine as _fb
+        except BaseException as fb_exc:                     # noqa: BLE001
+            with _lock:
+                _status.update(loaded=False, loading=False,
+                               error=f"{exc}", error_type=type(exc).__name__)
+            log = __import__("logging").getLogger("aree.engine")
+            log.error("direct-mode fallback also failed: %s", fb_exc)
+            return False
+
+        ok = _fb_start()
         with _lock:
+            _engine = _fb
+            _config = _cfg2
             _status.update(
-                loaded=False,
+                loaded=bool(ok),
                 loading=False,
-                error=f"{exc}",
-                error_type=type(exc).__name__,
+                mode="direct",
+                degraded=True,
+                error=None if ok else "direct engine started with no data",
+                error_type=None,
+                pathway_error=f"{exc}",
             )
-        return False
+        return bool(ok)
 
     with _lock:
         _engine = _app
         _config = _cfg
-        _status.update(loaded=True, loading=False, error=None, error_type=None)
+        _status.update(loaded=True, loading=False, mode="streaming",
+                       degraded=False, error=None, error_type=None)
     return True
 
 
@@ -127,6 +174,32 @@ def multi_window_cache() -> Dict[str, Any]:
 
 def rag_state() -> Dict[str, Any]:
     _require()
+    if _status.get("mode") == "direct":
+        # The semantic index is a Pathway DocumentStore and genuinely does not
+        # exist in this mode. The documents themselves do, so list them and
+        # mark only the retrieval layer as unavailable.
+        #
+        # store_status is set explicitly rather than left out: PolicyConsole
+        # reads `policy.store_status ?? "starting"`, so a missing value leaves
+        # the panel claiming to be initialising forever instead of saying the
+        # subsystem is not running.
+        files = _scan_policy_dir_direct(config().POLICY_DIR)
+        return {
+            "status": "unavailable",
+            "store_status": "unavailable",
+            "reason": "Policy RAG requires the Pathway runtime.",
+            "error": "Semantic policy retrieval is unavailable in direct mode. "
+                     "Documents below are present on disk but not embedded.",
+            "index_type": "Not indexed (direct mode)",
+            "embed_model": None,
+            # docs_indexed counts documents present, matching what the Pathway
+            # path puts in this field. Chunks stays 0 - nothing is embedded.
+            "docs_indexed": len(files),
+            "chunks_indexed": 0,
+            "last_reindex": None,
+            "policy_files": files,
+            "parse_errors": [],
+        }
     from rag.advisory_engine import _rag_state
     return _rag_state
 
@@ -134,8 +207,12 @@ def rag_state() -> Dict[str, Any]:
 def llm_status() -> Dict[str, Any]:
     """Gemini availability, so a retired model id or bad key is visible."""
     _require()
-    from rag.llm_engine import get_llm_status
-    return get_llm_status()
+    try:
+        from rag.llm_engine import get_llm_status
+        return get_llm_status()
+    except Exception as exc:                                # noqa: BLE001
+        return {"ready": False, "error": f"{exc}",
+                "mode": _status.get("mode", "unknown")}
 
 
 def feed_diagnostics(station: Optional[str] = None):
@@ -145,14 +222,76 @@ def feed_diagnostics(station: Optional[str] = None):
     aggregate AQI reads very differently from one that is merely warming up.
     """
     _require()
+
+    # In direct mode there is no WAQI poller - readings come from the CPCB
+    # network - so diagnostics are derived from the state the direct engine
+    # actually built. Importing aqi_stream here would hard-fail on a missing
+    # WAQI_TOKEN and take the whole stations view down with it.
+    if _status.get("mode") == "direct":
+        diags = {
+            name: {
+                "status": st.get("ingestion_status", "ok"),
+                "error": st.get("ingestion_error"),
+                "stale_seconds": st.get("stale_seconds"),
+                "feed_id": st.get("feed_id", ""),
+                "station_name_api": st.get("station_name_api", name),
+                "waqi_timestamp": st.get("waqi_timestamp"),
+                "raw_pm25": st.get("raw_pm25"),
+                "source": "CPCB/DPCC via OpenAQ (direct mode)",
+            }
+            for name, st in latest_state().items()
+        }
+        return diags if station is None else diags.get(station, {})
+
     from ingestion.aqi_stream import _debug_data
     if station is None:
         return dict(_debug_data)
     return _debug_data.get(station, {})
 
 
+# Mirrors rag.advisory_engine.SUPPORTED_EXTENSIONS. Duplicated rather than
+# imported because that module builds a Pathway DocumentStore at import time,
+# which is exactly what is unavailable in direct mode.
+_POLICY_EXTENSIONS = {".txt", ".md", ".text", ".pdf", ".docx"}
+
+
+def _scan_policy_dir_direct(policy_dir: str) -> List[Dict[str, Any]]:
+    """List the policy documents on disk, without the Pathway layer.
+
+    Listing a directory is a filesystem operation, not a retrieval one. The
+    earlier version returned [] in direct mode, so the console reported "No
+    policy documents found in the policies/ folder" while the folder held the
+    GRAP schedule. Saying a regulatory document is absent when it is present is
+    a worse failure than saying it is unindexed.
+    """
+    import os as _os
+    from datetime import datetime as _dt, timezone as _tz
+
+    out: List[Dict[str, Any]] = []
+    if not _os.path.isdir(policy_dir):
+        return out
+    for name in sorted(_os.listdir(policy_dir)):
+        path = _os.path.join(policy_dir, name)
+        if not _os.path.isfile(path):
+            continue
+        st = _os.stat(path)
+        ext = _os.path.splitext(name)[1].lower()
+        out.append({
+            "name": name,
+            "size_kb": round(st.st_size / 1024, 1),
+            "modified": _dt.fromtimestamp(st.st_mtime, tz=_tz.utc)
+                           .strftime("%Y-%m-%d %H:%M"),
+            "type": ext.lstrip(".") or "unknown",
+            "supported": ext in _POLICY_EXTENSIONS,
+            "parse_error": None,
+        })
+    return out
+
+
 def scan_policy_files():
     _require()
+    if _status.get("mode") == "direct":
+        return _scan_policy_dir_direct(config().POLICY_DIR)
     from rag.advisory_engine import _scan_policy_files
     return _scan_policy_files()
 
@@ -167,6 +306,23 @@ def config():
 def stations() -> Dict[str, Any]:
     """Hardcoded + dynamically discovered WAQI stations (1h cached upstream)."""
     _require()
+
+    # Direct mode discovers its own stations from the live CPCB network, so
+    # the station list IS whatever reported this cycle. Returning the
+    # hardcoded WAQI set here would list five nodes that this mode never
+    # polls, and show them all as offline.
+    if _status.get("mode") == "direct":
+        return {
+            name: {
+                "feed_id": st.get("feed_id", ""),
+                "lat": st.get("lat"),
+                "lon": st.get("lon"),
+                "city": "Delhi NCR",
+                "source": "CPCB/DPCC via OpenAQ",
+            }
+            for name, st in latest_state().items()
+        }
+
     from station_loader import get_all_stations
     from config import STATIONS
     try:
@@ -178,8 +334,10 @@ def stations() -> Dict[str, Any]:
 
 
 def station_meta(station: str) -> Dict[str, Any]:
-    from config import STATIONS
     allst = stations()
+    if _status.get("mode") == "direct":
+        return allst.get(station) or {}
+    from config import STATIONS
     return allst.get(station) or STATIONS.get(station) or {}
 
 

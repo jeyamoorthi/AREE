@@ -538,3 +538,6 @@ export interface LiveEvent {
   server_time: string;
   payload: unknown;
 }
+
+// PS 26082 ventilation-forecast layer.
+export * from "./ventilation";

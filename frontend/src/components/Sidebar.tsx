@@ -14,6 +14,7 @@ import {
   LayoutDashboard,
   MapPin,
   Radio,
+  Wind,
   X,
 } from "lucide-react";
 
@@ -42,6 +43,16 @@ const NAV_ITEMS = [
     icon: LayoutDashboard,
     exact: false,
     extraMatch: "/stations",
+  },
+  {
+    // Ventilation is the only route here that does not depend on the Pathway
+    // engine - it reads a met feed and a calibrated threshold - so it stays
+    // usable when the streaming pipeline is down.
+    href: "/ventilation",
+    label: "Ventilation Outlook",
+    shortLabel: "Ventilation",
+    icon: Wind,
+    exact: false,
   },
   {
     href: "/reports",

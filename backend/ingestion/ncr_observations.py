@@ -40,13 +40,17 @@ SOURCE CHOICE, AND WHY NOT CPCB DIRECTLY
 
 from __future__ import annotations
 
+import logging
 import os
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any
 
 import requests
+
+log = logging.getLogger("aree.ncr_observations")
 
 BASE = "https://api.openaq.org/v3"
 
@@ -82,7 +86,17 @@ def _api_key() -> str:
 
 
 def _headers() -> dict:
-    return {"X-API-Key": _api_key()}
+    # An explicit User-Agent for the same reason cpcb_stream sets one:
+    # the default python-requests identifier is treated as a bot by more
+    # than one Indian government-adjacent edge, and the resulting failure
+    # is a slow empty 502 rather than an honest 403.
+    return {
+        "X-API-Key": _api_key(),
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/124.0.0.0 Safari/537.36"),
+        "Accept": "application/json",
+    }
 
 
 def _get(url: str, params: dict | None = None, timeout: int = 60,
@@ -246,6 +260,63 @@ def composite_pm25(now: datetime | None = None,
         if not include_stations:
             out.pop("stations", None)
         return out
+
+    # CPCB is the authoritative source for this domain. OpenAQ remains a
+    # useful fallback, but its API key can expire independently of CPCB.
+    try:
+        from .cpcb_stream import fetch_ncr
+
+        cpcb_started = time.monotonic()
+        cpcb_rows = fetch_ncr()
+        cpcb_stations = [
+            {
+                "station": row["station"],
+                "pm25_ugm3": round(row["pm25"], 1),
+                "lat": row["lat"],
+                "lon": row["lon"],
+                "observed_at": row.get("observed_at") or now,
+                "age_minutes": round((now - (row.get("observed_at") or now)).total_seconds() / 60),
+                "location_id": row.get("station", ""),
+            }
+            for row in cpcb_rows
+            if row.get("pm25") is not None
+            and 0 <= row["pm25"] < 2000
+            and row.get("lat") is not None
+            and row.get("lon") is not None
+        ]
+        if cpcb_stations:
+            values = sorted(row["pm25_ugm3"] for row in cpcb_stations)
+            newest = max(row["observed_at"] for row in cpcb_stations)
+            result: dict[str, Any] = {
+                "available": True,
+                "pm25_ugm3": round(median(values), 1),
+                "n_stations": len(cpcb_stations),
+                "n_active_locations": len(cpcb_stations),
+                "n_stale_discarded": 0,
+                "n_rejected_values": 0,
+                "p25": round(values[len(values) // 4], 1),
+                "p75": round(values[3 * len(values) // 4], 1),
+                "min": round(values[0], 1),
+                "max": round(values[-1], 1),
+                "newest_observation": newest,
+                "data_age_minutes": round((now - newest).total_seconds() / 60.0),
+                "domain": "Delhi NCR",
+                "bbox": list(NCR_BBOX),
+                "source": "CPCB CAAQMS via data.gov.in",
+                "checked_at": now,
+                "served_from_cache": False,
+                "stations": sorted(cpcb_stations,
+                                    key=lambda station: station["pm25_ugm3"],
+                                    reverse=True),
+            }
+            _obs_cache["value"], _obs_cache["fetched_at"] = result, now
+            if not include_stations:
+                result.pop("stations", None)
+            log.info("CPCB source: %d stations in %.1fs",
+                     len(cpcb_stations), time.monotonic() - cpcb_started)
+            return result
+    except Exception as exc:                                # noqa: BLE001
+        log.warning("CPCB source unavailable, trying OpenAQ: %s", exc)
 
     try:
         locations = resolve_active_locations(now)

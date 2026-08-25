@@ -29,9 +29,13 @@ def require_engine():
         detail={
             "error": "engine_unavailable",
             "detail": st.get("error") or "AREE engine is not running.",
+            # Tell the operator what still works. An error that only states a
+            # failure leaves them assuming the whole system is down, when the
+            # PS 26082 forecast layer is unaffected - it does not use Pathway.
             "hint": "The Pathway pipeline must be importable in this process "
-                    "(Linux/macOS/Docker/WSL). Check backend logs for the "
-                    "import failure.",
+                    "(Linux/macOS/Docker/WSL). This affects the station and "
+                    "escalation views only - the Ventilation outlook does not "
+                    "use the engine and remains fully available.",
         },
     )
 

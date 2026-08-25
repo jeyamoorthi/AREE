@@ -22,6 +22,11 @@ import type {
   StationDetail,
   StationListResponse,
   SystemStatus,
+  VentilationAssessment,
+  VentilationCurrent,
+  VentilationForecast,
+  OperatingPoint,
+  ObservedComposite,
 } from "@/types";
 
 export const API_URL =
@@ -208,6 +213,49 @@ export const api = {
     link.click();
     link.remove();
     URL.revokeObjectURL(objectUrl);
+  },
+  // --- PS 26082 ventilation layer -----------------------------------------
+  // These endpoints do not depend on the Pathway engine, so they keep working
+  // when the streaming pipeline is unavailable. The UI treats them as a
+  // separate capability rather than folding them into the station views.
+
+  ventilationOperatingPoint: (mode?: string, signal?: AbortSignal) =>
+    request<OperatingPoint>(
+      `/api/ventilation/operating-point${mode ? `?mode=${enc(mode)}` : ""}`,
+      { signal },
+    ),
+
+  ventilationCurrent: (signal?: AbortSignal) =>
+    request<VentilationCurrent>("/api/ventilation/current", { signal }),
+
+  ventilationForecast: (mode?: string, signal?: AbortSignal) =>
+    request<VentilationForecast>(
+      `/api/ventilation/forecast${mode ? `?mode=${enc(mode)}` : ""}`,
+      { signal },
+    ),
+
+  ventilationObserved: (signal?: AbortSignal) =>
+    request<ObservedComposite>("/api/ventilation/observed", { signal }),
+
+  ventilationStations: (signal?: AbortSignal) =>
+    request<ObservedComposite>("/api/ventilation/stations", { signal }),
+
+  ventilationAssessment: (
+    pm25: number | null,
+    opts: { aqi?: number; station?: string; mode?: string } = {},
+    signal?: AbortSignal,
+  ) => {
+    // pm25 omitted -> the backend uses the live CPCB/DPCC composite and
+    // reports how many stations stood behind it.
+    const q = new URLSearchParams();
+    if (pm25 != null) q.set("pm25", String(pm25));
+    if (opts.aqi != null) q.set("aqi", String(opts.aqi));
+    if (opts.station) q.set("station", opts.station);
+    if (opts.mode) q.set("mode", opts.mode);
+    return request<VentilationAssessment>(
+      `/api/ventilation/assessment?${q.toString()}`,
+      { signal },
+    );
   },
 };
 

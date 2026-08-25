@@ -15,6 +15,7 @@ import {
   Menu,
   Radio,
   Search,
+  Wind,
 } from "lucide-react";
 
 import { useSystemStatus } from "@/components/providers/LiveDataProvider";
@@ -58,6 +59,9 @@ export default function CommandBar({
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/stations")) {
     pageTitle = "Command Center";
     PageIcon = LayoutDashboard;
+  } else if (pathname.startsWith("/ventilation")) {
+    pageTitle = "Ventilation Outlook";
+    PageIcon = Wind;
   } else if (pathname.startsWith("/reports")) {
     pageTitle = "Reports & Analytics";
     PageIcon = FileText;
