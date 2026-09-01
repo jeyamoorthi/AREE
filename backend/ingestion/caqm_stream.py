@@ -94,11 +94,36 @@ RETIRED_AFTER_HOURS = 24
 # Readings change hourly; one cycle of the direct engine is 120 s.
 READING_TTL_SECONDS = 90
 
-# Ten matches what OpenAQ tolerated in ncr_observations. Measured at 10.1 s for
-# the full 79-station network; more workers risk tripping a public endpoint for
-# a few seconds of gain.
-WORKERS = 10
+# Measured: at 10 workers the endpoint starts timing out individual reads and
+# a cycle returns 44 of 67 stations instead of all of them. This is a public
+# dashboard's backend, not a bulk API - fewer parallel requests and a retry
+# recover more stations than raw concurrency does, and the whole pull still
+# finishes well inside the 120 s engine cycle.
+WORKERS = 6
+READ_RETRIES = 2
 
+# A per-station read returns a couple of hundred bytes. The 45 s default is a
+# roster-sized timeout and applying it here is unsafe: 45 s x 2 retries across
+# 61 stations at 6 workers can exceed the 120 s engine cycle, so a slow patch
+# of the network stalls the whole poll loop rather than degrading it. Fifteen
+# seconds is generous for this payload and bounds a worst-case cycle.
+READ_TIMEOUT_SECONDS = 15
+
+# CAQM parameter names -> the keys used everywhere else in this codebase.
+_NORMALISE = {
+    "PM2.5": "pm25", "PM10": "pm10", "NO2": "no2", "SO2": "so2",
+    "CO": "co", "OZONE": "o3", "NH3": "nh3",
+}
+
+# The roster is metadata - station names and coordinates change on the order
+# of months - so it is cached far longer than the readings. This is not an
+# optimisation: caqm.nic.in intermittently times out under the 79-request
+# burst, and when the roster call was the one to fail, the whole source went
+# down and the engine flipped to the 5-hour-old data.gov.in feed for a cycle.
+# The station table then flip-flopped between two differently-named networks.
+_ROSTER_TTL_SECONDS = 3600
+
+_roster_cache: dict[str, Any] = {"value": None, "fetched_at": None}
 _cache: dict[str, Any] = {"value": None, "fetched_at": None}
 
 
@@ -139,8 +164,30 @@ def fetch_roster() -> list[dict]:
     Roster only. The `aqi` field in this payload is deliberately discarded -
     see the module docstring for the 24-day-old reading it will hand you.
     """
-    payload = _get("GetGoogleMapData",
-                   {"state": 0, "district": 0, "station": 0})
+    now = datetime.now(timezone.utc)
+    cached, at = _roster_cache["value"], _roster_cache["fetched_at"]
+    if cached and at and (now - at).total_seconds() < _ROSTER_TTL_SECONDS:
+        return cached
+
+    # One retry: the observed failure is a transient read timeout, not a
+    # rejection, and losing the roster costs the entire source for a cycle.
+    payload = None
+    for attempt in (1, 2):
+        try:
+            payload = _get("GetGoogleMapData",
+                           {"state": 0, "district": 0, "station": 0})
+            break
+        except Exception as exc:                            # noqa: BLE001
+            log.warning("CAQM roster attempt %d failed: %s", attempt, exc)
+    if payload is None:
+        # Serve the last known roster rather than dropping the source. The
+        # readings are re-fetched per station regardless, so a slightly old
+        # roster costs nothing but a station that has since been added.
+        if cached:
+            log.warning("CAQM roster unavailable, reusing cached roster")
+            return cached
+        return []
+
     out = []
     for row in payload.get("data") or []:
         if not _inside_ncr(row.get("latitude"), row.get("longitude")):
@@ -153,15 +200,33 @@ def fetch_roster() -> list[dict]:
             "city": row.get("city"),
             "state": row.get("state"),
         })
+    if out:
+        _roster_cache["value"], _roster_cache["fetched_at"] = out, now
     return out
+
+
+def known_station_names() -> set[str]:
+    """Names in the cached roster.
+
+    Lets the engine tell "this station did not answer this cycle" apart from
+    "this station is not part of this feed at all" - only the second is a
+    reason to drop it from the table.
+    """
+    return {r["station"] for r in (_roster_cache["value"] or []) if r.get("station")}
 
 
 def _reading_for(entry: dict) -> dict | None:
     """One station's current reading and the time it was actually taken."""
-    try:
-        payload = _get("GetActualSiteData",
-                       {"request": entry["station_id"], "state_id": 0})
-    except Exception:                                       # noqa: BLE001
+    payload = None
+    for _ in range(READ_RETRIES):
+        try:
+            payload = _get("GetActualSiteData",
+                           {"request": entry["station_id"], "state_id": 0},
+                           timeout=READ_TIMEOUT_SECONDS)
+            break
+        except Exception:                                   # noqa: BLE001
+            continue
+    if payload is None:
         return None
 
     rows = payload.get("data") or []
@@ -180,7 +245,12 @@ def _reading_for(entry: dict) -> dict | None:
     return {
         **entry,
         "aqi": float(value),
-        "dominant_pollutant": (best.get("parameter") or "").lower() or None,
+        # CAQM writes "PM2.5"/"OZONE"; the rest of the codebase keys on
+        # "pm25"/"o3". Normalised here so the frontend does not have to know
+        # which feed a station came from.
+        "dominant_pollutant": _NORMALISE.get(
+            (best.get("parameter") or "").strip().upper(),
+            (best.get("parameter") or "").strip().lower() or None),
         "observed_at": observed_at,
     }
 

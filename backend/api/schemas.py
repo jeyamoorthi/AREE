@@ -203,6 +203,10 @@ class AQIResponse(BaseModel):
     dominant_pollutant: Optional[str] = None
     pollutants_available: int = 0
     pollutants: List[PollutantReading] = Field(default_factory=list)
+    #: Concentrations can come from a different, slower feed than the AQI
+    #: above them. Both are published so neither is read as the other's age.
+    pollutant_source: Optional[str] = None
+    pollutant_age_minutes: Optional[int] = None
     ingestion_status: Optional[str] = None
     ingestion_error: Optional[str] = None
     avg_aqi_5min: Optional[float] = None

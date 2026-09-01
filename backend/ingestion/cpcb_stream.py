@@ -34,6 +34,7 @@ WHAT THE ENDPOINT ACTUALLY RETURNS
 from __future__ import annotations
 
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from typing import Any
@@ -244,6 +245,29 @@ def data_age_seconds(station: dict) -> float | None:
     return (datetime.now(timezone.utc) - obs).total_seconds()
 
 
+# A full four-state pull is 19-44 s when this endpoint is idle. It is NOT
+# idle when several callers hit it at once: measured under concurrent load the
+# same pull took 46 s, 89 s, 119 s, 140 s and once 220 s. data.gov.in degrades
+# steeply with parallel requests, so the fix is to make concurrent callers
+# share one pull rather than to make each one faster.
+#
+# Two things do that:
+#
+#   _ncr_lock  single-flight. A plain TTL cache does not help a thundering
+#              herd: N callers all miss simultaneously, all fetch, and each
+#              makes the others slower. The lock means one fetches and the
+#              rest wait on it, then read the value it stored.
+#
+#   TTL        ten minutes, not ninety seconds. These readings are measured
+#              ~8 h old and data.gov.in refreshes the resource a few times a
+#              day. A 90 s TTL re-pulled identical bytes on every engine cycle
+#              and every page poll, for data that had not changed since the
+#              previous morning.
+_NCR_TTL_SECONDS = 600
+_ncr_lock = threading.Lock()
+_ncr_cache: dict[str, Any] = {"value": None, "fetched_at": None}
+
+
 def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9)) -> list[dict]:
     """
     Every CPCB station inside the NCR bounding box.
@@ -252,6 +276,30 @@ def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9)) -> list[dict]:
     the API's state filter is indexed, a national pull is not, and NCR
     genuinely crosses Delhi / Haryana / Uttar Pradesh boundaries.
     """
+    def _fresh(ref: datetime) -> list[dict] | None:
+        cached, at = _ncr_cache["value"], _ncr_cache["fetched_at"]
+        if cached is not None and at and                 (ref - at).total_seconds() < _NCR_TTL_SECONDS:
+            return cached
+        return None
+
+    hit = _fresh(datetime.now(timezone.utc))
+    if hit is not None:
+        return hit
+
+    with _ncr_lock:
+        # Re-check inside the lock: while waiting, the caller that held it has
+        # very likely just stored a fresh result. Without this second check
+        # every queued caller would still run its own pull the moment it
+        # acquired the lock, which is the stampede this exists to prevent.
+        now = datetime.now(timezone.utc)
+        hit = _fresh(now)
+        if hit is not None:
+            return hit
+        return _fetch_ncr_uncached(now, lat_range, lon_range)
+
+
+def _fetch_ncr_uncached(now: datetime, lat_range, lon_range) -> list[dict]:
+    """The actual four-state pull. Only ever called holding _ncr_lock."""
     out: list[dict] = []
     # Exact strings the API indexes on. "Uttar_Pradesh" silently returns zero
     # rows rather than erroring, which is the worst kind of wrong.
@@ -269,6 +317,11 @@ def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9)) -> list[dict]:
                 and lon_range[0] <= st["lon"] <= lon_range[1]):
             st["data_age_s"] = data_age_seconds(st)
             inside.append(st)
+
+    # Only cache a non-empty result: caching a failed pull would suppress
+    # retries for 90 s and turn a transient outage into a visible gap.
+    if inside:
+        _ncr_cache["value"], _ncr_cache["fetched_at"] = inside, now
     return inside
 
 

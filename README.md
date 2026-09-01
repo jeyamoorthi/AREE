@@ -1,653 +1,634 @@
-<p align="center">
-  <img src="docs/architecture_diagram.png" alt="UrbanLive-AI Architecture" width="800"/>
-</p>
-
-<h1 align="center">🌍 UrbanLive-AI</h1>
-<h3 align="center">Autonomous Regulatory Escalation Engine for Environmental Governance</h3>
+<h1 align="center">🌬️ AREE</h1>
+<h3 align="center">Autonomous Regulatory Escalation Engine</h3>
+<p align="center"><i>Air pollution–weather coupled forecasting for Delhi NCR — SIH PS 26082 · Team Devengers</i></p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
-  <img src="https://img.shields.io/badge/Pathway-Streaming-00B4D8?style=for-the-badge&logo=apache-kafka&logoColor=white" alt="Pathway"/>
   <img src="https://img.shields.io/badge/FastAPI-API_Layer-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"/>
-  <img src="https://img.shields.io/badge/Next.js-Frontend-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js"/>
-  <img src="https://img.shields.io/badge/Gemini-AI_Analysis-4285F4?style=for-the-badge&logo=google&logoColor=white" alt="Gemini"/>
-  <img src="https://img.shields.io/badge/NASA_FIRMS-Satellite-000000?style=for-the-badge&logo=nasa&logoColor=white" alt="NASA FIRMS"/>
-  <img src="https://img.shields.io/badge/Docker-Containerized-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker"/>
-</p>
-
-<p align="center">
-  <i>A real-time, streaming-first environmental intelligence platform that autonomously monitors air quality across India, detects regulatory escalation triggers using India's official GRAP protocol, attributes pollution causes via satellite fire data, and generates policy-grounded advisories — all with full auditability and carbon-aware operations.</i>
+  <img src="https://img.shields.io/badge/Next.js_16-Frontend-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js"/>
+  <img src="https://img.shields.io/badge/Pathway-Optional-00B4D8?style=for-the-badge" alt="Pathway"/>
+  <img src="https://img.shields.io/badge/Open--Meteo-NWP-FF7F0E?style=for-the-badge" alt="Open-Meteo"/>
+  <img src="https://img.shields.io/badge/CAQM_%2F_CPCB-Ground_Truth-138808?style=for-the-badge" alt="CAQM"/>
 </p>
 
 ---
 
-## 📸 Dashboard Preview
+## What this is, in one paragraph
 
-<p align="center">
-  <img src="docs/dashboard_preview.png" alt="AREE Dashboard" width="800"/>
-</p>
+AREE answers a question that "what will the AQI be tomorrow" does not: **will the
+atmosphere still be able to clear itself, and for how much longer?** It forecasts the
+**ventilation coefficient** (mixing depth × transport speed) for the next ~72 hours,
+finds the first *sustained* collapse below a calibrated threshold, and reports the
+**intervention window** — the hours of usable lead time remaining before that collapse
+begins. Combined with live ground PM2.5 from the CPCB/CAQM network, it produces a
+GRAP escalation *recommendation* carrying its evidence, its operating point, and its
+false-alarm rate. It never issues the order: a human approves, and the whole decision is
+replayable from the audit record.
 
----
-
-## 🏗️ System Architecture
-
-<p align="center">
-  <img src="docs/pipeline_flow.png" alt="Streaming Pipeline Flow" width="800"/>
-</p>
-
-### Architecture Overview
-
-UrbanLive-AI is built as a **Pathway-native streaming pipeline** — not a batch system running on a timer. Every data point flows through a Directed Acyclic Graph (DAG) of stateful transforms, sliding windows, and intelligence layers before reaching the operator dashboard.
-
-Since the migration from Streamlit, the presentation layer is Next.js only:
-
-```text
-Next.js  (UI, charts, maps, forms)
-   ↓  REST + WebSocket
-FastAPI  (backend/api — serialization, validation, errors)
-   ↓  in-process
-Pathway  (streaming DAG, sliding windows, stateful transforms)
-   ↓
-Ingestion / Risk / RAG / Policy / AI
-```
-
-Next.js holds no business logic: every value it renders is computed by the
-Python engine and served over the API.
-
-```mermaid
-graph TB
-    subgraph "📡 Data Ingestion Layer"
-        A1[WAQI API<br/>Real-Time AQI] -->|30s poll| CONN1[AQIConnector]
-        A2[NASA FIRMS<br/>Satellite Fires] -->|5min poll| CONN2[FIRMSConnector]
-        A3[Wind Telemetry<br/>Speed + Direction] -->|Embedded in WAQI| CONN1
-    end
-
-    subgraph "⚡ Pathway Streaming DAG"
-        CONN1 --> T1[AQI Table]
-        CONN2 --> T2[Fire Satellite Table]
-        
-        T1 --> W1[3-min Window<br/>Primary Analysis]
-        T1 --> W2[5-min Window<br/>Trend Detection]
-        T1 --> W3[15-min Window<br/>Macro Trend]
-        
-        W1 --> UDF1[pw.udf: State Engine<br/>Persistence + GRAP]
-        W1 --> UDF2[pw.udf: Causal Analysis<br/>Attribution + Transport]
-        W2 --> UDF3[pw.udf: AQI Rate<br/>of Change]
-    end
-
-    subgraph "🧠 Intelligence Layer"
-        UDF1 --> OBS[Primary Observer]
-        UDF2 --> OBS
-        OBS --> RAG[RAG Advisory Engine<br/>Pathway DocumentStore]
-        OBS --> LLM[Gemini LLM Analysis<br/>Structured JSON]
-        OBS --> PRED[Predictive Intelligence<br/>Linear Regression]
-        OBS --> VPPE[Vulnerability Engine<br/>Population Risk]
-    end
-
-    subgraph "🔌 API Layer"
-        RAG --> FAPI[FastAPI<br/>backend/api]
-        LLM --> FAPI
-        PRED --> FAPI
-        VPPE --> FAPI
-        FAPI --> WS[WebSocket /ws/live<br/>Change Events]
-    end
-
-    subgraph "📊 Output Layer"
-        FAPI --> NEXT[Next.js Dashboard<br/>16-Section Command Center]
-        WS --> NEXT
-        NEXT --> PDF[PDF Report<br/>4-Page Municipal Brief]
-        NEXT --> ESC[Escalation Log<br/>GRAP Stage Transitions]
-    end
-
-    style A1 fill:#0ea5e9,color:#fff
-    style A2 fill:#ef4444,color:#fff
-    style W1 fill:#8b5cf6,color:#fff
-    style W2 fill:#8b5cf6,color:#fff
-    style W3 fill:#8b5cf6,color:#fff
-    style RAG fill:#3b82f6,color:#fff
-    style LLM fill:#f59e0b,color:#fff
-```
+Everything below reflects the repository as it stands today, including what does **not**
+work yet.
 
 ---
 
-## ✨ Key Features
-
-### 🔴 Real-Time GRAP Escalation Engine
-- Implements India's official **CAQM GRAP Protocol** (Graded Response Action Plan)
-- **Persistence-based triggering**: Escalation only fires after `N` consecutive high-AQI sliding windows
-- **Hysteresis state machine**: Prevents oscillation between stages — requires 2 confirmations before stage transition
-- 4-stage regulatory escalation: `None → Stage I → Stage II → Stage III → Stage IV`
-
-### 🛰️ Satellite Transport Intelligence
-- Live integration with **NASA FIRMS VIIRS_SNPP_NRT** satellite dataset
-- Per-station fire hotspot detection within configurable bounding boxes
-- **Transport Vector Model**: Computes plume transport probability using fire centroids, wind vectors, and distance decay
-- **Causal Attribution Engine**: Deterministic rule-based pollution source classification:
-  - `crop_burning_transport` | `possible_regional_transport` | `local_accumulation` | `dust_or_construction` | `industrial_emissions` | `mixed_sources` | `background_pollution`
-
-### 📄 RAG Policy Engine
-- **Pathway DocumentStore** with live streaming re-indexing
-- Per-format parsing: `.txt`/`.md` decoded as UTF-8, `.pdf` via `pypdf`,
-  `.docx` via `python-docx` — unparseable files are reported, not skipped silently
-- Automatically ingests policy documents from `policies/` folder (TXT, PDF, DOCX)
-- Embedded vector index using `all-MiniLM-L6-v2` (384-dim)
-- `BruteForceKnnFactory` for real-time similarity retrieval
-- Generates **policy-grounded advisories** referencing actual GRAP schedules and CPCB guidelines
-
-### 🤖 AI Risk Interpretation (Gemini)
-- Structured JSON output from `gemini-3.5-flash-lite` (override with `GEMINI_MODEL`)
-- Risk trajectory, escalation likelihood, public health risk assessment
-- **Explanation-only**: LLM does NOT influence escalation decisions
-- 10-second per-station cooldown with deterministic fallback on rate-limiting
-
-### 📈 Predictive Intelligence
-- **5-min and 30-min AQI projections** via linear regression on sliding windows
-- Z-score anomaly detection (>2σ deviation triggers alert)
-- Escalation ETA computation
-- AQI rate-of-change tracking across multiple window sizes
-
-### 👥 Vulnerable Population Risk Engine (VPPE)
-- Risk multipliers for: General (1.0×), Elderly (1.4×), Children (1.6×), Respiratory (1.8×)
-- Pre-emptive public health advisory generation
-- Deterministic — no ML models, fully auditable
-
-### 🌱 Carbon-Aware Operations
-- Real-time carbon footprint tracking via **CodeCarbon**
-- Per-decision emissions computation (gCO₂eq)
-- Deterministic fallback when hardware sensors unavailable
-
-### 📋 PDF Report Generator
-- 4-page municipal governance report via **ReportLab**
-- Decision snapshot, risk outlook, satellite attribution, engine transparency
-- **Zero generative content** — all deterministic values from live state
-
----
-
-## 📁 Project Structure
+## Two decision paths, one engine
 
 ```
-urbanlive-ai/
+                        ┌──────────────────────────────────────┐
+  Open-Meteo (ECMWF/GFS)│  PREDICTED PATH  (PS 26082)          │
+  BLH + wind10m ───────►│  ventilation forecast → collapse     │
+                        │  onset → intervention window         │
+                        └──────────────┬───────────────────────┘
+                                       │  AND
+  CPCB / data.gov.in ──► PM2.5 µg/m³ ──┤       ► escalation case (AWAITING_APPROVAL)
+                                       │
+                        ┌──────────────┴───────────────────────┐
+  CAQM / WAQI ─────────►│  OBSERVED PATH  (original AREE)      │
+  station AQI           │  persistence → hysteresis → GRAP     │
+                        └──────────────────────────────────────┘
+```
+
+The **observed path** is the original engine: sliding-window persistence, a hysteresis
+state machine, causal attribution against NASA FIRMS fires. It tells you an episode is
+*happening*. The **predicted path** is new and is the PS 26082 deliverable. It tells you
+whether an episode would *persist*. Neither is sufficient alone, which is why the trigger
+is a conjunction — see [Why the trigger is a conjunction](#why-the-trigger-is-a-conjunction).
+
+---
+
+## The ventilation layer
+
+### The quantity
+
+```
+ventilation coefficient  VC  =  boundary layer height (m)  ×  10 m wind speed (m/s)     [m²/s]
+```
+
+Mixing depth times transport speed — the volume flux available to dilute whatever is
+emitted. It is a long-standing quantity in air-quality meteorology, not one invented for a
+hackathon.
+
+Think of a room. **High ventilation** is windows open with a fan running, so smoke leaves
+quickly. **Low ventilation** is windows shut and a weak fan, so smoke stays trapped.
+
+| | PBL | Wind | VC | Meaning |
+|---|---|---|---|---|
+| Well ventilated | 1000 m | 3.0 m/s | 3000 m²/s | 🟢 the atmosphere disperses pollution effectively |
+| Poorly ventilated | 200 m | 1.0 m/s | 200 m²/s | 🔴 pollution accumulates in a shallow volume |
+
+> 🟢 Higher ventilation → the atmosphere can dilute and clear pollution.
+> 🔴 Lower ventilation → the atmosphere struggles to clear it, so pollution can stay trapped.
+
+### How the system actually uses it
+
+```
+Open-Meteo forecast (BLH + 10 m wind, hourly)
+        ↓
+VC per forecast hour
+        ↓
+compare against the calibrated threshold  (465.9 m²/s, "balanced")
+        ↓
+does it stay below for ≥ 6 consecutive hours?
+        ↓
+yes → that run's FIRST hour is the collapse onset
+        ↓
+intervention window = onset − now
+        ↓
+combine with live observed PM2.5
+        ↓
+AREE assessment → case → operator approval
+```
+
+**Step 1 — compute.** `VC_t = BLH_t × wind_t`. E.g. 500 m × 0.8 m/s = **400 m²/s**.
+
+**Step 2 — compare.** 800 🟢 · 500 🟢 · 400 🔴 · 250 🔴. One hour below is not enough.
+
+**Step 3 — require persistence.** Six consecutive hours below threshold:
+
+```
+14:00  700  🟢     18:00  300  🔴
+15:00  500  🟢     19:00  280  🔴
+16:00  420  🔴     20:00  260  🔴
+17:00  350  🔴     21:00  240  🔴     → onset = 16:00
+```
+
+The onset is the start of the *run*, not the first hour below threshold anywhere. An alert
+should describe when the atmosphere actually stops clearing.
+
+**Step 4 — window.** Forecast issued 13:00, onset 16:00 → **intervention window = 3 h**:
+"we have roughly three hours before the forecast sustained poor-ventilation period begins."
+
+**Step 5 — combine with pollution.** PM2.5 high **and** a sustained collapse forecast →
+elevated persistence risk, and AREE evaluates the rule. PM2.5 low with a collapse forecast
+→ that is just a winter night; monitor.
+
+```
+PM2.5                  how bad the pollution is
+Ventilation            how capable the atmosphere is of clearing it
+Intervention window    how much time is left to act
+```
+
+### Reading the chart on `/ventilation`
+
+The blue line is ventilation, not AQI. The red dashed line is the calibrated threshold. The
+shaded red band is a forecast *sustained* collapse.
+
+The sawtooth is the diurnal boundary-layer cycle, and it is the most important thing on the
+page. Measured from the live feed:
+
+| Hour UTC | BLH | Wind | VC |
+|---|---|---|---|
+| 00:00 | 55 m | 0.18 m/s | 9.9 |
+| 03:00 | 290 m | 0.21 m/s | 60.9 |
+| 06:00 | 375 m | 1.25 m/s | 468.8 |
+| 09:00 | 850 m | 0.81 m/s | 688.5 |
+| 12:00 | 335 m | 2.66 m/s | 891.1 |
+| 15:00 | 120 m | 0.75 m/s | 90.0 |
+| 18:00 | 60 m | 0.51 m/s | 30.6 |
+
+Solar heating grows the mixed layer through the morning, so the atmosphere's capacity to
+dilute rises by **two orders of magnitude** between night and midday. After sunset the layer
+collapses and whatever is emitted accumulates in a shallow volume. *Delhi's winter smog is
+not primarily an emissions story — it is this curve failing to rise.*
+
+Because it collapses every single night, "VC below threshold" on its own would fire
+constantly. That is exactly why the six-hour run length and the PM2.5 conjunction exist.
+
+Chart values are computed at request time from the current model run, verified against the
+upstream API directly (chart peak 1262.2 m²/s = BLH 935 m × wind 1.35 m/s, exact match). The
+horizon is usually under 72 h: it is the model's forward window minus the hours already
+elapsed since the run, so it shrinks through the day and jumps back when the upstream model
+re-runs.
+
+### What the chart does **not** say
+
+❌ "AQI will be 400."  ❌ "Pollution lock-in is guaranteed."
+
+✅ "Forecast ventilation falls below the calibrated operating threshold and stays there for
+a sustained period. If observed pollution is also elevated, this is an early-warning window
+for intervention."
+
+---
+
+## Why the trigger is a conjunction
+
+Five winters of Delhi NCR data (`research/ps26082`) established three things by measurement
+rather than assumption:
+
+1. Whether an episode locks in **cannot** be diagnosed from the atmospheric state at its
+   onset — AUC **0.514**, i.e. chance.
+2. It **is** determined by the ventilation over the following 48 hours — AUC **0.736**.
+3. A one-to-two day forecast reproduces that ventilation closely enough to retain the skill
+   — r = 0.75, RMSE 0.79 m/s on window-mean wind.
+
+So current air quality tells you an episode is *happening* but not whether it will last
+(peak PM2.5 barely separates a 16-hour spike from a 10-day event), and forecast ventilation
+tells you whether one would *persist* but is not itself an episode detector.
+
+```
+triggered  =  observed PM2.5 ≥ 120 µg/m³   AND   forecast sustained ventilation collapse
+```
+
+Firing on either half alone is precisely how a system generates the false alarms that get it
+switched off.
+
+---
+
+## The calibrated operating point
+
+Loaded at runtime from
+[`backend/config/ventilation_operating_point.json`](backend/config/ventilation_operating_point.json),
+not hard-coded, so it can be re-derived without touching application code and the running
+system can state which calibration it is using.
+
+| Mode | Threshold | Hit rate | False-alarm rate | Precision |
+|---|---|---|---|---|
+| **balanced** (default) | 465.9 m²/s | 0.606 | 0.191 | 0.488 |
+| precautionary | 765.0 m²/s | 0.818 | 0.527 | 0.318 |
+| conservative | 465.9 m²/s | 0.606 | 0.191 | 0.488 |
+
+Training AUC 0.736 · 143 episodes, 33 locked-in · 48-hour outcome window · holdout
+Nov 2023 + Nov 2024 (11 episodes, hit 0.20, FAR 0.50) · sustained-run requirement
+**6 hours**.
+
+> ⚠️ **Caveat carried in the config file and surfaced by the API:** derived from five
+> winters of Delhi NCR data in which 64% of in-season hours rest on two or fewer PM2.5
+> stations. The sample is small and the holdout is 11 episodes. Treat 466 m²/s as a
+> **current operating point to be re-derived** once the OpenAQ 2022–2025 gap is closed from
+> CPCB — not as a universal atmospheric law.
+
+`GET /api/ventilation/operating-point` exists so a regulator can answer "on what basis did
+you decide?" without reading source code. An uncalibrated mode is rejected with 422 rather
+than silently falling back, because the operating point *is* the false-alarm rate being
+accepted.
+
+### Lead-time bands
+
+Bands are lead-time, not severity, because for disaster management the actionable quantity
+is how long is left to act.
+
+| Window remaining | Forecast state | Case priority |
+|---|---|---|
+| collapse already begun | `collapsed` | CRITICAL — window closing or closed |
+| ≤ 12 h | `imminent` | HIGH |
+| ≤ 36 h | `approaching` | MEDIUM — prepare and pre-position |
+| > 36 h | `watch` | LOW — monitoring, time available |
+| no collapse forecast | `clear` | LOW |
+
+---
+
+## Two engine modes
+
+`engine.load_engine()` tries Pathway first and falls back to
+[`backend/fallback_engine.py`](backend/fallback_engine.py) when the import fails. Set
+`AREE_ENGINE_MODE=direct` to select direct mode explicitly. Every state carries
+`mode="direct"` so nothing downstream — and nobody reading the UI — can mistake it for the
+streaming engine.
+
+| | streaming | direct |
+|---|---|---|
+| Requires Pathway | yes | **no** |
+| Platform | Linux / macOS / Docker / WSL | anywhere, including Windows |
+| GRAP state machine | same code | same code |
+| Persistence + hysteresis | same code | same code |
+| Causal attribution, FIRMS | yes | yes |
+| Event-time windowing | yes | **no** — 120 s interval sampling |
+| Policy RAG advisories | yes | **no** — needs the DocumentStore |
+| Carbon tracking | measured | deterministic estimate, flagged `measured: false` |
+
+Direct mode exists because only `rag/advisory_engine.py` actually imports Pathway. The state
+machine that decides GRAP stages is pure Python and never needed a streaming runtime — three
+tabs were dark because of one import in one module.
+
+**`/ventilation` is independent of both engines.** It reads a numerical weather model and the
+ground network directly, so it stays up whatever the engine is doing. That is deliberate:
+the forecast layer is upstream of the streaming layer in the data flow, so it must not be
+downstream of it in the dependency graph.
+
+[`backend/tests_contract.py`](backend/tests_contract.py) parses `app.py` and compares the
+keys direct mode publishes against the keys the Pathway path declares. Several routes pass
+engine state to the client unvalidated, so a differently-spelled key does not fail a schema
+— it crashes a React component.
+
+```bash
+python -m backend.tests_contract
+```
+
+---
+
+## Data sources, and what each is authoritative for
+
+| Source | Used for | Why this one | Cadence |
+|---|---|---|---|
+| **Open-Meteo** (ECMWF/GFS) | BLH, 10 m wind, SW/TOA radiation, cloud, T, RH, pressure, precip | ECMWF-family fields over plain REST, no key, arbitrary horizon in one call. Copernicus CDS is the archive source but queues for minutes to hours — unusable on a request path | hourly runs, 90 s backend cache |
+| **CAQM** `caqm.nic.in` | live NCR station roster + sub-index AQI | measured **79 min** median behind, 75 of 79 stations inside the freshness window, against data.gov.in at **322 min** with 0 of 78 | hourly |
+| **CPCB** via `data.gov.in` | PM2.5 **concentrations** in µg/m³, verbatim CPCB station names | CAQM publishes sub-indices only, and the episode threshold is calibrated in µg/m³. Inverting the breakpoint table would fabricate precision inside the one number the decision turns on | a few times daily |
+| **OpenAQ v3** | NCR ground composite (median PM2.5 + percentiles) | station-level provenance behind the composite | on demand |
+| **WAQI** | pan-India AQI, dynamic station discovery | coverage outside the NCR domain | 30 s poll |
+| **NASA FIRMS** (VIIRS_SNPP_NRT) | per-station fire hotspots, FRP, transport vector | causal attribution of crop-residue transport | 5 min |
+| **Google Gemini** | risk narrative | **explanation only** — never influences an escalation decision | 10 s cooldown |
+
+### Traps these modules exist to avoid
+
+Each of these is a real bug that was found, reproduced, and is now defended against in code.
+
+- **OpenAQ `/parameters/{id}/latest` silently ignores `bbox` and `coordinates`.** The first
+  implementation reported "198 NCR stations"; the rows were from South Korea, Lithuania and
+  China, and the "Delhi composite" was a global median. It looked entirely plausible, which
+  is what made it dangerous. Every geographic query now re-checks returned coordinates, as a
+  hard filter rather than an assertion.
+- **CAQM `GetGoogleMapData` serves an `aqi` with no timestamp**, including for analysers that
+  stopped reporting weeks ago (`New Moti Bagh` — 24.3 days old, indistinguishable from live).
+  It is now used for the **roster only**; every value is re-read from `GetActualSiteData`,
+  which carries `lastupdate`, and anything without a fresh timestamp is dropped rather than
+  displayed.
+- **`data.gov.in` returns an empty-bodied HTTP 502 after ~60 s under burst**, never a 429, so
+  retry logic written from the spec will not catch it.
+- **Location dates are not sensor dates.** A location's `datetimeLast` spans every sensor ever
+  sited there; individual sensor ids retire.
+- **OpenAQ's Indian feed has a gap from Nov 2022 to Feb 2025**, present in the S3 archive too.
+  Only the US Embassy monitor spans it. This is why the operating point is provisional.
+- **Request OpenAQ history in monthly chunks.** Deep pagination returns 500s and 408s.
+
+### Freshness
+
+WAQI and CPCB publish hourly, so a healthy feed is routinely 40–100 minutes old. The bands in
+`config.py` describe the upstream cadence rather than relaxing a warning:
+
+| Band | Age | Meaning |
+|---|---|---|
+| current | 0–90 min | normal operation |
+| aging | 90–120 min | older than expected, still plausible for an hourly feed |
+| stale | > 120 min | outside the acceptable window, reported prominently |
+
+Station panels show **measured data age**, never the poll interval. `generated_at` in every
+forecast payload is the honest answer to "when was this computed". If the chart looks static
+for a few minutes, that is correct — the forecast behind it has not changed.
+
+---
+
+## Repository layout
+
+```
+AREE/
+├── backend/
+│   ├── app.py                     Pathway streaming pipeline & DAG (Linux/macOS)
+│   ├── fallback_engine.py         direct mode — same state machine, no Pathway
+│   ├── config.py                  thresholds, stations, CPCB bands, freshness bands
+│   ├── tests_contract.py          direct-vs-streaming key-shape contract check
+│   ├── station_loader.py          pan-India station discovery (WAQI)
+│   ├── report_generator.py        4-page municipal PDF (ReportLab)
+│   │
+│   ├── config/
+│   │   └── ventilation_operating_point.json    ← the calibrated threshold + its skill
+│   │
+│   ├── forecast/
+│   │   └── ventilation.py         VC series, sustained-collapse detection, window
+│   │
+│   ├── ingestion/
+│   │   ├── weather_stream.py      Open-Meteo forecast + archive (BLH, wind, radiation)
+│   │   ├── caqm_stream.py         CAQM roster + per-station timestamped readings
+│   │   ├── cpcb_stream.py         CPCB via data.gov.in — concentrations, µg/m³
+│   │   ├── ncr_observations.py    NCR PM2.5 composite with station-level provenance
+│   │   ├── aqi_stream.py          WAQI polling with retry & staleness
+│   │   ├── firms_stream.py        per-station satellite fire intelligence
+│   │   ├── fire_stream.py         legacy fire count
+│   │   ├── feed_time.py           observed_at / received_at / issued_at semantics
+│   │   └── micro_nodes.py         empty — placeholder, see Known gaps
+│   │
+│   ├── streaming/
+│   │   ├── predictive_engine.py   the conjunction, priority bands, case builder
+│   │   ├── state_machine.py       GRAP stages + hysteresis + persistence
+│   │   └── risk_engine.py         causal attribution + transport vector model
+│   │
+│   ├── rag/                       Pathway DocumentStore advisories + Gemini narrative
+│   ├── policies/                  GRAP schedule, HSPCB winter plan, AQI methodology
+│   └── api/
+│       ├── main.py                app, CORS, structured errors, health
+│       ├── engine.py              streaming ⇄ direct bridge
+│       ├── schemas.py             Pydantic response models (the API contract)
+│       └── routes/                system, dashboard, stations, aqi, risk, grap,
+│                                  forecast, advisory, ai, carbon, escalations,
+│                                  policy, reports, ventilation
 │
-├── 📂 backend/                    # Python engine + API (unchanged intelligence)
-│   ├── 📄 app.py                  # Pathway streaming pipeline & DAG
-│   ├── 📄 config.py               # Central configuration & thresholds
-│   ├── 📄 station_loader.py       # Dynamic pan-India station discovery (WAQI API)
-│   ├── 📄 report_generator.py     # PDF escalation report (ReportLab)
-│   ├── 📄 requirements.txt        # Python dependencies
-│   │
-│   ├── 📂 api/                    # FastAPI layer (presentation only)
-│   │   ├── main.py                # App, CORS, error handling, health
-│   │   ├── engine.py              # Bridge to the live engine state
-│   │   ├── schemas.py             # Pydantic response models
-│   │   ├── serialization.py       # JSON-safe conversion of engine state
-│   │   ├── deps.py                # Shared request guards (503/425/404)
-│   │   ├── ws.py                  # WebSocket live event channel
-│   │   └── 📂 routes/             # dashboard, stations, aqi, risk, grap,
-│   │                              # forecast, advisory, ai, carbon,
-│   │                              # escalations, policy, reports, system
-│   │
-│   ├── 📂 ingestion/              # Multi-source data ingestion
-│   │   ├── aqi_stream.py          # WAQI AQI polling with retry & staleness
-│   │   ├── fire_stream.py         # Legacy fire count (FIRMS)
-│   │   └── firms_stream.py        # Per-station satellite fire intelligence
-│   │
-│   ├── 📂 streaming/              # Stateful streaming computation
-│   │   ├── state_machine.py       # GRAP state machine + persistence tracker
-│   │   └── risk_engine.py         # Causal attribution + transport vector model
-│   │
-│   ├── 📂 rag/                    # Policy retrieval & LLM layer
-│   │   ├── advisory_engine.py     # RAG: Pathway DocumentStore + policy grounding
-│   │   └── llm_engine.py          # Gemini structured risk interpretation
-│   │
-│   └── 📂 policies/               # Policy documents (auto-indexed by RAG)
+├── frontend/                      Next.js 16 · React 19 · Tailwind 4 · Recharts · Leaflet
+│   └── src/
+│       ├── app/                   / · /dashboard · /stations/[station] · /ventilation · /reports
+│       ├── components/            VentilationOutlook, AQICard, GRAPCard, SatelliteCard,
+│       │                          StationMap, PolicyConsole, AIAnalysis, …
+│       ├── hooks/                 usePolling, useLiveChannel, useEngineConfig
+│       └── lib/                   api.ts (every call), theme.ts, freshness.ts, clock.ts
 │
-├── 📂 frontend/                   # Next.js + TypeScript + Tailwind dashboard
-│   ├── 📂 src/app/                # Routes: /, /dashboard, /stations/[station], /reports
-│   ├── 📂 src/components/         # AQICard, GRAPCard, SatelliteCard, StationMap, …
-│   ├── 📂 src/hooks/              # usePolling, useLiveChannel, useEngineConfig
-│   ├── 📂 src/lib/                # api.ts (all API calls), theme.ts (AREE palette)
-│   ├── 📂 src/types/              # TypeScript mirrors of the API schemas
-│   └── 📄 .env.local              # NEXT_PUBLIC_API_URL
-│
-├── 📄 Dockerfile                  # Backend container (Cloud Run ready)
-├── 📄 docker-compose.yml          # Backend + frontend together
-├── 📄 .env                        # API keys (WAQI, FIRMS, Gemini) — backend only
-└── 📄 .gitignore
+├── research/ps26082/              the validation pipeline — scripts 00→10, docs, figures
+├── docs/                          architecture / pipeline / dashboard images
+├── Dockerfile · docker-compose.yml · .env
+├── MIGRATION.md                   Streamlit → Next.js migration map
+└── TEAM_OWNERSHIP.md              who owns which directory
 ```
 
 ---
 
-## 🧠 How It Works — Deep Dive
-
-### 1. Multi-Source Data Ingestion
-
-```mermaid
-sequenceDiagram
-    participant WAQI as WAQI API
-    participant AQI as AQIConnector
-    participant FIRMS as NASA FIRMS
-    participant FC as FIRMSConnector
-    participant PW as Pathway Engine
-
-    loop Every 30 seconds
-        AQI->>WAQI: GET /feed/{feed_id}
-        WAQI-->>AQI: {aqi, pm25, pm10, no2, so2, o3, co, wind}
-        AQI->>PW: self.next(**record)
-    end
-
-    loop Every 5 minutes
-        FC->>FIRMS: GET /api/area/csv/{key}/{dataset}/{bbox}
-        FIRMS-->>FC: CSV fire hotspot data
-        FC->>PW: self.next(**fire_record)
-    end
-```
-
-The ingestion layer uses **Pathway ConnectorSubjects** — custom Python classes that emit records into Pathway tables as an infinite streaming source. Each connector runs in its own thread with configurable poll intervals.
-
-### 2. Multi-Window Sliding Computation
-
-The engine runs **three parallel sliding windows** on every incoming AQI data point:
-
-| Window | Duration | Hop | Purpose |
-|--------|----------|-----|---------|
-| **Primary** | 3 minutes | 1 minute | GRAP state transitions & persistence |
-| **5-min** | 5 minutes | 1 minute | AQI rate-of-change & trend detection |
-| **15-min** | 15 minutes | 1 minute | Macro trend & background drift |
-
-Each window produces enriched aggregates (`max_aqi`, `avg_aqi`, `min_aqi`, `wind_speed`, etc.) that feed into downstream stateful transforms via `pw.udf` functions.
-
-### 3. GRAP State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> None
-    None --> StageI_Pending: AQI 101-200 detected
-    StageI_Pending --> StageI: 2 consecutive confirmations
-    StageI --> StageII_Pending: AQI 201-300 detected
-    StageII_Pending --> StageII: 2 consecutive confirmations
-    StageII --> StageIII_Pending: AQI 301-400 detected
-    StageIII_Pending --> StageIII: 2 consecutive confirmations
-    StageIII --> StageIV_Pending: AQI 401-500 detected
-    StageIV_Pending --> StageIV: 2 consecutive confirmations
-    
-    StageI --> None: AQI drops + 2 confirmations
-    StageII --> StageI: AQI drops + 2 confirmations
-    StageIII --> StageII: AQI drops + 2 confirmations
-    StageIV --> StageIII: AQI drops + 2 confirmations
-
-    note right of StageI_Pending
-        Hysteresis prevents
-        oscillation between stages
-    end note
-```
-
-The GRAP state machine implements **hysteresis-based transitions** — a stage change only takes effect after `HYSTERESIS_CONFIRMATIONS` (default: 2) consecutive windows confirm the new stage. This prevents rapid oscillation during boundary conditions (e.g., AQI fluctuating around 200).
-
-### 4. Transport Vector Model
-
-The satellite transport analysis pipeline:
-
-```
-Fire Hotspots → FRP-Weighted Centroid → Bearing Calculation → Wind Alignment
-                                                                    ↓
-Station Location ← Haversine Distance ← Distance Decay Factor ← Transport Probability
-                                                                    ↓
-                                                        Combined Score (0-100)
-                                                        alignment × 0.35 + distance × 0.25
-                                                        + wind × 0.20 + fire_intensity × 0.20
-```
-
-### 5. Escalation Readiness Index (ERI)
-
-A composite advisory index (0-100) computed deterministically:
-
-| Factor | Points | Condition |
-|--------|--------|-----------|
-| High AQI | +40 | AQI ≥ 200 |
-| Rising Slope | +20 | Slope > 0.5 AQI/min |
-| Persistence | +20 | ≥ 1 consecutive high window |
-| Transport | +10 | Transport score > 50 |
-| Exposure | +10 | 30-min exposure score > 150 |
-
-**ERI Categories**: LOW READINESS (0-25) → MONITOR (26-50) → PRE-ESCALATION (51-75) → HIGH READINESS (76-100)
-
-> ⚠️ ERI is **advisory only** — it does NOT influence the GRAP escalation trigger logic.
-
----
-
-## 🚀 Quick Start
+## Quick start
 
 ### Prerequisites
 
-- **Docker** (recommended) or **Linux/WSL** with Python 3.10+
-- API Keys:
-  - [WAQI API Token](https://aqicn.org/data-platform/token/)
-  - [NASA FIRMS API Key](https://firms.modaps.eosdis.nasa.gov/api/area/)
-  - [Google Gemini API Key](https://aistudio.google.com/apikey)
+Python 3.10+, Node 20+. Keys in `.env` at the repo root:
 
-> **Pathway publishes Linux/macOS wheels only.** On Windows the API still starts,
-> but every data route answers `503 engine_unavailable` until you run the backend
-> under WSL or Docker. The frontend runs natively on any platform.
-
-### Option 1: Docker Compose (backend + frontend)
-
-```bash
-# Configure API keys in .env at the project root:
-#   WAQI_TOKEN=your_waqi_token
-#   FIRMS_API_KEY=your_firms_key
-#   GEMINI_API_KEY=your_gemini_key
-
-docker compose up --build
-
-# Backend  → http://localhost:8000/docs
-# Frontend → http://localhost:3000
+```
+WAQI_TOKEN=…            aqicn.org/data-platform/token
+FIRMS_API_KEY=…         firms.modaps.eosdis.nasa.gov/api
+GEMINI_API_KEY=…        aistudio.google.com/apikey
+DATA_GOV_API_KEY=…      data.gov.in  (CPCB concentrations)
+OPENAQ_API_KEY=…        openaq.org   (NCR composite)
 ```
 
-### Option 2: Backend in Docker, frontend local
+Open-Meteo and CAQM need no key.
+
+### Local — works on Windows, no Pathway required
 
 ```bash
-# Backend (Pathway engine + FastAPI)
-docker build -t aree-backend .
-docker run -p 8000:8000 --env-file .env -e PORT=8000 aree-backend
+python -m venv venv
+venv\Scripts\activate                 # Linux/macOS: source venv/bin/activate
+pip install fastapi "uvicorn[standard]" requests python-dotenv python-multipart numpy reportlab
+python -m uvicorn backend.api.main:api --port 8077
+```
 
-# Frontend
+```bash
 cd frontend
 npm install
-npm run dev
-# → http://localhost:3000
+set NEXT_PUBLIC_API_URL=http://127.0.0.1:8077      # Linux/macOS: export …
+npx next dev --port 3077
 ```
 
-### Option 3: Local (Linux/WSL)
+Open **http://localhost:3077**. All views work; the engine reports `mode: "direct"` and the
+RAG advisory panel reports itself unavailable rather than faking output.
+
+### Full streaming engine
 
 ```bash
-# Backend
-python3.10 -m venv venv
-source venv/bin/activate
-pip install -r backend/requirements.txt
-uvicorn backend.api.main:api --reload --port 8000
-# → http://localhost:8000/api/health  and  http://localhost:8000/docs
-
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
-# → http://localhost:3000
-```
-
-### Streamlit dashboard (removed)
-
-The original Streamlit presentation layer has been **removed** now that the
-migration is complete. Next.js is the only frontend; `streamlit` and
-`streamlit-autorefresh` are no longer dependencies.
-
-The intelligence engine was never part of that layer and is unchanged — Pathway,
-ingestion, the risk engine, the GRAP state machine, RAG, Gemini and PDF
-generation all live in `backend/` exactly as before. A pre-migration copy of the
-old dashboard is retained under `backup_pre_migration/` for reference only; it is
-not part of the build and nothing imports it.
-
----
-
-## ⚙️ Configuration
-
-All operational parameters are centralized in [`config.py`](config.py):
-
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `AQI_POLL_INTERVAL` | 30s | WAQI polling frequency |
-| `FIRE_POLL_INTERVAL` | 60s | FIRMS polling frequency |
-| `PERSISTENCE_THRESHOLD` | 3 | Consecutive windows for escalation |
-| `HIGH_AQI_THRESHOLD` | 300 | AQI level triggering escalation watch |
-| `WINDOW_DURATION_MINUTES` | 3 | Primary sliding window size |
-| `WINDOW_HOP_MINUTES` | 1 | Window hop interval |
-| `HYSTERESIS_CONFIRMATIONS` | 2 | Required confirmations for stage change |
-| `FIRMS_BBOX_DELTA` | 0.15° | Satellite search radius per station |
-| `STALE_DATA_THRESHOLD_SECONDS` | 1200 | Data staleness warning (20 min) |
-| `GEMINI_MODEL` | `gemini-3.5-flash-lite` | LLM model id (env override) |
-| `GEMINI_MAX_TOKENS` | 1024 | Reply budget — too low truncates the JSON |
-
-### Monitoring Stations
-
-The system ships with 5 verified CPCB stations and dynamically discovers up to **30 additional stations** across India via the WAQI search API:
-
-| Station | City | Feed ID |
-|---------|------|---------|
-| SIDCO Kurichi | Coimbatore | @11847 |
-| BTM Layout | Bangalore | @8190 |
-| Tirumala | Tirupati | @9069 |
-| NSIT Dwarka | Delhi | A568246 |
-| Anand Vihar | Delhi | @2553 |
-
----
-
-## 📊 Dashboard Sections
-
-The Next.js command center preserves all **16 operational sections** from the
-original dashboard, across four routes:
-
-| Route | Contents |
-|-------|----------|
-| `/` | National overview: live map, Top-5 AQI/ERI, cross-station rankings, escalations, carbon |
-| `/dashboard?station=…` | Single-station command center with inline selector |
-| `/stations/[station]` | The same command center, deep-linkable |
-| `/reports` | Per-station PDF escalation report downloads |
-
-Section-by-section (identical numbering in both UIs):
-
-| # | Section | Description |
-|---|---------|-------------|
-| 1 | Monitoring Control | Station selection + National Overview mode |
-| 2 | Data Source Transparency | WAQI feed ID, raw AQI, timestamp, freshness |
-| 3 | Official Regulatory Context | Engine mode, data type, API response time |
-| 4 | Persistence Engine Status | Escalation state, consecutive windows, progress |
-| 5 | Satellite Transport Intelligence | Fire hotspots, transport score, wind data |
-| 6 | Data Methodology | How AQI is used, what triggers escalation |
-| 7 | Regulatory Advisory | Full grounded advisory with legal basis |
-| 8 | Policy Retrieval Intelligence | RAG index stats, source document, similarity |
-| 9 | Escalation History | Log of all GRAP stage transitions |
-| 10 | Carbon Intensity | Total emissions, per-decision cost |
-| 11 | Predictive Intelligence | Trend, 5-min/30-min projections, anomaly |
-| 12 | Escalation Readiness Index | ERI score with contributing factors |
-| 13 | Ward Comparative Ranking | Cross-station AQI, ERI, slope rankings |
-| 14 | AI Risk Interpretation | Gemini structured analysis |
-| 15 | Public Health Impact Forecast | VPPE risk matrix, pre-emptive advisory |
-| 16 | Policy Intelligence Console | Live index, document upload, PDF export |
-
----
-
-## 🔌 AREE REST API
-
-The FastAPI layer exposes the live engine state. It contains **no business
-logic** — every value comes from the running Pathway pipeline, RAG index or
-report generator. Interactive docs: `http://localhost:8000/docs`.
-
-| Method | Endpoint | Returns |
-|--------|----------|---------|
-| GET | `/api/health` | Liveness + engine load state (always answers) |
-| GET | `/api/system/status` | Pipeline status, active stations, decisions processed |
-| GET | `/api/system/config` | Thresholds, window params, CPCB bands, GRAP stages |
-| GET | `/api/dashboard` | National overview: map points, top-5 lists, rankings |
-| GET | `/api/stations` | All known nodes with headline live state |
-| GET | `/api/stations/{station}` | Complete engine state for one station |
-| GET | `/api/aqi/{station}` | AQI, pollutants, feed provenance, freshness |
-| GET | `/api/aqi/{station}/history` | Rolling sliding-window AQI history |
-| GET | `/api/grap/{station}` | GRAP stage, persistence, hysteresis, decision trace |
-| GET | `/api/risk/{station}` | ERI, transport score, causal attribution |
-| GET | `/api/forecast/{station}` | 5/30-min projection, slope, anomaly, history |
-| GET | `/api/forecast/{station}/health` | VPPE vulnerable-population risk matrix |
-| GET | `/api/advisory/{station}` | Grounded advisory text + RAG metadata |
-| GET | `/api/ai/{station}` | Gemini structured risk interpretation |
-| GET | `/api/carbon` | Carbon accounting for the engine |
-| GET | `/api/escalations` | GRAP stage transition log (`?station=` to filter) |
-| GET | `/api/policy` | Live policy index status + indexed documents |
-| POST | `/api/policy/upload` | Upload a policy doc into the RAG index (multipart) |
-| GET | `/api/reports/{station}` | Report availability + download link |
-| GET | `/api/reports/{station}/pdf` | The 4-page municipal PDF report |
-| WS | `/ws/live` | Change events: `station_update`, `escalation`, `status` |
-
-### Error contract
-
-All errors return structured JSON, never an HTML page:
-
-```json
-{
-  "error": "engine_starting",
-  "detail": "AREE engine is starting: loading the Pathway pipeline…",
-  "status_code": 503,
-  "hint": "Retry in a few seconds. Poll GET /api/health for readiness."
-}
-```
-
-| Status | Meaning |
-|--------|---------|
-| `424` | Upstream WAQI feed is dormant (`no_aqi`) or failing (`feed_error`) |
-| `425` | Station known, but no sliding window has closed yet |
-| `422` | Upstream payload failed validation (`DATA_INVALID`) |
-| `503` | Engine still starting, or not runnable in this environment |
-
-A station whose feed publishes no aggregate AQI (WAQI returns `"-"`) is reported
-distinctly rather than looking like one that is merely warming up:
-`GET /api/stations` carries `feed_status`, `feed_error` and `feed_last_reading`
-per station plus an `unavailable` count.
-
-### Live updates
-
-REST is the data path; the WebSocket only announces change. The frontend polls
-every 5s and additionally refetches immediately when `/ws/live` reports a
-`station_update` or `escalation`. If the socket never connects, the dashboard
-keeps working on polling alone and shows `polling only`.
-
----
-
-## 🔗 API Integrations
-
-```mermaid
-graph LR
-    A[UrbanLive-AI] --> B[WAQI API<br/>aqicn.org]
-    A --> C[NASA FIRMS<br/>VIIRS_SNPP_NRT]
-    A --> D[Google Gemini<br/>2.5-flash-lite]
-    
-    B -->|AQI, PM2.5, PM10<br/>NO2, SO2, O3, CO<br/>Wind Speed/Direction| A
-    C -->|Fire Lat/Lon<br/>Confidence, FRP<br/>Acquisition Time| A
-    D -->|Risk Trajectory<br/>Health Risk<br/>Escalation Likelihood| A
-
-    style A fill:#0ea5e9,color:#fff
-    style B fill:#22c55e,color:#fff
-    style C fill:#ef4444,color:#fff
-    style D fill:#f59e0b,color:#fff
-```
-
-| API | Purpose | Rate | Auth |
-|-----|---------|------|------|
-| **WAQI** | Real-time AQI + pollutant data | 30s/station | Token |
-| **NASA FIRMS** | Satellite fire detection (VIIRS) | 5min/station | API Key |
-| **Google Gemini** | AI risk interpretation | 10s cooldown | API Key |
-
----
-
-## 🐳 Deployment
-
-### Cloud Run (GCP)
-
-```bash
-# Build container
-docker build -t gcr.io/PROJECT_ID/urbanlive-ai .
-
-# Push to Container Registry
-docker push gcr.io/PROJECT_ID/urbanlive-ai
-
-# Deploy
-gcloud run deploy urbanlive-ai \
-  --image gcr.io/PROJECT_ID/urbanlive-ai \
-  --platform managed \
-  --port 8080 \
-  --set-env-vars "WAQI_TOKEN=xxx,FIRMS_API_KEY=xxx,GEMINI_API_KEY=xxx" \
-  --memory 2Gi
+pip install -r backend/requirements.txt            # Linux/macOS/WSL — Pathway wheels
+python -m uvicorn backend.api.main:api --reload --port 8000
 ```
 
 ### Docker Compose
 
-```yaml
-version: "3.8"
-services:
-  urbanlive-ai:
-    build: .
-    ports:
-      - "8080:8080"
-    env_file:
-      - .env
-    volumes:
-      - ./policies:/app/policies
-    restart: unless-stopped
-```
-
----
-
-## 🧪 Design Principles
-
-1. **Streaming-First**: Pathway DAG processes every data point through stateful transforms — no batch scheduling.
-2. **Deterministic Decisions**: All escalation logic is rule-based and auditable. LLM is explanation-only.
-3. **Data Sovereignty**: WAQI AQI used directly from API payload. No re-computation or approximation.
-4. **Graceful Degradation**: Each subsystem (FIRMS, Gemini, RAG) fails independently with deterministic fallbacks.
-5. **Full Transparency**: Every dashboard panel shows data provenance — feed ID, timestamp, freshness, confidence score.
-6. **Carbon Awareness**: Per-decision emissions tracked and displayed.
-7. **Zero-Config Dynamic Discovery**: Stations auto-discovered from WAQI search API (up to 30 across India).
-
----
-
-## 🛡️ How Escalation Logic Works
-
-```
-IF   AQI ≥ 300  (from WAQI API, direct — no recomputation)
-AND  Sustained across 3 consecutive sliding windows (3min duration, 1min hop)
-AND  GRAP state machine confirms via 2 hysteresis confirmations
-THEN → ESCALATION TRIGGERED
-
-Regulatory actions activated:
-  ▸ Construction/demolition restrictions
-  ▸ High-emission vehicle entry ban
-  ▸ Industrial compliance verification
-  ▸ Public health advisory issuance
-  ▸ School outdoor activity suspension
-```
-
-> The system never modifies or re-calculates the AQI. It uses the exact value from the WAQI payload.
-
----
-
-## 📜 Policy Documents
-
-The RAG engine automatically indexes documents placed in the `policies/` directory:
-
-| Document | Description | Size |
-|----------|-------------|------|
-| `GRAP Schedule.txt` | Official CAQM GRAP action framework | 25 KB |
-| `hspcb_winter_action_plan.txt` | Haryana SPCB winter action plan 2024-25 | 84 KB |
-| `How_AQI_Calculated.txt` | AQI computation methodology | 1.3 KB |
-| `pollution.txt` | Comprehensive pollution reference | 63 KB |
-
-**To add new policy documents**: Simply place `.txt` or `.pdf` files in the `policies/` folder — the Pathway DocumentStore will auto-index them in real-time.
-
----
-
-## 📄 License
-
-This project is built for the **Hack for Green Bharat** hackathon. See the problem statement in `policies/` for context.
-
----
-
-## 🙏 Acknowledgments
-
-- **[WAQI](https://aqicn.org/)** — Real-time global air quality data
-- **[NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/)** — Satellite-based fire detection
-- **[Pathway](https://pathway.com/)** — Real-time streaming data processing
-- **[Google Gemini](https://ai.google.dev/)** — AI-powered risk interpretation
-- **[CodeCarbon](https://codecarbon.io/)** — Carbon emissions tracking
-
----
-
-<p align="center">
-  <sub>Built with 💚 for cleaner air and smarter governance</sub>
-</p>
-
+```bash
 docker compose up --build
+# backend  → http://localhost:8000/docs
+# frontend → http://localhost:3000
+```
+
+The compose file mounts `backend/policies` so uploaded policy documents survive restarts, and
+never passes secrets to the frontend image.
+
+---
+
+## API
+
+Interactive docs at `/docs`. Everything is served under `/api`.
+
+### Ventilation — the PS 26082 layer (no engine dependency)
+
+| Method | Endpoint | Returns |
+|---|---|---|
+| GET | `/api/ventilation/forecast` | 72 h VC series, sustained collapse, intervention window |
+| GET | `/api/ventilation/current` | observed VC over recent hours — analysis values only |
+| GET | `/api/ventilation/observed` | live NCR PM2.5 composite with provenance |
+| GET | `/api/ventilation/stations` | every reporting station behind that composite |
+| GET | `/api/ventilation/assessment` | the conjunction → assessment + case |
+| GET | `/api/ventilation/operating-point` | the threshold, where it came from, what it costs |
+
+Query params: `lat`/`lon` (default Delhi NCR centroid 28.63, 77.22), `hours` (6–168), `mode`
+(`balanced` · `precautionary` · `conservative`), and on `/assessment` an optional `pm25=`
+override. A supplied PM2.5 is flagged `input_source: "manual"` — a reviewer probing the
+decision boundary must never have their input presented as a measurement.
+
+### Engine-backed routes
+
+| Method | Endpoint | Returns |
+|---|---|---|
+| GET | `/api/health` | liveness + engine load state — always answers |
+| GET | `/api/system/status` | pipeline status, mode, active stations, decisions processed |
+| GET | `/api/system/config` | thresholds, window params, CPCB bands, GRAP stages |
+| GET | `/api/dashboard` | national overview: map points, top-5 lists, rankings |
+| GET | `/api/stations` · `/api/stations/{station}` | roster with live state · full station state |
+| GET | `/api/aqi/{station}` · `/api/aqi/{station}/history` | AQI, pollutants, provenance, freshness |
+| GET | `/api/grap/{station}` | GRAP stage, persistence, hysteresis, decision trace |
+| GET | `/api/risk/{station}` | ERI, transport score, causal attribution |
+| GET | `/api/forecast/{station}` · `/health` | 5/30-min projection, anomaly · VPPE risk matrix |
+| GET | `/api/advisory/{station}` · `/api/ai/{station}` | grounded advisory · Gemini narrative |
+| GET | `/api/carbon` · `/api/escalations` | carbon accounting · GRAP transition log |
+| GET/POST | `/api/policy` · `/api/policy/upload` | RAG index status · add a document |
+| GET | `/api/reports/{station}` · `/pdf` | report availability · the municipal PDF |
+| WS | `/ws/live` | change events: `station_update`, `escalation`, `status` |
+
+### Error contract
+
+Structured JSON, never an HTML page:
+
+```json
+{
+  "error": "met_feed_unavailable",
+  "detail": "No recent meteorological analysis returned.",
+  "status_code": 503
+}
+```
+
+| Status | Meaning |
+|---|---|
+| `422` | invalid operating mode, or an upstream payload failed validation |
+| `424` | ground observations unavailable, or an upstream feed is dormant/failing |
+| `425` | station known, but no sliding window has closed yet |
+| `503` | engine not running in this process, or the met feed returned nothing |
+
+### Refresh cadence
+
+| Layer | Cadence | Why |
+|---|---|---|
+| Upstream NWP | hourly | ECMWF/GFS run cadence |
+| Backend forecast cache | 90 s | the ground network publishes hourly; faster buys nothing |
+| Chart poll | 5 min | matches how fast the forecast can actually change |
+| Station poll | 2 min | dropouts are what an operator needs to see promptly |
+| Direct-engine cycle | 120 s | one full network sample |
+
+REST is the data path; the WebSocket only *announces* change. If the socket never connects the
+dashboard keeps working on polling alone and says `polling only`.
+
+---
+
+## Frontend
+
+Next.js 16 App Router, React 19, Tailwind 4, Recharts, React-Leaflet. It holds **no business
+logic** — every value it renders is computed by the Python engine and served over the API.
+
+| Route | Contents |
+|---|---|
+| `/` | national overview: live map, top-5 AQI/ERI, cross-station rankings, escalations, carbon |
+| `/dashboard?station=…` | single-station command center with inline selector |
+| `/stations/[station]` | the same command center, deep-linkable |
+| `/ventilation` | **PS 26082**: VC chart, collapse band, intervention window, composite, station table, assessment |
+| `/reports` | per-station PDF escalation report downloads |
+
+---
+
+## Design principles
+
+1. **Forecast, don't just observe.** The operationally useful quantity is not "what will AQI
+   be" but "will the atmosphere still be able to clear itself".
+2. **Deterministic decisions.** All escalation logic is rule-based and auditable. The LLM
+   explains; it never decides.
+3. **Never blur observed and predicted.** Forecast rows carry `is_forecast`; analysis and
+   forecast endpoints are separate. In a system that issues regulatory escalations, that is
+   the failure mode that matters most.
+4. **The system proposes, the authority disposes.** Cases open as `AWAITING_APPROVAL`. Legal
+   authority for GRAP invocation rests with CAQM and the state pollution control boards.
+5. **Provenance on every number.** Station names, measured data age, station counts, the
+   operating point in force, and whether an input was measured or supplied.
+6. **Degrade visibly, never plausibly.** Unavailable subsystems say so instead of returning
+   defaults that look like measurements.
+7. **Verify what an API claims to have filtered.** An endpoint that ignores a filter rather
+   than rejecting it will hand you a confident wrong answer.
+
+---
+
+## Current status
+
+### Working end to end
+- ✅ 72 h ventilation forecast, sustained-collapse detection, intervention window
+- ✅ Calibrated operating point loaded from disk, three modes, skill metrics exposed
+- ✅ Live NCR PM2.5 composite with per-station provenance and staleness filtering
+- ✅ Predictive assessment + case builder with recommended GRAP measures
+- ✅ CAQM ingestion with timestamp verification, roster cache and bounded retries
+- ✅ Direct mode — full GRAP / persistence / attribution stack without Pathway, on Windows
+- ✅ All five frontend routes, live charts, station map, PDF reports
+- ✅ Structured error contract, plus a contract test for direct-vs-streaming key shapes
+
+### In progress (uncommitted working tree)
+- 🔧 `pollutant_source` / `pollutant_age_minutes` on `/api/aqi` — concentrations can come from
+  a slower feed than the AQI above them, so both ages are published rather than one implying
+  the other
+- 🔧 CAQM concurrency lowered 10 → 6 workers, with retries and a 15 s per-read timeout
+  (10 workers returned 44 of 67 stations; fewer parallel reads recover more)
+- 🔧 Roster caching (1 h) so a transient roster timeout no longer takes the whole source down
+  and flips the station table to a differently-named network
+- 🔧 Station pruning in direct mode against the source roster, so the table stops accumulating
+  ghosts from a previous feed
+
+### Known gaps — stated rather than hidden
+- ⚠️ **λ is not validated on real data.** `research/ps26082` recovers a known λ from synthetic
+  data (+0.1386 true → +0.1513 recovered, 9.2% error, all three physical sign checks pass),
+  but step 1 needs a Copernicus CDS key and has not been run on real ERA5. The shipped system
+  therefore uses the **ventilation-coefficient baseline**, not λ.
+- ⚠️ **The holdout is thin.** 11 episodes, hit rate 0.20, FAR 0.50. 466 m²/s is a starting
+  operating point, not a settled one.
+- ⚠️ **`backend/ingestion/micro_nodes.py` is empty** — a placeholder for low-cost sensor
+  ingestion, not implemented.
+- ⚠️ **Two GRAP AQI mappings exist.** `config.GRAP_STAGES` puts Stage I at 101–200;
+  `predictive_engine.GRAP_BY_AQI` puts it at 201–300, which matches the official CAQM
+  schedule. The predictive path is the correct one; `config.py` needs reconciling.
+- ⚠️ **RAG advisories and measured CodeCarbon tracking require Pathway**, so they are
+  unavailable in direct mode — reported as unavailable, never faked.
+- ⚠️ **Ventilation is currently NCR-centroid single-point.** Per-station coordinates are
+  accepted by the API, but the dashboard uses one location.
+
+### Rules the team does not break
+- Never quote **23 ms** anywhere near forecasting. It is API latency; an NWP scientist reads
+  it as a category error.
+- Never present λ as a published standard index. The *physics* is published; operationalising
+  it as a live scalar is ours. Say exactly that.
+- Hold out **Nov 2023 and Nov 2024**. Every public number comes from episodes the fit never
+  saw.
+- Episode labels never see λ. Step 5 stays independent of step 4, or the validation is
+  circular.
+
+---
+
+## Research pipeline
+
+`research/ps26082` — read `docs/AREE_PS26082_Architecture.pdf` first.
+
+| Step | Script | Key | What it does |
+|---|---|---|---|
+| 0 | `00_selftest_synthetic.py` | — | synthetic data with a **known** λ; checks the estimator recovers it. Run first, always |
+| 1 | `01_fetch_era5.py` / `01b_fetch_openmeteo_era5.py` | CDS | ERA5 hourly `blh`, `ssrd`, `ssrdc`, `t2m`, `u10/v10`, `sp`, `tp`, `sshf` |
+| 2 | `02_fetch_ground_aq.py` | OpenAQ | hourly PM2.5 across NCR stations |
+| 3 | `03_build_panel.py` | — | one hourly panel; converts ERA5 J m⁻² accumulations to W m⁻² |
+| 4 | `04_compute_lambda.py` | — | estimates e1, e2, e3 and λ, with physical sign checks |
+| 5 | `05_label_episodes.py` | — | labels episodes locked-in vs ventilated — **never sees λ** |
+| 6 | `06_validate_lambda.py` | — | the go/no-go gate: AUC, lead time, FAR vs the VC baseline |
+| 7–9 | `07_diagnose_elasticities` · `08_dilution_index` · `09_forecast_skill_chain` | — | endogeneity diagnosis, dilution index, forecast-skill chain |
+| 10 | `10_calibrate_operating_point.py` | — | derives the 465.9 m²/s threshold shipped in `backend/config/` |
+
+---
+
+## Acknowledgments
+
+**[Open-Meteo](https://open-meteo.com/)** ECMWF/GFS fields · **[CAQM](https://caqm.nic.in/)**
+and **[CPCB](https://cpcb.nic.in/)** ground network · **[data.gov.in](https://data.gov.in/)**
+· **[OpenAQ](https://openaq.org/)** · **[WAQI](https://aqicn.org/)** ·
+**[NASA FIRMS](https://firms.modaps.eosdis.nasa.gov/)** · **[Pathway](https://pathway.com/)**
+· **[Google Gemini](https://ai.google.dev/)** · **[CodeCarbon](https://codecarbon.io/)**
+
+Built for **SIH PS 26082** — Air Pollution–Weather Coupled Forecasting, Ministry of Earth
+Sciences / NCMRWF, Disaster Management. Team **Devengers**.
+
+<p align="center"><sub>The system proposes. The authority disposes. Every number carries its provenance.</sub></p>

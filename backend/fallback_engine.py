@@ -68,6 +68,10 @@ carbon_state: dict[str, Any] = {
 CARBON_COST_PER_DECISION = 0.002   # gCO2eq, same value app.py uses
 _multi_window_cache: dict[str, dict] = {}
 
+# Below this, a cycle is treated as partial: it still updates the stations it
+# did return, but it will not prune the ones it did not.
+MIN_CYCLE_STATIONS = 10
+
 MODE = "direct"
 POLL_SECONDS = 120
 HISTORY_LEN = 120
@@ -383,6 +387,38 @@ def _poll_once() -> int:
         except Exception:                                   # noqa: BLE001
             log.exception("direct engine: failed to build state for %s",
                           st.get("station"))
+    # Drop stations this cycle did not report.
+    #
+    # latest_state persists across cycles, and nothing ever removed from it. So
+    # a station that left the feed kept its last reading forever and went on
+    # being counted - and when a cycle fell back to the other source, whose
+    # station names differ, the table became the UNION of two networks: 82
+    # entries for a 67-station feed, 16 of them hours stale. A live dashboard
+    # must not accumulate ghosts.
+    #
+    # Guarded on a plausible cycle: a partial fetch should degrade the table,
+    # never wipe it.
+    # Prune against the SOURCE'S ROSTER, not against this cycle's successful
+    # reads. A station that timed out this cycle is still part of the network -
+    # dropping it would make the station count flicker between cycles, and a
+    # count that moves for no reason is indistinguishable from stations going
+    # offline. It keeps its last reading and ages out through the normal
+    # freshness bands instead. Only names the current source does not know at
+    # all are removed, which is what clears the table on a source switch.
+    reported = {st["station"] for st in stations}
+    roster = set()
+    try:
+        from ingestion import caqm_stream as _caqm
+        roster = _caqm.known_station_names()
+    except Exception:                                       # noqa: BLE001
+        pass
+    keep = reported | roster if roster else reported
+
+    if len(reported) >= MIN_CYCLE_STATIONS:
+        for gone in set(latest_state) - keep:
+            latest_state.pop(gone, None)
+            aqi_history.pop(gone, None)
+
     _cycles += 1
 
     # One decision per station state evaluated, matching how the Pathway path
