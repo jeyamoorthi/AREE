@@ -8,6 +8,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -43,6 +44,16 @@ const NAV_ITEMS = [
     icon: LayoutDashboard,
     exact: false,
     extraMatch: "/stations",
+  },
+  {
+    // The MVP screen: the whole chain on one page, and like /ventilation it is
+    // free of the Pathway engine so a demonstration cannot be killed by one
+    // import failing.
+    href: "/outlook",
+    label: "Atmospheric Outlook",
+    shortLabel: "Outlook",
+    icon: Activity,
+    exact: false,
   },
   {
     // Ventilation is the only route here that does not depend on the Pathway

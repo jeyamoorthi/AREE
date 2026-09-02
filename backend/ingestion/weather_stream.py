@@ -65,6 +65,37 @@ HOURLY_VARS = [
     "precipitation",
 ]
 
+# Pressure-level temperatures. Inversion strength is what these exist for: a
+# temperature that RISES with height caps the mixed layer, and is the mechanism
+# behind the shallow winter boundary layer whose consequence ventilation
+# already measures.
+#
+# MEASURED LIMITATION, DO NOT REDISCOVER THIS THE HARD WAY
+#   The ARCHIVE endpoint accepts these names and answers HTTP 200 with a fully
+#   populated `hourly` block in which every pressure-level value is null. It
+#   does not reject the request and it does not set `reason`. Verified on
+#   2024-11-01 for temperature_1000hPa / _925hPa / _850hPa, with and without
+#   models=era5, and on the /v1/era5 alias:
+#
+#       temperature_2m       [19.6, 19.4, 20.3, 22.9]
+#       temperature_925hPa   [None, None, None, None]
+#
+#   The FORECAST endpoint does serve them (verified: [25.3, 25.9, 26.1]), but
+#   only across its own window - roughly 92 past days. So inversion strength is
+#   computable for recent weeks and NOT for the 2019-2025 training corpus from
+#   this source. Pressure levels for the full period need Copernicus CDS
+#   directly (research/ps26082/scripts/01_fetch_era5.py), which is why that
+#   script stays in the repository.
+#
+#   This is the same failure mode as the OpenAQ bbox bug and the CAQM
+#   timestamp-free payload: an endpoint that answers confidently rather than
+#   refusing, so the wrong answer looks exactly like the right one.
+ARCHIVE_PRESSURE_VARS = [
+    "temperature_1000hPa",
+    "temperature_925hPa",
+    "temperature_850hPa",
+]
+
 # Delhi NCR centroid. Callers pass explicit coordinates for per-station pulls.
 DEFAULT_LAT, DEFAULT_LON = 28.63, 77.22
 
@@ -74,7 +105,8 @@ DEFAULT_LAT, DEFAULT_LON = 28.63, 77.22
 MIN_TOA_WM2 = 120.0
 
 
-def _rows_from_payload(payload: dict, is_forecast: bool) -> list[dict]:
+def _rows_from_payload(payload: dict, is_forecast: bool,
+                       variables: list[str] | None = None) -> list[dict]:
     """
     Convert an Open-Meteo hourly block into flat per-hour records.
 
@@ -97,7 +129,7 @@ def _rows_from_payload(payload: dict, is_forecast: bool) -> list[dict]:
             "lat": payload.get("latitude"),
             "lon": payload.get("longitude"),
         }
-        for var in HOURLY_VARS:
+        for var in (variables or HOURLY_VARS):
             series = hourly.get(var)
             rec[var] = series[i] if series and i < len(series) else None
         rows.append(_derive(rec))
@@ -131,7 +163,8 @@ def _derive(rec: dict) -> dict:
     return rec
 
 
-def _fetch(url: str, params: dict, is_forecast: bool, retries: int = 3) -> list[dict]:
+def _fetch(url: str, params: dict, is_forecast: bool, retries: int = 3,
+           variables: list[str] | None = None) -> list[dict]:
     """One HTTP call with retry. Returns [] rather than raising."""
     for attempt in range(retries):
         try:
@@ -139,7 +172,7 @@ def _fetch(url: str, params: dict, is_forecast: bool, retries: int = 3) -> list[
             if r.status_code == 429:
                 continue
             r.raise_for_status()
-            return _rows_from_payload(r.json(), is_forecast)
+            return _rows_from_payload(r.json(), is_forecast, variables)
         except Exception:                                   # noqa: BLE001
             if attempt == retries - 1:
                 return []
@@ -170,7 +203,8 @@ def fetch_forecast(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
 
 
 def fetch_recent(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
-                 past_days: int = 2) -> list[dict]:
+                 past_days: int = 2,
+                 variables: list[str] | None = None) -> list[dict]:
     """
     Recent OBSERVED meteorology, for anchoring the forecast against reality.
 
@@ -180,14 +214,48 @@ def fetch_recent(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
     forecast fields would be circular, since it would only be re-reading the
     model's own output.
     """
+    vars_ = variables or HOURLY_VARS
     return _fetch(FORECAST_URL, {
         "latitude": lat, "longitude": lon,
-        "hourly": ",".join(HOURLY_VARS),
+        "hourly": ",".join(vars_),
         "past_days": min(past_days, 92),
         "forecast_days": 1,
         "timezone": "UTC",
         "wind_speed_unit": "ms",
-    }, is_forecast=False)
+    }, is_forecast=False, variables=vars_)
+
+
+def fetch_archive(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
+                  start_date: str = "", end_date: str = "",
+                  variables: list[str] | None = None) -> list[dict]:
+    """
+    ERA5 reanalysis for a closed date range. The historical backfill path.
+
+    WHY THIS IS NOT fetch_forecast WITH past_days
+        past_days on the forecast endpoint is capped and serves the model's own
+        recent analysis. The archive endpoint serves ERA5 proper and accepts an
+        arbitrary range in one call, which is what a multi-winter backfill needs.
+
+    WHY THE ROWS ARE FLAGGED is_forecast=False, AND WHY THAT MATTERS
+        Reanalysis already knows the answer. It is legitimate training data and
+        illegitimate skill evidence. Anything scored against these rows measures
+        hindcast fit, not forecast skill - for that use the previous-runs
+        endpoint at a fixed lead time. Keeping the flag honest here is what
+        stops the two from being confused three months from now.
+
+    `variables` defaults to HOURLY_VARS. The backfill passes HOURLY_VARS plus
+    ARCHIVE_PRESSURE_VARS, because inversion strength needs temperature aloft
+    and the live path has no use for it.
+    """
+    vars_ = variables or HOURLY_VARS
+    return _fetch(ARCHIVE_URL, {
+        "latitude": lat, "longitude": lon,
+        "hourly": ",".join(vars_),
+        "start_date": start_date,
+        "end_date": end_date,
+        "timezone": "UTC",
+        "wind_speed_unit": "ms",
+    }, is_forecast=False, variables=vars_)
 
 
 def data_age_seconds(record: dict) -> float:

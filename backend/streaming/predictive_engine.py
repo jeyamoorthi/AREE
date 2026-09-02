@@ -34,7 +34,7 @@ RELATIONSHIP TO THE EXISTING ENGINE
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 # GRAP stage boundaries on the CPCB AQI scale, as used by the existing engine.
@@ -60,6 +60,141 @@ PRIORITY_BANDS = [
     (36, "MEDIUM", "Under 36 hours. Prepare and pre-position."),
     (10_000, "LOW", "Monitoring. Time available."),
 ]
+
+
+# --- the severe-event warning rule ------------------------------------------
+#
+# These three constants ARE the rule Experiment D scored, and warning_skill.py
+# imports them from here rather than keeping its own copy. That is deliberate:
+# the rule running in production must be the same object that was validated,
+# not a second implementation that agrees with it today and drifts next month.
+#
+# 250 ug/m3 is the CPCB "Severe" breakpoint for PM2.5 (121-250 is Very Poor),
+# so it is a published boundary rather than a number chosen by eye. Six hours
+# mirrors the sustained-run requirement the ventilation layer already applies.
+SEVERE_PM25_UGM3 = 250.0
+WARNING_MIN_HOURS = 6
+WARNING_MERGE_GAP_HOURS = 12
+
+# The upper-tail series is what triggers a warning, never the central one.
+# Measured in Experiment D across 13 severe episodes: the q90 upper tail
+# anticipated 9 of them from clean air with a median 68 h of lead, while
+# persistence and climatology anticipated 0 of 13. The central forecast is the
+# expected concentration and answers a different question.
+WARNING_SIGNAL = "upper"
+
+
+def sustained_runs(series: list[tuple[datetime, float]], threshold: float,
+                   min_hours: int) -> list[tuple[datetime, datetime]]:
+    """
+    Runs of at least min_hours consecutive hours at or above threshold.
+
+    Used for BOTH observed episodes and forecast warnings so that the thing
+    predicted has the same shape as the thing scored. A single hour above the
+    threshold is not an episode and is not a warning.
+    """
+    runs: list[list[datetime]] = []
+    start = last = None
+    length = 0
+    for moment, value in sorted(series):
+        contiguous = last is not None and (moment - last) == timedelta(hours=1)
+        if value >= threshold:
+            if start is None or not contiguous:
+                start, length = moment, 1
+            else:
+                length += 1
+            if length == min_hours:
+                runs.append([start, moment])
+            elif length > min_hours and runs:
+                runs[-1][1] = moment
+        else:
+            start, length = None, 0
+        last = moment
+    return [(a, b) for a, b in runs]
+
+
+def merge_runs(runs: list[tuple[datetime, datetime]],
+               gap_hours: int) -> list[tuple[datetime, datetime]]:
+    """Fuse runs separated by less than gap_hours into one episode."""
+    if not runs:
+        return []
+    out = [list(runs[0])]
+    for start, end in runs[1:]:
+        if (start - out[-1][1]) <= timedelta(hours=gap_hours):
+            out[-1][1] = max(out[-1][1], end)
+        else:
+            out.append([start, end])
+    return [(a, b) for a, b in out]
+
+
+def assess_forecast_risk(pm25_forecast: dict[str, Any] | None,
+                         threshold: float = SEVERE_PM25_UGM3,
+                         min_hours: int = WARNING_MIN_HOURS,
+                         signal: str = WARNING_SIGNAL) -> dict[str, Any]:
+    """
+    Does the forecast cross the severe threshold, and how long do we have?
+
+    Reads the UPPER-TAIL series, not the central one. The central forecast
+    answers "what concentration do we expect"; the upper tail answers "how bad
+    could this plausibly get", and only the second is a risk signal. The
+    distinction is carried into the output so a caller cannot present one as
+    the other: `central_at_crossing` and `upper_at_crossing` are both reported,
+    and `trigger_source` names which one fired.
+
+    Returns a dict with forecast_risk False rather than None when there is no
+    crossing, so callers never have to test for absence before reading it.
+    """
+    empty = {
+        "forecast_risk": False,
+        "first_crossing": None,
+        "lead_hours": None,
+        "threshold_ugm3": threshold,
+        "min_sustained_hours": min_hours,
+        "trigger_source": f"{signal}_tail_q90" if signal == "upper" else signal,
+        "central_at_crossing": None,
+        "upper_at_crossing": None,
+        "sustained_hours": None,
+        "supporting_points": [],
+    }
+
+    if not pm25_forecast or not pm25_forecast.get("available"):
+        empty["reason"] = "no PM2.5 forecast available"
+        return empty
+
+    series = pm25_forecast.get("series") or []
+    points = [(p["valid_at"], p[signal]) for p in series if p.get(signal) is not None]
+    runs = merge_runs(sustained_runs(points, threshold, min_hours),
+                      WARNING_MERGE_GAP_HOURS)
+    if not runs:
+        empty["reason"] = (
+            f"{signal} forecast stays below {threshold:.0f} ug/m3, or does not "
+            f"hold above it for {min_hours} consecutive hours")
+        return empty
+
+    onset, end = runs[0]
+    as_of = pm25_forecast.get("as_of")
+    at_onset = next((p for p in series if p["valid_at"] == onset), {})
+    window = [p for p in series if onset <= p["valid_at"] <= end]
+
+    return {
+        "forecast_risk": True,
+        "first_crossing": onset,
+        "lead_hours": (round((onset - as_of).total_seconds() / 3600.0, 1)
+                       if as_of else None),
+        "threshold_ugm3": threshold,
+        "min_sustained_hours": min_hours,
+        "trigger_source": "upper_tail_q90" if signal == "upper" else signal,
+        "central_at_crossing": at_onset.get("central"),
+        "upper_at_crossing": at_onset.get("upper"),
+        "sustained_hours": len(window),
+        "peak_upper_ugm3": max((p["upper"] for p in window), default=None),
+        "peak_central_ugm3": max((p["central"] for p in window), default=None),
+        "supporting_points": [
+            {"valid_at": p["valid_at"], "central": p["central"],
+             "upper": p["upper"], "ventilation_m2_s": p.get("ventilation_m2_s")}
+            for p in window[:12]
+        ],
+    }
 
 
 def grap_stage_for(aqi: float | None) -> tuple[str, str]:
@@ -88,8 +223,32 @@ def priority_for(window_hours: float | None) -> tuple[str, str]:
     return "LOW", "Time available."
 
 
+def status_for(pm25: float | None, forecast_risk: bool) -> tuple[str, str]:
+    """
+    The one distinction that is AREE's actual wedge.
+
+    "A severe episode is under way" and "no severe episode, but the forecast
+    indicates severe risk in 42 hours" are different operational situations
+    demanding different responses, and a system that collapses them into one
+    RED light is not telling an authority anything they could not see from a
+    current-conditions dashboard.
+    """
+    if pm25 is not None and pm25 >= SEVERE_PM25_UGM3:
+        return ("SEVERE_EPISODE_UNDERWAY",
+                "Observed concentrations are already in the CPCB Severe band.")
+    if forecast_risk:
+        return ("PREDICTIVE_WARNING",
+                "No severe episode under way, but the upper-tail forecast "
+                "indicates elevated severe-event risk ahead.")
+    if pm25 is not None and pm25 >= EPISODE_PM25_UGM3:
+        return ("EPISODE_UNDERWAY",
+                "An episode is under way below the Severe band.")
+    return ("MONITOR", "No episode under way and none forecast.")
+
+
 def assess(observed: dict[str, Any],
-           ventilation_forecast: dict[str, Any]) -> dict[str, Any]:
+           ventilation_forecast: dict[str, Any],
+           pm25_forecast: dict[str, Any] | None = None) -> dict[str, Any]:
     """
     Combine observed air quality with the ventilation outlook.
 
@@ -134,8 +293,28 @@ def assess(observed: dict[str, Any],
 
     op = (ventilation_forecast or {}).get("operating_point", {})
 
+    # The predictive layer sits BESIDE the existing conjunction, it does not
+    # replace it. `triggered` keeps its original meaning (observed episode AND
+    # forecast ventilation collapse) so every existing caller, case record and
+    # audit entry means exactly what it meant before.
+    forecast_risk = assess_forecast_risk(pm25_forecast)
+    status, status_detail = status_for(pm25, forecast_risk["forecast_risk"])
+
+    if forecast_risk["forecast_risk"]:
+        reasons.append(
+            f"Upper-tail PM2.5 forecast crosses "
+            f"{forecast_risk['threshold_ugm3']:.0f} ug/m3 for "
+            f"{forecast_risk['sustained_hours']} sustained hours from "
+            f"{forecast_risk['first_crossing']:%Y-%m-%d %H:%M} UTC "
+            f"({forecast_risk['lead_hours']:.0f} h of lead time).")
+
     return {
         "assessed_at": now,
+        "status": status,
+        "status_detail": status_detail,
+        "severe_episode_underway": bool(
+            pm25 is not None and pm25 >= SEVERE_PM25_UGM3),
+        "forecast_risk": forecast_risk,
         "triggered": triggered,
         "trigger_rule": (
             "observed PM2.5 >= episode threshold AND forecast sustained "

@@ -40,3 +40,9 @@ frontend/tsconfig.tsbuildinfo
 
 # Migration backup (local snapshot, not source)
 backup_pre_migration/
+# Local D:-drive working dirs (see venv/pip.ini) — never committed.
+.pipcache/
+.tmp/
+data/*.db
+data/*.db-wal
+data/*.db-shm

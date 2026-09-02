@@ -133,6 +133,24 @@ def _box_block(elements_list):
     return inner
 
 
+
+def _engine_latest_state() -> dict:
+    """
+    The live station roster, from whichever engine is loaded.
+
+    Tries the Pathway engine first because that is the full path; falls back to
+    the direct engine, which publishes the identical dict. Returns {} rather
+    than raising if neither is importable - a regional-comparison section is
+    worth degrading, not worth failing a whole report for.
+    """
+    for module in ("app", "fallback_engine"):
+        try:
+            return __import__(module).latest_state
+        except Exception:                                   # noqa: BLE001
+            continue
+    return {}
+
+
 def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
     s = state_snapshot
     sty = _styles()
@@ -373,7 +391,18 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
 
     # G. Regional Snapshot
     els.extend(_sec_header("G. Regional Comparative Snapshot", sty))
-    from app import latest_state as _all_st
+    # Read the roster from whichever engine is actually running.
+    #
+    # This used to be `from app import latest_state`, which hard-wired the
+    # report to the Pathway module. Pathway ships Linux/macOS wheels only, so
+    # on Windows - and in every direct-mode deployment - PDF generation died
+    # with ModuleNotFoundError while the report METADATA endpoint kept
+    # answering 200. The failure therefore looked like a broken PDF writer
+    # rather than a missing engine.
+    #
+    # Both engines publish the same `latest_state` dict by design (see
+    # tests_contract.py), so either satisfies this section.
+    _all_st = _engine_latest_state()
     _act = {k: v for k, v in _all_st.items()
             if isinstance(v, dict) and v.get("aqi") is not None and v.get("status") != "DATA_INVALID"}
     n_stations = len(_act)

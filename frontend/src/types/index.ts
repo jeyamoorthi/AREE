@@ -541,3 +541,6 @@ export interface LiveEvent {
 
 // PS 26082 ventilation-forecast layer.
 export * from "./ventilation";
+
+// The AREE outlook: one contract for the whole vertical slice.
+export * from "./outlook";

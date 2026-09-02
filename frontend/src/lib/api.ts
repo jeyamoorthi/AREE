@@ -27,6 +27,7 @@ import type {
   VentilationForecast,
   OperatingPoint,
   ObservedComposite,
+  OutlookResponse,
 } from "@/types";
 
 export const API_URL =
@@ -218,6 +219,19 @@ export const api = {
   // These endpoints do not depend on the Pathway engine, so they keep working
   // when the streaming pipeline is unavailable. The UI treats them as a
   // separate capability rather than folding them into the station views.
+
+  /**
+   * The complete AREE outlook.
+   *
+   * `at` is passed straight through as the backend's `as_of`. Omitting it
+   * gives live; supplying it replays that moment. There is no separate demo
+   * endpoint, so the UI cannot drift from what production actually serves.
+   */
+  outlook: (at?: string, signal?: AbortSignal) =>
+    request<OutlookResponse>(
+      at ? `/api/aree/outlook?at=${enc(at)}` : "/api/aree/outlook",
+      { signal },
+    ),
 
   ventilationOperatingPoint: (mode?: string, signal?: AbortSignal) =>
     request<OperatingPoint>(

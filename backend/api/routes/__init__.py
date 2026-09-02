@@ -9,6 +9,7 @@ from . import (  # noqa: F401
     escalations,
     forecast,
     grap,
+    outlook,
     policy,
     reports,
     risk,
@@ -34,4 +35,8 @@ ROUTERS = [
     # PS 26082 forecast layer. Mounted last, and deliberately free of the
     # Pathway engine dependency so it stays available on Windows.
     ventilation.router,
+    # The AREE outlook: one endpoint composing forecast, cause, risk and
+    # decision. Engine-independent for the same reason - a demonstration must
+    # not be one import away from being dead.
+    outlook.router,
 ]

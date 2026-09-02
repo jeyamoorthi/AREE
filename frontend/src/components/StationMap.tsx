@@ -10,11 +10,29 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect, useMemo } from "react";
 import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
-
 import { freshness } from "@/lib/freshness";
 import { feedLabel, stationLabel } from "@/lib/station";
 import { aqiColor, eriColor, modeColor } from "@/lib/theme";
 import type { EngineMode, FreshnessStatus } from "@/types";
+
+/* CARTO raster basemap.
+ *
+ * The key lives in the environment, not in this file. It is a browser-side
+ * basemap key so it is inherently visible in the bundle - that is how tile
+ * auth works - but keeping it out of source control means it is not shared
+ * with anyone who clones the repository, which is what CARTO asks.
+ *
+ * Without a key the tiles still render, watermarked. So a missing key degrades
+ * the map's appearance and nothing else, and the app does not need to care.
+ *
+ * NOTE: CARTO are retiring raster in favour of vector tiles (sharper at any
+ * zoom, fresher data, restyleable). The key already covers vector, so that
+ * migration is a URL and layer change here when we choose to make it.
+ */
+const CARTO_KEY = process.env.NEXT_PUBLIC_CARTO_KEY ?? "";
+const BASEMAP_URL =
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png" +
+  (CARTO_KEY ? `?key=${CARTO_KEY}` : "");
 
 export interface MapStation {
   station: string;
@@ -145,10 +163,14 @@ export default function StationMap({
         attributionControl
       >
         <ViewController points={points} focus={focus} />
-        {/* CARTO Voyager / OpenStreetMap light terrain tiles */}
+        {/* CARTO Voyager / OpenStreetMap light terrain tiles.
+
+            The attribution below is not decoration: keeping the CARTO and
+            OpenStreetMap credit visible is the condition of the free tier, so
+            it must not be removed or moved behind a control. */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          url={BASEMAP_URL}
         />
 
         {stations.map((station) => {
