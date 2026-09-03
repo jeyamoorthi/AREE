@@ -29,7 +29,11 @@ export default function RiskChart({ data }: { data: StationDetail }) {
       value: data.transport_score ?? 0,
       color: (data.transport_score ?? 0) > 50 ? COLORS.red : COLORS.yellow,
     },
-    { name: "Confidence", value: data.confidence_score ?? 0, color: COLORS.accent },
+    // Only charted when present: a missing metric plotted as 0 is indistinguishable
+    // from a metric that was genuinely measured at 0.
+    ...(data.confidence_score !== null && data.confidence_score !== undefined
+      ? [{ name: "Confidence", value: data.confidence_score, color: COLORS.accent }]
+      : []),
     {
       name: "Cause conf.",
       value: Math.round((data.cause_confidence ?? 0) * 100),

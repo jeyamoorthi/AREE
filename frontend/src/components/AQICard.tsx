@@ -17,8 +17,13 @@ import { KeyValue, Panel, Stat } from "@/components/ui/Card";
 import { aqiColor, orDash } from "@/lib/theme";
 import type { EngineConfig, StationDetail } from "@/types";
 
-// WAQI publishes per-pollutant AQI sub-indices in `iaqi`, not concentrations,
-// so no mass unit is shown — labelling these µg/m³ would misstate the source.
+// SOURCE AND UNITS.
+//   The engine reads CAQM for the station AQI and CPCB (data.gov.in) for the
+//   per-pollutant CONCENTRATIONS in ug/m3 - see fallback_engine._attach_pollutants.
+//   These cells were labelled "WAQI sub-index", which named a publisher the demo
+//   path does not use AND the wrong quantity: a PM10 value of 151 here is
+//   151 ug/m3, not an index. The unit now comes from the payload's own
+//   pollutant_source, and CO is called out because CPCB reports it in mg/m3.
 const POLLUTANTS: { name: string; key: keyof StationDetail; waqiKey: string }[] = [
   { name: "PM2.5", key: "raw_pm25", waqiKey: "pm25" },
   { name: "PM10", key: "raw_pm10", waqiKey: "pm10" },
@@ -53,7 +58,7 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
         <span className="text-[13px] font-bold" style={{ color: look.color }}>
           {look.marker} {look.badge}
         </span>
-        <span className="aree-num text-xs text-aree-body">WAQI reading {age} ago</span>
+        <span className="aree-num text-xs text-aree-body">Reading {age} ago</span>
         <span className="text-xs text-aree-dim">
           Older than expected, still within the window for an hourly feed.
         </span>
@@ -105,7 +110,7 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
           ) : null}
         </div>
         <div className="bg-[var(--aree-surface-1)] px-5 py-3">
-          <div className="aree-eyebrow text-[9.5px]">WAQI sync</div>
+          <div className="aree-eyebrow text-[9.5px]">Feed sync</div>
           <div className="aree-num mt-1 text-[12px] font-semibold text-aree-body">
             {lastSync ?? "Not reported"}
           </div>
@@ -134,7 +139,7 @@ export function IngestionErrorBanner({ data }: { data: StationDetail }) {
   return (
     <div className="mb-4 rounded-[var(--aree-radius-sm)] border border-[#7f1d1d] bg-[rgba(239,68,68,0.06)] px-4 py-3 shadow-[var(--aree-shadow-sm)]">
       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-aree-red">
-        × WAQI feed temporarily unavailable
+        × Station feed temporarily unavailable
       </span>
       <span className="ml-3 text-[11.5px] text-aree-muted">{data.ingestion_error}</span>
     </div>
@@ -155,7 +160,7 @@ export function PollutantGrid({ data }: { data: StationDetail }) {
             className="bg-aree-surface-1 px-4 py-3.5 transition-colors hover:bg-aree-surface-2"
             title={
               available
-                ? `${name}: WAQI sub-index ${value}`
+                ? `${name}: ${value} ${name === "CO" ? "mg/m³" : "µg/m³"}`
                 : `${name} not reported by this feed`
             }
           >
@@ -164,7 +169,7 @@ export function PollutantGrid({ data }: { data: StationDetail }) {
               {dominant ? (
                 <span
                   className="text-[9px] font-bold uppercase tracking-[0.1em] text-aree-accent"
-                  title="Dominant pollutant reported by WAQI"
+                  title="Pollutant leading the published index"
                 >
                   dom
                 </span>
@@ -178,7 +183,7 @@ export function PollutantGrid({ data }: { data: StationDetail }) {
               {available ? value : "—"}
             </div>
             <div className="mt-1.5 text-[10.5px] text-aree-dim">
-              {available ? "WAQI sub-index" : "not reported"}
+              {available ? (name === "CO" ? "mg/m³" : "µg/m³") : "not reported"}
             </div>
           </div>
         );
@@ -208,7 +213,7 @@ export function DataSourceTransparency({
 
   return (
     <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
-      <KeyValue label="WAQI feed ID" value={orDash(data.feed_id)} />
+      <KeyValue label="Station feed ID" value={orDash(data.feed_id)} />
       <KeyValue
         label="WAQI AQI (raw)"
         value={orDash(data.waqi_aqi)}

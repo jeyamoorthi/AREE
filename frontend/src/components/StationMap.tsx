@@ -48,15 +48,36 @@ export interface MapStation {
   city?: string | null;
 }
 
-const INDIA_CENTER: [number, number] = [22.5937, 78.9629];
+/* The network is Delhi NCR, not India. Opening on the country centroid at zoom 5 put
+   71 NCR stations in one indistinguishable clump somewhere north of the middle of the
+   frame, and the title said "across India" over it. Bounds match
+   ncr_observations.NCR_BBOX on the backend. */
+const NCR_CENTER: [number, number] = [28.6, 77.2];
+const NCR_BOUNDS: [[number, number], [number, number]] = [
+  [27.9, 76.5],
+  [29.3, 77.9],
+];
 
+/**
+ * Marker diameter in pixels.
+ *
+ * Roughly thirty of the NCR's monitors sit inside twenty kilometres of central Delhi,
+ * and at 20-28 px they merged into one blob at the region zoom — the densest, most
+ * important part of the network was the least readable part of the map. The range is
+ * now 14-22 px, which separates them at zoom 9 while keeping the severity ramp legible.
+ *
+ * Size still tracks AQI so the eye is drawn to the worst nodes, but the spread is
+ * deliberately narrow: on this map severity is carried by COLOUR, and size is only a
+ * secondary emphasis. The Atmospheric Outlook's map is the one where size is the
+ * quantitative encoding.
+ */
 function markerSize(station: MapStation): number {
   const aqi = station.aqi ?? 0;
-  if (aqi >= 400) return 28;
-  if (aqi >= 300) return 26;
-  if (aqi >= 200) return 24;
-  if (aqi >= 100) return 22;
-  return 20;
+  if (aqi >= 400) return 22;
+  if (aqi >= 300) return 20;
+  if (aqi >= 200) return 18;
+  if (aqi >= 100) return 16;
+  return 14;
 }
 
 function esc(value: string): string {
@@ -68,12 +89,36 @@ function esc(value: string): string {
 }
 
 function buildIcon(station: MapStation, selected: boolean): L.DivIcon {
-  const unavailable = station.freshness_status === "unavailable";
-  const color = unavailable ? "#788796" : aqiColor(station.aqi);
+  // COLOUR IS SEVERITY, ALWAYS.
+  //
+  // This used to substitute grey whenever freshness was "unavailable", which put two
+  // unrelated meanings on one channel: a reader could not tell a clean station from a
+  // station whose feed had stopped, and the legend underneath listed the freshness
+  // bands while the markers were actually coloured by AQI. Freshness now rides on the
+  // BORDER STYLE, so an ageing reading of 380 stays red and merely looks provisional.
+  //
+  // aqiColor(null) already returns the neutral tone, so a station with no reading is
+  // still visually distinct without the override.
+  const color = aqiColor(station.aqi);
   const size = markerSize(station);
+  const fresh = station.freshness_status;
 
+  const borderStyle =
+    fresh === "current" ? "solid" : fresh === "unavailable" ? "dotted" : "dashed";
+  // A station with no usable AQI gets a hollow centre rather than a different hue.
+  const centre =
+    fresh === "unavailable"
+      ? ""
+      : `<div style="width:6px;height:6px;border-radius:9999px;background:${color};"></div>`;
+
+  const freshLabel =
+    fresh === "current"
+      ? "current"
+      : fresh === "unavailable"
+        ? "no usable reading"
+        : `${fresh} data`;
   const label = esc(
-    `${stationLabel(station.station)}. AQI ${station.aqi ?? "unavailable"}.`,
+    `${stationLabel(station.station)}. AQI ${station.aqi ?? "unavailable"}, ${freshLabel}.`,
   );
 
   return L.divIcon({
@@ -83,10 +128,10 @@ function buildIcon(station: MapStation, selected: boolean): L.DivIcon {
         width:${size}px;height:${size}px;border-radius:9999px;
         display:flex;align-items:center;justify-content:center;
         background:#ffffff;
-        border:3px solid ${color};
+        border:3px ${borderStyle} ${color};
         box-shadow:0 2px 5px rgba(0,0,0,0.25)${selected ? `, 0 0 0 3px #143828` : ""};
       ">
-        <div style="width:6px;height:6px;border-radius:9999px;background:${color};"></div>
+        ${centre}
       </div>`,
     iconSize: [size, size],
     iconAnchor: [size / 2, size / 2],
@@ -115,10 +160,10 @@ function ViewController({
     }
     if (points.length === 0) return;
     if (points.length === 1) {
-      map.flyTo(points[0], 9, { duration: 0.6 });
+      map.flyTo(points[0], 10, { duration: 0.6 });
       return;
     }
-    map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 10 });
+    map.fitBounds(L.latLngBounds(NCR_BOUNDS), { padding: [20, 20], maxZoom: 10 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, key]);
 
@@ -146,7 +191,7 @@ export default function StationMap({
     return match ? [match.lat, match.lon] : null;
   }, [stations, selected]);
 
-  const initialCenter = focus ?? INDIA_CENTER;
+  const initialCenter = focus ?? NCR_CENTER;
 
   return (
     <div
@@ -157,7 +202,10 @@ export default function StationMap({
     >
       <MapContainer
         center={initialCenter}
-        zoom={5}
+        zoom={9}
+        minZoom={7}
+        maxBounds={NCR_BOUNDS}
+        maxBoundsViscosity={0.7}
         scrollWheelZoom={false}
         style={{ height: "100%", width: "100%" }}
         attributionControl
@@ -176,10 +224,8 @@ export default function StationMap({
         {stations.map((station) => {
           const isSelected = station.station === selected;
           const look = freshness(station.freshness_status);
-          const color =
-            station.freshness_status === "unavailable"
-              ? "#788796"
-              : aqiColor(station.aqi);
+          // Same rule as the icon: severity sets the colour, freshness is its own row.
+          const color = aqiColor(station.aqi);
           return (
             <Marker
               key={station.station}

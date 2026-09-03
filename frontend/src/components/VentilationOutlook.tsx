@@ -1,25 +1,31 @@
 "use client";
 
-/**
- * Ventilation outlook — the PS 26082 view.
- *
- * WHAT THIS SHOWS AND WHY IT IS THE RIGHT THING TO SHOW
- *   Five winters of Delhi NCR data established that whether a pollution
- *   episode locks in cannot be diagnosed from the state at its onset
- *   (AUC 0.514) but is determined by the ventilation over the following 48
- *   hours (AUC 0.736). So the operationally useful display is not another AQI
- *   line — it is how much longer the atmosphere can still clear itself, and
- *   therefore how much time is left to act.
- *
- *   The headline is a countdown, not a severity gauge. Everything else on the
- *   page exists to justify that number.
- */
+/* ==========================================================================
+   AREE — Ventilation Outlook (deep diagnostic screen)
 
-import { useMemo, useState } from "react";
+   This page answers ONE question: how well will the atmosphere clear pollution?
+
+   It is deliberately the counterpart to Atmospheric Outlook, which answers
+   "what does that mean for air quality and what should be done". The two used
+   to overlap almost entirely; the split is now explicit:
+
+       Atmospheric Outlook  ->  summary, consequence, recommendation
+       Ventilation Outlook  ->  the dispersion diagnostic and its evidence
+
+   Model metrics (hit rate, false-alarm rate, AUC, training episodes) live HERE,
+   under Decision basis. They belong to someone auditing why the system drew a
+   line at 466 m2/s, not to someone deciding whether to act this evening.
+
+   It reads the SAME /api/aree/outlook contract as the executive page, so both
+   share one as_of and replay behaves identically on each. Nothing on this page
+   computes a threshold, a status or a statistic.
+   ========================================================================== */
+
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Area,
-  AreaChart,
   CartesianGrid,
+  ComposedChart,
   ReferenceArea,
   ReferenceLine,
   ResponsiveContainer,
@@ -28,824 +34,737 @@ import {
   YAxis,
 } from "recharts";
 import {
-  AlertTriangle,
+  ChevronRight,
+  Cloud,
   Gauge,
-  Wind,
-  Timer,
-  FlaskConical,
+  History,
+  Info,
   Radio,
-  Satellite,
-  ListFilter,
-  MapPin,
+  Radar,
+  ShieldCheck,
+  Thermometer,
+  Wind,
 } from "lucide-react";
 
-import { api } from "@/lib/api";
-import { usePolling } from "@/hooks/usePolling";
-import { Panel, Pill, KeyValue, Note } from "@/components/ui/Card";
-import { ErrorState, LoadingState } from "@/components/ui/States";
-import type {
-  ObservedComposite,
-  VentilationAssessment,
-  VentilationForecast,
-  VentilationState,
-} from "@/types";
+import { usePublishOutlookMode } from "@/components/providers/OutlookModeProvider";
+import { useSyncPresetToUrl } from "@/hooks/useSyncPresetToUrl";
+import { api, errorMessage } from "@/lib/api";
+import type { OutlookResponse } from "@/types";
 
-/** Lead-time states carry colour; they are not severity bands. */
-const STATE_STYLE: Record<VentilationState, { color: string; label: string }> = {
-  clear: { color: "var(--aree-green)", label: "Clear" },
-  watch: { color: "var(--aree-cyan)", label: "Watch" },
-  approaching: { color: "var(--aree-amber)", label: "Approaching" },
-  imminent: { color: "var(--aree-orange)", label: "Imminent" },
-  collapsed: { color: "var(--aree-red)", label: "Collapsed" },
-  unknown: { color: "var(--aree-muted)", label: "Unknown" },
+const PRESETS: { label: string; at?: string }[] = [
+  { label: "Live (anchored)" },
+  { label: "02 Nov 2024 · 06:00", at: "2024-11-02T06:00:00Z" },
+  { label: "14 Nov 2024 · 00:00", at: "2024-11-14T00:00:00Z" },
+  { label: "16 Nov 2024 · 00:00", at: "2024-11-16T00:00:00Z" },
+];
+
+const C = {
+  ink: "#1a1a17",
+  body: "#44403a",
+  muted: "#7d776c",
+  dim: "#a8a196",
+  line: "#e8e3d7",
+  paper: "#ffffff",
+  wash: "#faf8f2",
+  red: "#c0392b",
+  amber: "#e07a3f",
+  green: "#3f7a4e",
+  blue: "#3b82c4",
 };
 
-const PRIORITY_COLOR: Record<string, string> = {
-  LOW: "var(--aree-green)",
-  MEDIUM: "var(--aree-amber)",
-  HIGH: "var(--aree-orange)",
-  CRITICAL: "var(--aree-red)",
-};
-
-/**
- * Render a UTC instant in IST.
- *
- * Every operational decision here is taken in India, and the page previously
- * showed UTC only. "Collapse onset 09:00" is 14:30 local - a five and a half
- * hour error in the one number the page exists to communicate. UTC is kept
- * alongside because the model runs on it.
- */
-function istLabel(iso: string): string {
+function ist(iso: string, withDate = true): string {
   const d = new Date(iso);
-  return d.toLocaleString("en-IN", {
-    timeZone: "Asia/Kolkata",
-    day: "2-digit",
-    month: "short",
+  const t = d.toLocaleTimeString("en-GB", {
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false,
+    timeZone: "Asia/Kolkata",
   });
+  if (!withDate) return t;
+  const day = d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "Asia/Kolkata",
+  });
+  return `${day} ${t}`;
 }
 
-/**
- * What this forecast covers, and where.
- *
- * The page previously opened straight into a countdown with no statement of
- * scope, next to a panel citing 78 ground stations. A reader could only
- * conclude the countdown was per-station, or belonged to whichever station
- * the rest of the app had selected. Neither is true: ventilation is computed
- * once, at a single point, for the whole airshed.
- *
- * Saying so is not a caveat, it is the definition of the number above it.
- */
-function ScopeBanner({ forecast }: { forecast: VentilationForecast }) {
-  // location is optional in the response schema, so the coordinate pill is
-  // omitted rather than rendered as "undefined°N" when the backend omits it.
-  const loc = forecast.location;
+function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="border-aree-border bg-aree-card flex flex-wrap items-start justify-between gap-4 rounded-xl border p-4"
-      style={{ borderLeft: "3px solid var(--aree-forest)" }}
+    <p
+      className="text-[9.5px] font-bold uppercase tracking-[0.09em]"
+      style={{ color: C.muted }}
     >
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <MapPin className="text-aree-forest h-4 w-4 shrink-0" aria-hidden />
-          <span className="text-aree-text text-[15px] font-bold">
-            Delhi NCR airshed
-          </span>
-          {loc ? (
-            <Pill color="var(--aree-dim)">
-              {loc.lat.toFixed(2)}&deg;N, {loc.lon.toFixed(2)}&deg;E
-            </Pill>
-          ) : null}
-        </div>
-        <p className="text-aree-muted mt-2 max-w-2xl text-[12px] leading-relaxed">
-          <strong className="text-aree-body">
-            One outlook for the whole region — not per station.
-          </strong>{" "}
-          Ventilation is boundary-layer depth &times; wind speed, which varies
-          over roughly 100 km. Computing it per monitor would imply a spatial
-          detail the weather model does not have.
-        </p>
-      </div>
-
-      <div className="text-right">
-        <p className="aree-eyebrow text-aree-dim">Forecast issued</p>
-        <p className="text-aree-body aree-num mt-1 text-[13px] font-bold">
-          {istLabel(forecast.generated_at)} IST
-        </p>
-        <p className="text-aree-dim mt-0.5 text-[11px]">
-          covers the next {forecast.horizon_hours} h
-        </p>
-      </div>
-    </div>
+      {children}
+    </p>
   );
 }
 
-function hourLabel(iso: string): string {
-  const d = new Date(iso);
-  return `${String(d.getUTCDate()).padStart(2, "0")} ${String(
-    d.getUTCHours(),
-  ).padStart(2, "0")}h`;
-}
-
-/**
- * Where the two halves of a decision come from.
- *
- * This panel exists because the global status strip reports the Pathway
- * engine, which this view does not use. Seeing "0 / 0 stations reporting"
- * above a confident countdown reads as fabricated, when in fact the forecast
- * needs no stations and the observation side has hundreds. Stating both
- * sources explicitly is the fix.
- */
-function DataSources({
-  forecast,
-  observed,
+function Card({
+  children,
+  className = "",
 }: {
-  forecast: VentilationForecast;
-  observed: ObservedComposite | null;
+  children: React.ReactNode;
+  className?: string;
 }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
-      <div className="border-aree-border bg-aree-card rounded-xl border p-4">
-        <div className="flex items-center gap-2">
-          <Satellite className="text-aree-cyan h-3.5 w-3.5" aria-hidden />
-          <p className="aree-eyebrow text-aree-dim">Forecast input</p>
-        </div>
-        <p className="text-aree-body mt-2 text-[13px] font-semibold">
-          Numerical weather model
-        </p>
-        <p className="text-aree-muted mt-1 text-[11.5px] leading-relaxed">
-          Boundary layer height × wind speed, {forecast.horizon_hours} h ahead.
-          Uses <strong>no ground stations</strong> — this is why the outlook
-          works while the streaming engine is offline.
-        </p>
-      </div>
-
-      <div className="border-aree-border bg-aree-card rounded-xl border p-4">
-        <div className="flex items-center gap-2">
-          <Radio className="text-aree-teal h-3.5 w-3.5" aria-hidden />
-          <p className="aree-eyebrow text-aree-dim">Observation input</p>
-        </div>
-        {observed?.available ? (
-          <>
-            <p className="text-aree-body mt-2 text-[13px] font-semibold tabular-nums">
-              {observed.pm25_ugm3} µg/m³{" "}
-              <span className="text-aree-dim font-normal">
-                across {observed.n_stations} stations
-              </span>
-            </p>
-            <p className="text-aree-muted mt-1 text-[11.5px] leading-relaxed">
-              Median concentration across the CPCB network, via data.gov.in,
-              {" "}
-              {observed.data_age_minutes} min old.
-            </p>
-            <p className="text-aree-dim mt-1.5 text-[11px] leading-relaxed">
-              A different feed from the station list in the sidebar. That one is
-              CAQM, which publishes hourly; this one is the only source that
-              carries PM2.5 in µg/m³, which the episode threshold is calibrated
-              in — so it is used here despite lagging further behind.
-            </p>
-          </>
-        ) : (
-          <p className="text-aree-muted mt-2 text-[11.5px] leading-relaxed">
-            {observed?.reason ?? "Ground network unavailable."}
-          </p>
-        )}
-      </div>
+    <div
+      className={`rounded-lg border p-4 ${className}`}
+      style={{ background: C.paper, borderColor: C.line }}
+    >
+      {children}
     </div>
   );
 }
 
-/**
- * Every monitor behind the composite.
- *
- * A median with no visible constituents is not evidence. An operator seeing
- * one high station can tell it apart from an airshed-wide episode, and a
- * regulator reviewing an escalation needs the station names that appear in
- * GRAP orders. The reading age is shown per station because CPCB publishes
- * hourly and a two-hour-old value is normal, not a fault.
- */
-function StationTable({ observed }: { observed: ObservedComposite | null }) {
-  const [expanded, setExpanded] = useState(false);
-
-  if (!observed?.available || !observed.stations?.length) {
-    return (
-      <Panel
-        title="Reporting stations"
-        icon={<ListFilter className="h-3.5 w-3.5" />}
-        accent="var(--aree-teal)"
-      >
-        <p className="text-aree-dim text-[12px]">
-          {observed?.reason ?? "No station readings available."}
-        </p>
-      </Panel>
-    );
-  }
-
-  const all = observed.stations;
-  const rows = expanded ? all : all.slice(0, 12);
-  const median = observed.pm25_ugm3 ?? 0;
-
-  return (
-    <Panel
-      title={`Reporting stations — ${observed.n_stations} fresh of ${observed.n_active_locations} active`}
-      icon={<ListFilter className="h-3.5 w-3.5" />}
-      accent="var(--aree-teal)"
-      right={
-        <Pill color="var(--aree-dim)">
-          median {median} µg/m³ · {observed.min}–{observed.max}
-        </Pill>
-      }
-    >
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[520px] border-collapse">
-          <thead>
-            <tr className="border-aree-border border-b">
-              <th className="aree-eyebrow text-aree-dim py-2 text-left">
-                Station
-              </th>
-              <th className="aree-eyebrow text-aree-dim py-2 text-right">
-                PM2.5
-              </th>
-              <th className="aree-eyebrow text-aree-dim w-[35%] py-2 pl-4 text-left">
-                vs median
-              </th>
-              <th className="aree-eyebrow text-aree-dim py-2 text-right">Age</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((st) => {
-              // Bar is scaled to the network maximum, so the visual ranking is
-              // the actual ranking rather than a clipped one.
-              const pct = observed.max
-                ? Math.max(2, (st.pm25_ugm3 / observed.max) * 100)
-                : 0;
-              const above = st.pm25_ugm3 > median;
-              return (
-                <tr
-                  key={st.location_id}
-                  className="border-aree-border/50 border-b last:border-0"
-                >
-                  <td className="text-aree-body py-1.5 pr-3 text-[12px]">
-                    {st.station}
-                  </td>
-                  <td className="text-aree-body py-1.5 text-right text-[12px] font-semibold tabular-nums">
-                    {st.pm25_ugm3.toFixed(1)}
-                  </td>
-                  <td className="py-1.5 pl-4">
-                    <div className="bg-aree-bg-soft h-1.5 w-full overflow-hidden rounded-full">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${pct}%`,
-                          background: above
-                            ? "var(--aree-orange)"
-                            : "var(--aree-teal)",
-                        }}
-                      />
-                    </div>
-                  </td>
-                  <td className="text-aree-dim py-1.5 text-right text-[11px] tabular-nums">
-                    {st.age_minutes}m
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {all.length > 12 ? (
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className="text-aree-muted hover:text-aree-body mt-3 text-[11.5px] font-semibold"
-        >
-          {expanded
-            ? "Show fewer"
-            : `Show all ${all.length} stations`}
-        </button>
-      ) : null}
-
-      <Note>
-        {observed.n_stale_discarded} readings older than the freshness window
-        were discarded before the median was taken.
-        {observed.degraded
-          ? ` Serving cached values: ${observed.degraded_reason}.`
-          : ""}
-      </Note>
-    </Panel>
-  );
-}
-
-/**
- * The countdown. Rendered as the largest thing on the page because it is the
- * only number an operator has to act on.
- */
-function WindowHero({ forecast }: { forecast: VentilationForecast }) {
-  const style = STATE_STYLE[forecast.state] ?? STATE_STYLE.unknown;
-  const hours = forecast.intervention_window_hours;
-
+function Row({
+  label,
+  value,
+  tone,
+  small,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+  small?: string;
+}) {
   return (
     <div
-      className="border-aree-border bg-aree-card-raised rounded-xl border p-6"
-      style={{ borderLeft: `3px solid ${style.color}` }}
+      className="flex items-baseline justify-between border-b py-2 last:border-0"
+      style={{ borderColor: "#f2efe6" }}
     >
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="aree-eyebrow text-aree-dim">Intervention window</p>
-          {hours == null ? (
-            <>
-              <p
-                className="mt-1 text-[42px] leading-none font-bold"
-                style={{ color: style.color }}
-              >
-                Open
-              </p>
-              <p className="text-aree-muted mt-2 max-w-xl text-[12.5px]">
-                No sustained ventilation collapse in the next{" "}
-                {forecast.horizon_hours} hours. The atmosphere is expected to
-                keep clearing.
-              </p>
-            </>
-          ) : (
-            <>
-              <p
-                className="mt-1 text-[42px] leading-none font-bold tabular-nums"
-                style={{ color: style.color }}
-              >
-                {hours.toFixed(1)}
-                <span className="ml-2 text-[18px] font-semibold">hours</span>
-              </p>
-              <p className="text-aree-muted mt-2 max-w-xl text-[12.5px]">
-                Time remaining before ventilation is forecast to collapse. After
-                that point interventions act on air that is no longer clearing
-                itself, so measures taken later do less.
-              </p>
-            </>
-          )}
-        </div>
-        <Pill color={style.color} filled>
-          {style.label}
-        </Pill>
-      </div>
-
-      {forecast.collapse ? (
-        <div className="border-aree-border mt-5 grid gap-3 border-t pt-4 sm:grid-cols-3">
-          <KeyValue
-            label="Collapse onset"
-            value={
-              <>
-                {istLabel(forecast.collapse.onset)} IST
-                <span className="text-aree-dim ml-2 text-[11px] font-normal">
-                  ({forecast.collapse.onset.replace("T", " ").slice(11, 16)} UTC)
-                </span>
-              </>
-            }
-          />
-          <KeyValue
-            label="Sustained hours below"
-            value={`${forecast.collapse.sustained_hours_below_threshold} h`}
-          />
-          <KeyValue
-            label="Minimum ventilation"
-            value={`${forecast.collapse.min_ventilation_m2_s} m²/s`}
-          />
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/** The 72-hour outlook with the decision threshold drawn on it. */
-function VentilationChart({ forecast }: { forecast: VentilationForecast }) {
-  const threshold = forecast.operating_point.threshold_m2_s;
-
-  const data = useMemo(
-    () =>
-      forecast.series.map((p) => ({
-        t: hourLabel(p.time),
-        iso: p.time,
-        ventilation: p.ventilation_m2_s,
-        blh: p.blh_m,
-        wind: p.wind_ms,
-      })),
-    [forecast.series],
-  );
-
-  // Shade the forecast collapse so the eye lands on it without reading axes.
-  const collapseFrom = forecast.collapse
-    ? hourLabel(forecast.collapse.onset)
-    : null;
-  const collapseTo = data.length ? data[data.length - 1].t : null;
-
-  return (
-    <div className="h-[320px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
-          <defs>
-            <linearGradient id="ventFill" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="var(--aree-cyan)" stopOpacity={0.35} />
-              <stop offset="100%" stopColor="var(--aree-cyan)" stopOpacity={0.02} />
-            </linearGradient>
-          </defs>
-
-          <CartesianGrid
-            strokeDasharray="2 4"
-            stroke="var(--aree-border)"
-            vertical={false}
-          />
-          <XAxis
-            dataKey="t"
-            tick={{ fill: "var(--aree-dim)", fontSize: 10 }}
-            stroke="var(--aree-border)"
-            interval={Math.max(0, Math.floor(data.length / 8) - 1)}
-          />
-          <YAxis
-            tick={{ fill: "var(--aree-dim)", fontSize: 10 }}
-            stroke="var(--aree-border)"
-            width={54}
-            label={{
-              value: "m²/s",
-              angle: -90,
-              position: "insideLeft",
-              fill: "var(--aree-dim)",
-              fontSize: 10,
-            }}
-          />
-
-          {collapseFrom && collapseTo ? (
-            <ReferenceArea
-              x1={collapseFrom}
-              x2={collapseTo}
-              fill="var(--aree-red)"
-              fillOpacity={0.07}
-            />
-          ) : null}
-
-          <ReferenceLine
-            y={threshold}
-            stroke="var(--aree-red)"
-            strokeDasharray="5 4"
-            label={{
-              value: `threshold ${threshold} m²/s`,
-              position: "insideTopRight",
-              fill: "var(--aree-red)",
-              fontSize: 10,
-            }}
-          />
-
-          <Tooltip
-            contentStyle={{
-              background: "var(--aree-card-raised)",
-              border: "1px solid var(--aree-border-strong)",
-              borderRadius: 8,
-              fontSize: 11.5,
-            }}
-            labelStyle={{ color: "var(--aree-muted)" }}
-            formatter={(value, name) => {
-              // Recharts types the value as ValueType | undefined, so narrow
-              // rather than assert - an undefined slipping through would
-              // render "NaN m²/s" on the one panel an operator acts on.
-              const n = typeof value === "number" ? value : Number(value);
-              if (name === "ventilation")
-                return [
-                  Number.isFinite(n) ? `${n.toFixed(0)} m²/s` : "—",
-                  "Ventilation",
-                ];
-              return [String(value ?? "—"), String(name ?? "")];
-            }}
-          />
-
-          <Area
-            type="monotone"
-            dataKey="ventilation"
-            stroke="var(--aree-cyan)"
-            strokeWidth={1.8}
-            fill="url(#ventFill)"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  );
-}
-
-/**
- * The decision basis. Shown, not hidden, because a regulatory system should be
- * able to answer "on what grounds" without anyone reading source code.
- */
-function OperatingPointPanel({ forecast }: { forecast: VentilationForecast }) {
-  const op = forecast.operating_point;
-  return (
-    <Panel
-      title="Decision basis"
-      icon={<Gauge className="h-3.5 w-3.5" />}
-      accent="var(--aree-blue)"
-    >
-      <div className="grid gap-3 sm:grid-cols-2">
-        <KeyValue label="Operating point" value={op.mode} />
-        <KeyValue label="Threshold" value={`${op.threshold_m2_s} m²/s`} />
-        <KeyValue
-          label="Hit rate"
-          value={op.hit_rate != null ? op.hit_rate.toFixed(2) : "—"}
-        />
-        <KeyValue
-          label="False-alarm rate"
-          value={
-            op.false_alarm_rate != null ? op.false_alarm_rate.toFixed(2) : "—"
-          }
-        />
-        <KeyValue
-          label="AUC (training)"
-          value={op.auc_training != null ? op.auc_training.toFixed(3) : "—"}
-        />
-        <KeyValue
-          label="Training episodes"
-          value={op.n_train_episodes ?? "—"}
-        />
-      </div>
-      {op.caveat ? <Note>{op.caveat}</Note> : null}
-    </Panel>
-  );
-}
-
-/**
- * Assessment probe.
- *
- * Lets a reviewer vary the observed PM2.5 and watch the decision boundary
- * move. Included deliberately: the trigger is a conjunction, and the most
- * convincing demonstration of that is showing it NOT firing.
- */
-function AssessmentProbe() {
-  const [useLive, setUseLive] = useState(true);
-  const [pm25, setPm25] = useState(168);
-  const [result, setResult] = useState<VentilationAssessment | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const run = async () => {
-    setBusy(true);
-    setErr(null);
-    try {
-      // Passing null asks the backend for the live network composite. The
-      // response records which path was taken, so a manually supplied value
-      // can never be displayed as though it were measured.
-      setResult(
-        await api.ventilationAssessment(useLive ? null : pm25, {
-          station: "Delhi NCR",
-        }),
-      );
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <Panel
-      title="Escalation assessment"
-      icon={<FlaskConical className="h-3.5 w-3.5" />}
-      accent="var(--aree-amber)"
-    >
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex cursor-pointer items-center gap-2 pb-1.5">
-          <input
-            type="checkbox"
-            checked={useLive}
-            onChange={(e) => setUseLive(e.target.checked)}
-            className="accent-[var(--aree-teal)]"
-          />
-          <span className="text-aree-body text-[12px]">
-            Use live network
-          </span>
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="aree-eyebrow text-aree-dim">
-            {useLive ? "Overridden by live feed" : "Observed PM2.5"}
-          </span>
-          <input
-            type="number"
-            value={pm25}
-            min={0}
-            max={1000}
-            disabled={useLive}
-            onChange={(e) => setPm25(Number(e.target.value))}
-            className="border-aree-border bg-aree-bg-soft text-aree-body w-32 rounded-md border px-2 py-1.5 text-[13px] tabular-nums disabled:opacity-40"
-          />
-        </label>
-        <button
-          onClick={run}
-          disabled={busy}
-          className="border-aree-border bg-aree-card-raised text-aree-body hover:border-aree-border-strong rounded-md border px-3 py-1.5 text-[12px] font-semibold disabled:opacity-50"
+      <span className="text-[11.5px]" style={{ color: C.body }}>
+        {label}
+      </span>
+      <span className="text-right">
+        <span
+          className="text-[12.5px] font-bold tabular-nums"
+          style={{ color: tone ?? C.ink }}
         >
-          {busy ? "Assessing…" : "Assess"}
-        </button>
-        <span className="text-aree-dim pb-1.5 text-[11px]">
-          {useLive
-            ? "reads the CPCB/DPCC composite"
-            : "µg/m³ — try 168, then 40"}
+          {value}
         </span>
-      </div>
+        {small && (
+          <span className="ml-1.5 text-[10px]" style={{ color: C.dim }}>
+            {small}
+          </span>
+        )}
+      </span>
+    </div>
+  );
+}
 
-      {err ? <Note>{err}</Note> : null}
+/** Donut of the last 24 h banded on the calibrated threshold. */
+function Donut({
+  bands,
+}: {
+  bands: { label: string; hours: number; colour: string; share: number }[];
+}) {
+  const total = bands.reduce((a, b) => a + b.hours, 0) || 1;
+  const R = 42;
+  const stroke = 17;
+  const circ = 2 * Math.PI * R;
+  let offset = 0;
 
-      {result ? (
-        <div className="mt-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Pill
-              color={
-                result.triggered ? PRIORITY_COLOR[result.priority] : "var(--aree-green)"
-              }
-              filled
-            >
-              {result.triggered ? `${result.priority} — case opened` : "No case"}
-            </Pill>
-            <Pill color="var(--aree-muted)">{result.grap_stage_observed}</Pill>
-            {result.observation_provenance ? (
-              <Pill
-                color={
-                  result.observation_provenance.input_source === "live"
-                    ? "var(--aree-teal)"
-                    : "var(--aree-amber)"
-                }
-                title={result.observation_provenance.source}
-              >
-                {result.observation_provenance.input_source === "live"
-                  ? `live · ${result.observation_provenance.n_stations} stations · ${result.observation_provenance.data_age_minutes} min old`
-                  : "manual input — not measured"}
-              </Pill>
-            ) : null}
+  return (
+    <div className="flex items-center gap-4">
+      <svg viewBox="0 0 110 110" className="h-[110px] w-[110px] shrink-0">
+        <g transform="translate(55,55) rotate(-90)">
+          {bands.map((b) => {
+            const len = (b.hours / total) * circ;
+            const el = (
+              <circle
+                key={b.label}
+                r={R}
+                fill="none"
+                stroke={b.colour}
+                strokeWidth={stroke}
+                strokeDasharray={`${len} ${circ - len}`}
+                strokeDashoffset={-offset}
+              />
+            );
+            offset += len;
+            return el;
+          })}
+        </g>
+      </svg>
+      <div className="min-w-0 flex-1 space-y-1">
+        {bands.map((b) => (
+          <div key={b.label} className="flex items-center justify-between gap-2">
+            <span className="flex items-center gap-1.5 text-[10.5px]" style={{ color: C.body }}>
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ background: b.colour }}
+              />
+              {b.label} m²/s
+            </span>
+            <span className="text-[10.5px] font-semibold tabular-nums" style={{ color: C.ink }}>
+              {b.hours} h ({Math.round(b.share * 100)}%)
+            </span>
           </div>
-
-          <ul className="mt-3 space-y-1.5">
-            {result.reasons.map((r) => (
-              <li
-                key={r}
-                className="text-aree-muted flex gap-2 text-[12px] leading-relaxed"
-              >
-                <span className="text-aree-dim">—</span>
-                <span>{r}</span>
-              </li>
-            ))}
-          </ul>
-
-          {result.case ? (
-            <div className="border-aree-border mt-4 grid gap-3 border-t pt-4 sm:grid-cols-2">
-              <KeyValue
-                label="Responsible authority"
-                value={result.case.responsible_authority}
-              />
-              <KeyValue label="Status" value={result.case.status} />
-              <KeyValue
-                label="Deadline (UTC)"
-                value={
-                  result.case.deadline
-                    ? result.case.deadline.replace("T", " ").slice(0, 16)
-                    : "—"
-                }
-              />
-              <KeyValue label="Basis" value={result.case.basis} />
-              <div className="sm:col-span-2">
-                <p className="aree-eyebrow text-aree-dim mb-1.5">
-                  Recommended measures
-                </p>
-                <ul className="space-y-1">
-                  {result.case.recommended_measures.map((m) => (
-                    <li key={m} className="text-aree-muted text-[12px]">
-                      • {m}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          ) : null}
-
-          <Note>{result.confidence_note}</Note>
-        </div>
-      ) : null}
-    </Panel>
+        ))}
+      </div>
+    </div>
   );
 }
 
 export default function VentilationOutlook() {
-  // 5 minutes: the underlying meteorological model does not update faster, so
-  // polling harder would only add load without adding information.
-  const forecast = usePolling<VentilationForecast>(
-    (signal) => api.ventilationForecast(undefined, signal),
-    { intervalMs: 300_000 },
-  );
-  const current = usePolling((signal) => api.ventilationCurrent(signal), {
-    intervalMs: 300_000,
-  });
-  // Ground network polls faster than the forecast: CPCB publishes hourly, and
-  // station dropouts are the thing an operator most needs to see promptly.
-  const observed = usePolling<ObservedComposite>(
-    (signal) => api.ventilationStations(signal),
-    { intervalMs: 120_000 },
+  const [preset, setPreset] = useState(0);
+  const [data, setData] = useState<OutlookResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async (at?: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      setData(await api.outlook(at));
+    } catch (err) {
+      setData(null);
+      setError(errorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load(PRESETS[preset].at);
+  }, [preset, load]);
+
+  useSyncPresetToUrl(PRESETS, preset, setPreset);
+
+  const chart = useMemo(
+    () =>
+      (data?.forecast.series ?? []).map((p) => ({
+        label: ist(p.valid_at),
+        ventilation: p.ventilation_m2_s,
+      })),
+    [data],
   );
 
-  if (forecast.initialLoading) return <LoadingState label="Loading ventilation outlook…" />;
-  if (forecast.error)
-    return <ErrorState error={forecast.error} onRetry={forecast.refresh} />;
-  if (!forecast.data) return <LoadingState />;
+  // Tell the shell which moment this page is describing (see OutlookModeProvider).
+  usePublishOutlookMode(data?.mode, data?.as_of);
 
-  const f = forecast.data;
-  const c = current.data;
+  const vf = data?.atmosphere.ventilation_forecast;
+  const vp = data?.atmosphere.ventilation_profile;
+  const op = vf?.operating_point;
+  const threshold = op?.threshold_m2_s ?? data?.atmosphere.ventilation.threshold_m2_s ?? null;
+  const windowH = vf?.intervention_window_hours ?? null;
+
+  // TWO DIFFERENT QUESTIONS, AND THE PAGE USED TO ANSWER BOTH WITH ONE FLAG.
+  //
+  //   collapsed  — has the forecast collapse already STARTED? (a clock)
+  //   belowNow   — is ventilation below the operating point RIGHT NOW? (a measurement)
+  //
+  // Every string on the status row was keyed on `collapsed`, so a live screen showing
+  // 332.8 m²/s against a 465.9 threshold read "Imminent — dispersion capacity within
+  // operating range" beside "Poor dispersion", and the interpretation card underneath
+  // said "Ventilation is above the operating point". Three statements, one of them
+  // right. Copy that contradicts the number beside it is worse than no copy.
+  const collapsed = windowH !== null && windowH <= 0;
+  const ventNow = vp?.components?.ventilation_m2_s ?? null;
+  const belowNow =
+    ventNow !== null && threshold !== null ? ventNow <= threshold : null;
+
+  // "store:ncr_28.63_77.22 (era5)" in replay vs "openmeteo:forecast" live. The backend
+  // already names its own feature source; the page just has to stop ignoring it.
+  const isReanalysis = Boolean(
+    data?.provenance.feature_source?.startsWith("store:"),
+  );
+
+  const band = useMemo(() => {
+    if (!data) return null;
+    const s = data.timeline.find((m) => m.kind === "collapse");
+    const e = data.timeline.find((m) => m.kind === "recovery");
+    if (!s) return null;
+    return { from: ist(s.at), to: e ? ist(e.at) : chart[chart.length - 1]?.label };
+  }, [data, chart]);
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="aree-page-title">Ventilation outlook</h1>
-        <p className="text-aree-dim mt-1 max-w-3xl text-[12px]">
-          Whether a pollution episode locks in cannot be told from today&apos;s
-          air — it is decided by how well the atmosphere clears itself over the
-          next 48 hours. This forecasts that, and turns it into the time left
-          to act.
-        </p>
-      </div>
-
-      <ScopeBanner forecast={f} />
-
-      <DataSources forecast={f} observed={observed.data} />
-
-      <WindowHero forecast={f} />
-
-      <div className="grid gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <Panel
-          title={`Ventilation coefficient — next ${f.horizon_hours} h`}
-          icon={<Wind className="h-3.5 w-3.5" />}
-          accent="var(--aree-cyan)"
-          right={
-            <Pill color="var(--aree-dim)">
-              {f.summary.hours_below_threshold} h below threshold
-            </Pill>
-          }
-        >
-          <VentilationChart forecast={f} />
-          <div className="border-aree-border mt-4 grid gap-3 border-t pt-4 sm:grid-cols-3">
-            <KeyValue
-              label="Minimum"
-              value={`${f.summary.min_ventilation_m2_s} m²/s`}
-            />
-            <KeyValue
-              label="Mean"
-              value={`${f.summary.mean_ventilation_m2_s} m²/s`}
-            />
-            <KeyValue
-              label="Maximum"
-              value={`${f.summary.max_ventilation_m2_s} m²/s`}
-            />
-          </div>
-        </Panel>
-
-        <div className="flex flex-col gap-4">
-          <Panel
-            title="Observed now"
-            icon={<Timer className="h-3.5 w-3.5" />}
-            accent="var(--aree-teal)"
-          >
-            {c?.available ? (
-              <div className="grid gap-3">
-                <KeyValue
-                  label="Ventilation"
-                  value={`${c.latest.ventilation_m2_s} m²/s`}
-                />
-                <KeyValue label="Boundary layer" value={`${c.latest.blh_m} m`} />
-                <KeyValue label="Wind" value={`${c.latest.wind_ms} m/s`} />
-                <KeyValue
-                  label="Data age"
-                  value={`${c.latest.data_age_minutes} min`}
-                />
-                <KeyValue
-                  label="Hours below threshold (24 h)"
-                  value={c.hours_below_threshold_24h}
-                />
-              </div>
-            ) : (
-              <p className="text-aree-dim text-[12px]">
-                No recent meteorological analysis.
-              </p>
-            )}
-          </Panel>
-
-          <OperatingPointPanel forecast={f} />
+    <div className="space-y-3" style={{ color: C.body }}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[19px] font-bold tracking-tight" style={{ color: C.ink }}>
+            Ventilation Outlook
+          </h1>
+          <p className="mt-0.5 text-[11.5px]" style={{ color: C.muted }}>
+            Dispersion capacity and intervention window for Delhi NCR.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {PRESETS.map((p, i) => (
+            <button
+              key={p.label}
+              onClick={() => setPreset(i)}
+              className="rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
+              style={
+                preset === i
+                  ? { background: "#14532d", borderColor: "#14532d", color: "#fff" }
+                  : { background: C.paper, borderColor: C.line, color: C.body }
+              }
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <StationTable observed={observed.data} />
+      {loading && (
+        <Card>
+          <p className="py-10 text-center text-[12.5px]" style={{ color: C.muted }}>
+            Loading ventilation diagnostic…
+          </p>
+        </Card>
+      )}
 
-      <AssessmentProbe />
+      {error && !loading && (
+        <div className="rounded-lg border p-4" style={{ background: "#fdf2f0", borderColor: "#f0d5cd" }}>
+          <p className="text-[12.5px] font-bold" style={{ color: "#b91c1c" }}>
+            Ventilation outlook unavailable
+          </p>
+          <p className="mt-1 text-[12px]">{error}</p>
+        </div>
+      )}
 
-      <div className="text-aree-dim flex items-start gap-2 text-[11px] leading-relaxed">
-        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
-        <p>
-          Advisory only. Legal authority for GRAP invocation rests with CAQM and
-          the state pollution control boards; this view recommends and records,
-          it does not issue orders.
-        </p>
-      </div>
+      {data && !loading && vp?.available && (
+        <>
+          {/* ── status strip ── */}
+          <div
+            className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-6"
+            style={{ background: C.wash, borderColor: C.line }}
+          >
+            <div className="lg:border-r lg:pr-4" style={{ borderColor: C.line }}>
+              <span className="flex items-center gap-1.5">
+                <Radar className="h-3.5 w-3.5" style={{ color: C.red }} />
+                <Eyebrow>Ventilation status</Eyebrow>
+              </span>
+              <p
+                className="mt-1.5 text-[17px] font-bold leading-none"
+                style={{ color: belowNow ? C.red : C.ink }}
+              >
+                {collapsed
+                  ? "Collapsed"
+                  : (vf?.state ?? "—").replace(/^\w/, (c) => c.toUpperCase())}
+              </p>
+              <p className="mt-1 text-[10.5px] leading-snug" style={{ color: C.muted }}>
+                {/* Describes the CURRENT measurement, not the collapse clock. */}
+                {belowNow === null
+                  ? "Ventilation not available for this hour"
+                  : belowNow
+                    ? "Below the operating point — dispersion capacity is poor now"
+                    : "Above the operating point — dispersion capacity is adequate now"}
+              </p>
+              <p className="mt-1 text-[10.5px] font-semibold" style={{ color: C.body }}>
+                {windowH !== null ? `${windowH.toFixed(1)} h intervention window remaining` : "No collapse forecast"}
+              </p>
+            </div>
+
+            {[
+              [Gauge, "Ventilation (now)", `${vp.components?.ventilation_m2_s?.toFixed(1)}`, "m²/s",
+               (vp.components?.ventilation_m2_s ?? 0) <= (threshold ?? 0) ? "Poor dispersion" : "Adequate dispersion", C.body],
+              [Cloud, "Boundary layer", `${vp.components?.blh_m?.toFixed(0)}`, "m",
+               (vp.components?.blh_m ?? 0) < 400 ? "Very low" : "Moderate", (vp.components?.blh_m ?? 0) < 400 ? C.red : C.body],
+              [Wind, "Wind speed (10 m)", `${vp.components?.wind_ms?.toFixed(2)}`, "m/s",
+               (vp.components?.wind_ms ?? 0) < 2 ? "Light" : "Moderate", C.body],
+              [ShieldCheck, "Operating point", `${threshold?.toFixed(1)}`, "m²/s", "Threshold", C.body],
+              [History, "Hours below threshold (24 h)", `${vp.hours_below_24h}`, "h",
+               `${Math.round((vp.share_below_24h ?? 0) * 100)}% of last 24 h`, C.body],
+            ].map(([Icon, label, value, unit, caption, tone]) => {
+              const I = Icon as typeof Gauge;
+              return (
+                <div key={label as string}>
+                  <span className="flex items-center gap-1.5">
+                    <I className="h-3.5 w-3.5" style={{ color: C.muted }} />
+                    <Eyebrow>{label as string}</Eyebrow>
+                  </span>
+                  <p className="mt-1.5 text-[17px] font-bold leading-none tabular-nums" style={{ color: C.ink }}>
+                    {value as string}
+                    <span className="ml-1 text-[10.5px] font-semibold" style={{ color: C.muted }}>
+                      {unit as string}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-[10.5px] font-semibold" style={{ color: tone as string }}>
+                    {caption as string}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* ── the two inputs, stated plainly ── */}
+          <div className="grid gap-3 lg:grid-cols-2">
+            <Card>
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex items-center gap-1.5">
+                  <Cloud className="h-3.5 w-3.5" style={{ color: C.blue }} />
+                  <Eyebrow>Forecast input</Eyebrow>
+                </span>
+                <span
+                  className="rounded px-2 py-0.5 text-[9.5px] font-bold"
+                  style={{ background: "#eef4fb", color: "#1e5b96" }}
+                >
+                  {data.provenance.feature_source}
+                </span>
+              </div>
+              {/* A replay does not run on a forecast. It runs on ERA5 reanalysis at
+                  valid time — the weather as it turned out, which no forecaster held at
+                  that hour. Calling that "numerical weather model, 72 h ahead" is the
+                  perfect-prognosis overclaim the engineering report is careful to avoid,
+                  so the label follows the actual feature source. */}
+              <p className="mt-2 text-[12.5px] font-bold" style={{ color: C.ink }}>
+                {isReanalysis
+                  ? "ERA5 reanalysis at valid time"
+                  : `Numerical weather model (${data.forecast.horizon_hours} h ahead)`}
+              </p>
+              <p className="mt-1 text-[11px] leading-snug" style={{ color: C.muted }}>
+                {isReanalysis ? (
+                  <>
+                    Boundary layer height × wind speed at 10 m, from the archive rather
+                    than a forecast run. <b>Perfect prognosis</b>: this replay knows the
+                    weather that actually occurred, so its skill is an upper bound on
+                    what the live system can achieve.
+                  </>
+                ) : (
+                  <>
+                    Boundary layer height × wind speed at 10 m. Uses no ground stations,
+                    so it keeps working while the streaming engine is offline.
+                  </>
+                )}
+              </p>
+              <div className="mt-2">
+                <Row label="Horizon" value={`${data.forecast.horizon_hours} h`} />
+                <Row label="Models" value={Object.values(data.provenance.models).join(", ")} />
+                <Row label="Mode" value={data.mode.toUpperCase()} />
+              </div>
+            </Card>
+
+            <Card>
+              <div className="flex items-start justify-between gap-3">
+                <span className="flex items-center gap-1.5">
+                  <Radio className="h-3.5 w-3.5" style={{ color: C.green }} />
+                  <Eyebrow>Observation input</Eyebrow>
+                </span>
+                <span
+                  className="rounded px-2 py-0.5 text-[9.5px] font-bold"
+                  style={
+                    data.observation.target === "network"
+                      ? { background: "#eff6f0", color: "#2f6b3f" }
+                      : { background: "#f6efd9", color: "#8a6d1f" }
+                  }
+                >
+                  {data.observation.source}
+                </span>
+              </div>
+              {/* Reads the OBSERVATION, not the exposure panel. Those are different
+                  hours and different targets: a Nov 2024 replay is a one-monitor
+                  composite, and taking the station count from `exposure` printed
+                  today's network size beside a 2024 value. */}
+              <p className="mt-2 text-[12.5px] font-bold" style={{ color: C.ink }}>
+                {data.observation.value.toFixed(0)} µg/m³
+                {data.observation.n_stations !== null
+                  ? ` across ${data.observation.n_stations} ${
+                      data.observation.n_stations === 1 ? "monitor" : "stations"
+                    }`
+                  : ""}
+              </p>
+              <p className="mt-1 text-[11px] leading-snug" style={{ color: C.muted }}>
+                {data.observation.target === "network"
+                  ? "Median PM2.5 across the reporting network. This is a different feed from the station roster in the sidebar — see the note below."
+                  : "The historical NCR target. For most of the record it rests on a single monitor, which is why AREE now captures the whole network hourly."}
+              </p>
+              <div className="mt-2">
+                <Row label="Target" value={data.observation.target_label} />
+                <Row
+                  label={data.observation.n_stations === 1 ? "Monitors" : "Stations"}
+                  value={
+                    data.observation.n_stations !== null
+                      ? String(data.observation.n_stations)
+                      : "not recorded"
+                  }
+                  tone={data.observation.n_stations === 1 ? C.amber : undefined}
+                />
+                <Row label="Observed at" value={ist(data.observation.observed_at)} />
+              </div>
+            </Card>
+          </div>
+
+          {/* ── chart · components · distribution ── */}
+          <div className="grid gap-3 xl:grid-cols-[1.7fr_1fr]">
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="flex items-center gap-1.5">
+                  <Wind className="h-3.5 w-3.5" style={{ color: C.blue }} />
+                  <Eyebrow>
+                    Ventilation coefficient — next {data.forecast.horizon_hours} hours
+                  </Eyebrow>
+                </span>
+                <span
+                  className="rounded px-2 py-0.5 text-[9.5px] font-bold"
+                  style={{ background: "#eef4fb", color: "#1e5b96" }}
+                >
+                  {data.atmosphere.ventilation.hours_below_threshold} H BELOW THRESHOLD
+                </span>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-4">
+                <span className="text-[10px]" style={{ color: C.muted }}>
+                  <span className="mr-1 inline-block h-[2px] w-3 align-middle" style={{ background: C.blue }} />
+                  Ventilation (m²/s)
+                </span>
+                <span className="text-[10px]" style={{ color: C.muted }}>
+                  <span className="mr-1 inline-block h-[2px] w-3 align-middle" style={{ background: C.red }} />
+                  Operating point ({threshold?.toFixed(1)} m²/s)
+                </span>
+                <span className="text-[10px]" style={{ color: C.muted }}>
+                  <span className="mr-1 inline-block h-2 w-3 rounded-sm align-middle" style={{ background: "#f7dcd6" }} />
+                  Collapse zone
+                </span>
+              </div>
+
+              <div className="mt-2 h-[240px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={chart} margin={{ top: 8, right: 10, bottom: 0, left: -16 }}>
+                    <CartesianGrid stroke="#f2efe6" vertical={false} />
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 9, fill: C.dim }}
+                      interval={Math.max(3, Math.floor(chart.length / 8))}
+                      tickLine={false}
+                      axisLine={{ stroke: C.line }}
+                    />
+                    <YAxis tick={{ fontSize: 9, fill: C.dim }} tickLine={false} axisLine={false} width={44} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 11, borderRadius: 6, border: `1px solid ${C.line}` }}
+                      formatter={(v) => [`${v} m²/s`, "Ventilation"]}
+                    />
+                    {threshold !== null && (
+                      <ReferenceArea y1={0} y2={threshold} fill="#f7dcd6" fillOpacity={0.45} />
+                    )}
+                    {band && (
+                      <ReferenceArea x1={band.from} x2={band.to} fill="#e9b7a6" fillOpacity={0.2} />
+                    )}
+                    <Area
+                      dataKey="ventilation"
+                      stroke={C.blue}
+                      strokeWidth={1.6}
+                      fill="#dbeafe"
+                      fillOpacity={0.5}
+                      dot={false}
+                    />
+                    {threshold !== null && (
+                      <ReferenceLine y={threshold} stroke={C.red} strokeDasharray="5 3" />
+                    )}
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
+
+            <div className="space-y-3">
+              <Card>
+                <Eyebrow>Ventilation components (now)</Eyebrow>
+                <div className="mt-1.5">
+                  <Row label="Boundary layer height" value={`${vp.components?.blh_m?.toFixed(0)} m`} />
+                  <Row label="Wind speed (10 m)" value={`${vp.components?.wind_ms?.toFixed(2)} m/s`} />
+                  <Row
+                    label="Ventilation (PBLH × wind)"
+                    value={`${vp.components?.ventilation_m2_s?.toFixed(1)} m²/s`}
+                    tone={collapsed ? C.red : C.ink}
+                  />
+                </div>
+              </Card>
+
+              <Card>
+                <Eyebrow>Distribution (next 24 h)</Eyebrow>
+                <div className="mt-2">
+                  <Donut bands={vp.distribution ?? []} />
+                </div>
+              </Card>
+
+              <Card>
+                <Eyebrow>Ventilation statistics ({vp.statistics?.hours} h)</Eyebrow>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {[
+                    ["Minimum", vp.statistics?.min, C.red],
+                    ["Mean", vp.statistics?.mean, C.ink],
+                    ["Maximum", vp.statistics?.max, C.green],
+                  ].map(([l, v, t]) => (
+                    <div key={l as string}>
+                      <p className="text-[9.5px] font-semibold uppercase" style={{ color: C.dim }}>
+                        {l as string}
+                      </p>
+                      <p className="mt-0.5 text-[14px] font-bold tabular-nums" style={{ color: t as string }}>
+                        {(v as number)?.toFixed(1)}
+                      </p>
+                      <p className="text-[9px]" style={{ color: C.dim }}>
+                        m²/s
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* ── events · decision basis · interpretation ── */}
+          <div className="grid gap-3 xl:grid-cols-[1.5fr_1fr_0.9fr]">
+            <Card>
+              <span className="flex items-center gap-1.5">
+                <Info className="h-3.5 w-3.5" style={{ color: C.muted }} />
+                <Eyebrow>Intervention window & key events</Eyebrow>
+              </span>
+
+              <div className="mt-4 overflow-x-auto pb-1">
+                <div className="relative min-w-[560px] pt-1">
+                  <div className="absolute left-0 right-0 top-[6px] h-[2px]" style={{ background: C.line }} />
+                  <div className="relative flex justify-between">
+                    {data.timeline.map((m) => {
+                      const tone =
+                        m.kind === "now"
+                          ? C.red
+                          : m.kind === "collapse"
+                            ? C.amber
+                            : m.kind === "minimum" || m.kind === "peak_risk"
+                              ? C.red
+                              : C.green;
+                      return (
+                        <div key={m.kind + m.at} className="flex w-[19%] flex-col items-start">
+                          <span
+                            className="h-3 w-3 rounded-full border-2"
+                            style={{ background: tone, borderColor: "#fff" }}
+                          />
+                          <p className="mt-1.5 text-[10.5px] font-bold" style={{ color: C.ink }}>
+                            {m.kind === "now" ? "Now" : ist(m.at)}
+                          </p>
+                          <p className="text-[9.5px] font-semibold" style={{ color: C.muted }}>
+                            {m.kind === "now"
+                              ? `${windowH?.toFixed(1) ?? "—"} h remaining`
+                              : `${m.hours_from_now > 0 ? "+" : ""}${m.hours_from_now.toFixed(0)} h`}
+                          </p>
+                          <p className="mt-1 text-[9.5px] leading-snug" style={{ color: C.body }}>
+                            {m.state}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2" style={{ borderColor: C.line }}>
+                {[
+                  ["Critical", C.red],
+                  ["Warning", C.amber],
+                  ["Recovery", C.green],
+                ].map(([l, c]) => (
+                  <span key={l} className="text-[9.5px]" style={{ color: C.muted }}>
+                    <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ background: c }} />
+                    {l}
+                  </span>
+                ))}
+              </div>
+            </Card>
+
+            <Card>
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck className="h-3.5 w-3.5" style={{ color: C.muted }} />
+                <Eyebrow>Decision basis</Eyebrow>
+              </span>
+              <div className="mt-1.5">
+                <Row
+                  label="Operating point (threshold)"
+                  value={`${threshold?.toFixed(1)} m²/s`}
+                  small={op?.mode ? `${op.mode}${op.calibrated ? " (calibrated)" : ""}` : undefined}
+                />
+                <Row
+                  label="Current ventilation vs threshold"
+                  value={`${vp.components?.ventilation_m2_s?.toFixed(1)} ${
+                    (vp.components?.ventilation_m2_s ?? 0) < (threshold ?? 0) ? "<" : ">"
+                  } ${threshold?.toFixed(1)}`}
+                  tone={(vp.components?.ventilation_m2_s ?? 0) < (threshold ?? 0) ? C.red : C.green}
+                />
+                {/* These two rows were labelled "Hit rate (validation)" and
+                    "False-alarm rate" and carried the TRAINING figures — 0.61 / 0.19 on
+                    143 episodes. The same threshold scores 0.20 / 0.50 on the held-out
+                    episodes, and a judge who has read the engineering report will look
+                    for exactly that number. Showing both, labelled, is stronger than
+                    showing the flattering one. */}
+                <Row
+                  label="Hit rate — training"
+                  value={op?.hit_rate?.toFixed(2) ?? "—"}
+                  small={op?.n_train_episodes ? `${op.n_train_episodes} episodes` : undefined}
+                />
+                <Row
+                  label="False alarm — training"
+                  value={op?.false_alarm_rate?.toFixed(2) ?? "—"}
+                />
+                <Row
+                  label="Hit rate — held out"
+                  value={op?.holdout_hit_rate?.toFixed(2) ?? "—"}
+                  tone={C.red}
+                  small={
+                    op?.n_holdout_episodes ? `${op.n_holdout_episodes} episodes` : undefined
+                  }
+                />
+                <Row
+                  label="False alarm — held out"
+                  value={op?.holdout_false_alarm_rate?.toFixed(2) ?? "—"}
+                  tone={C.red}
+                />
+                <Row
+                  label="AUC — training"
+                  value={op?.auc_training?.toFixed(3) ?? "—"}
+                  small={
+                    op?.outcome_window_hours
+                      ? `${op.outcome_window_hours} h outcome window`
+                      : undefined
+                  }
+                />
+              </div>
+              {op?.caveat && (
+                <p className="mt-2 text-[9.5px] leading-snug" style={{ color: C.dim }}>
+                  {op.caveat}
+                </p>
+              )}
+            </Card>
+
+            <Card className="flex flex-col">
+              <span className="flex items-center gap-1.5">
+                <Thermometer className="h-3.5 w-3.5" style={{ color: C.muted }} />
+                <Eyebrow>Interpretation</Eyebrow>
+              </span>
+              <p className="mt-2 flex-1 text-[11.5px] leading-relaxed" style={{ color: C.body }}>
+                {/* Keyed on the measurement, so this can no longer contradict the number
+                    in the card immediately above it. */}
+                {belowNow
+                  ? `Ventilation is ${ventNow?.toFixed(0)} m²/s, below the ${threshold?.toFixed(0)} m²/s operating point, and ${vp.hours_below_24h} of the last 24 hours were below it. Dispersion capacity is poor and pollutants are accumulating faster than the atmosphere clears them.`
+                  : `Ventilation is ${ventNow?.toFixed(0)} m²/s, above the ${threshold?.toFixed(0)} m²/s operating point. ${vp.hours_below_24h} of the last 24 hours fell below it, so conditions remain worth watching.`}
+              </p>
+              <p className="mt-2 text-[11px] leading-relaxed" style={{ color: C.muted }}>
+                {data.mechanism.consequence}.
+              </p>
+              <a
+                href="/outlook"
+                className="mt-3 flex items-center justify-between rounded-md border px-3 py-2 text-[11px] font-semibold transition"
+                style={{ borderColor: C.line, color: C.body }}
+              >
+                What this means for air quality
+                <ChevronRight className="h-3.5 w-3.5" />
+              </a>
+            </Card>
+          </div>
+
+          {/* ── advisory footer ── */}
+          <div
+            className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1.5 rounded-lg border px-4 py-2.5"
+            style={{ background: C.wash, borderColor: C.line }}
+          >
+            <span className="text-[10.5px]" style={{ color: C.muted }}>
+              Advisory only. Legal authority for GRAP invocation rests with CAQM
+              and the state pollution control boards.
+            </span>
+            <span className="text-[10px]" style={{ color: C.dim }}>
+              {data.provenance.note}
+            </span>
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -38,7 +38,7 @@ function sourceRows(
     {
       name: "AQI",
       available: data?.aqi !== null && data?.aqi !== undefined,
-      detail: data?.feed_id ? `WAQI feed @${data.feed_id}` : "WAQI feed",
+      detail: data?.feed_id ? `station feed ${data.feed_id}` : "station feed",
     },
     {
       name: "Weather",

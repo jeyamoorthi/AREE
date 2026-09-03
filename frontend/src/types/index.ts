@@ -51,6 +51,10 @@ export interface SystemStatus {
   engine_loaded: boolean;
   engine_error: string | null;
   pipeline: string;
+  /** Which engine is actually running: "streaming" (Pathway) or "direct". */
+  mode: string | null;
+  /** True when subsystems are unavailable in the running mode (RAG, event-time windows). */
+  degraded: boolean;
   active_stations: number;
   known_stations: number;
   decisions_processed: number;
@@ -474,6 +478,12 @@ export interface AIResponse {
 export interface EscalationEvent {
   timestamp: string | null;
   city: string | null;
+  /**
+   * The direct engine writes the station name under `station`, the Pathway engine under
+   * `city`. Both reach the client because the schema allows extra fields. Consumers must
+   * read `city ?? station` until the two engines are reconciled.
+   */
+  station?: string | null;
   aqi: number | null;
   from_stage: string | null;
   to_stage: string | null;

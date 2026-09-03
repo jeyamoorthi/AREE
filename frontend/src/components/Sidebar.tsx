@@ -14,12 +14,12 @@ import {
   FileText,
   LayoutDashboard,
   MapPin,
-  Radio,
   Wind,
   X,
 } from "lucide-react";
 
 import { useSystemStatus } from "@/components/providers/LiveDataProvider";
+import { useOutlookMode } from "@/components/providers/OutlookModeProvider";
 import { istClock } from "@/lib/clock";
 
 interface SidebarProps {
@@ -83,6 +83,7 @@ export default function Sidebar({
   const pathname = usePathname();
   const statusState = useSystemStatus();
   const status = statusState.data;
+  const { mode: pageMode } = useOutlookMode();
 
   const offline = Boolean(statusState.error) && !status;
   const engineDown = Boolean(status && !status.engine_loaded);
@@ -94,7 +95,17 @@ export default function Sidebar({
       ? "var(--aree-yellow)"
       : "var(--aree-green)";
 
-  const indicatorLabel = offline ? "OFFLINE" : engineDown ? "DOWN" : "LIVE";
+  // A replay on screen outranks engine liveness here for the same reason it does in the
+  // header: the badge is read as "what am I looking at", not "is the server up".
+  const replay = pageMode === "replay";
+  const indicatorColorEffective = replay ? "#4338ca" : indicatorColor;
+  const indicatorLabel = replay
+    ? "REPLAY"
+    : offline
+      ? "OFFLINE"
+      : engineDown
+        ? "DOWN"
+        : "LIVE";
   const clock = istClock(status?.server_time);
 
   return (
@@ -201,14 +212,14 @@ export default function Sidebar({
                 <span className="flex items-center gap-1.5">
                   <span
                     className={`h-2 w-2 rounded-full ${
-                      live ? "aree-live-dot" : ""
+                      live && !replay ? "aree-live-dot" : ""
                     }`}
-                    style={{ backgroundColor: indicatorColor }}
+                    style={{ backgroundColor: indicatorColorEffective }}
                     aria-hidden="true"
                   />
                   <span
                     className="text-[11px] font-bold tracking-wider uppercase"
-                    style={{ color: indicatorColor }}
+                    style={{ color: indicatorColorEffective }}
                   >
                     {indicatorLabel}
                   </span>
@@ -230,8 +241,8 @@ export default function Sidebar({
           ) : (
             <div className="flex justify-center py-1" title={`${indicatorLabel} · ${status ? `${status.active_stations}/${status.known_stations} active` : ""}`}>
               <span
-                className={`h-2.5 w-2.5 rounded-full ${live ? "aree-live-dot" : ""}`}
-                style={{ backgroundColor: indicatorColor }}
+                className={`h-2.5 w-2.5 rounded-full ${live && !replay ? "aree-live-dot" : ""}`}
+                style={{ backgroundColor: indicatorColorEffective }}
                 aria-hidden="true"
               />
             </div>

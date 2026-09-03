@@ -90,25 +90,47 @@ LEGACY_STATION = "Delhi NCR composite (research)"
 # anchored to yesterday and present it as current.
 MAX_ANCHOR_BACKOFF_HOURS = 6
 
+# Stations an hour needs before its target counts as a network estimate rather than a
+# few scattered sensors. Mirrors target.MIN_VALID_STATIONS, which is the bar the
+# multi-station NCR target already has to clear; duplicated as a constant rather than
+# imported because target.py is a CLI at the repository root, not a package module.
+QUALIFYING_STATIONS = 20
+
 
 # --- observations ----------------------------------------------------------
 
-def observation_series(conn) -> dict[datetime, tuple[float, str]]:
+def observation_series(conn) -> dict[datetime, dict[str, Any]]:
     """
-    One PM2.5 history, assembled from every source, each hour tagged.
+    One PM2.5 history, assembled from every source, each hour fully described.
 
     Priority is capture over legacy: where the live network has an hour, that
     hour is an airshed median across ~80 instruments, which is a better
     quantity than the single-monitor legacy series (see C0). Where it does not,
     the legacy series is used and says so. Nothing is silently blended - the
     caller can see, per hour, which target it is standing on.
+
+    WHY EACH HOUR IS A DICT AND NOT A (value, tag) PAIR
+        The tag alone ("legacy", "live:77st") told a caller which family the hour
+        came from but not how many instruments stood behind it, so the API had
+        nothing honest to publish and the dashboard filled the gap with whatever
+        station count happened to be current. The monitor count is a STORED FACT -
+        station_readings.n_stations, written by the research import precisely
+        because the historical target rests on one monitor for most of its span -
+        so it is read here and carried, never inferred and never invented.
     """
-    out: dict[datetime, tuple[float, str]] = {}
+    out: dict[datetime, dict[str, Any]] = {}
 
     for row in conn.execute(
-            "SELECT timestamp, pm25 FROM station_readings "
+            "SELECT timestamp, pm25, n_stations FROM station_readings "
             "WHERE station_id = ? AND pm25 IS NOT NULL", (LEGACY_STATION,)):
-        out[model_lgbm._parse(row["timestamp"])] = (row["pm25"], "legacy")
+        out[model_lgbm._parse(row["timestamp"])] = {
+            "pm25": row["pm25"],
+            "source": "legacy",
+            "target": "legacy",
+            # None where the store does not record it. A null station count is a
+            # true statement; a plausible one would not be.
+            "n_stations": row["n_stations"],
+        }
 
     # Any per-station row counts as network observation, whether it arrived
     # from the hourly capture or was retrieved from OpenAQ. Both are the same
@@ -123,8 +145,13 @@ def observation_series(conn) -> dict[datetime, tuple[float, str]]:
         network.setdefault(hour, []).append(row["pm25"])
         tags.setdefault(hour, set()).add(row["source"].split(":")[0])
     for hour, values in network.items():
-        out[hour] = (median(values),
-                     f"{'+'.join(sorted(tags[hour]))}:{len(values)}st")
+        out[hour] = {
+            "pm25": median(values),
+            "source": f"{'+'.join(sorted(tags[hour]))}:{len(values)}st",
+            "target": "network",
+            # Here the count IS the number of rows that went into the median.
+            "n_stations": len(values),
+        }
 
     return out
 
@@ -243,17 +270,46 @@ def forecast(conn, as_of: datetime | None = None,
         return [h for h in model_lgbm.PM_LAGS
                 if (anchor - timedelta(hours=h)) not in observations]
 
-    # In LIVE mode, step back to the newest hour that actually has a complete
-    # set of lags. An explicitly supplied `at` is never moved - a replay must
-    # reconstruct the moment it was asked for, exactly.
+    # In LIVE mode, step back to an hour that actually has a complete set of lags.
+    # An explicitly supplied `at` is never moved - a replay must reconstruct the
+    # moment it was asked for, exactly.
+    #
+    # WHY THE NEWEST USABLE HOUR IS NOT ALWAYS THE RIGHT ONE
+    #     Taking the first hour with complete lags meant the anchor could land on an
+    #     hour served by a handful of OpenAQ sensors while a full CAQM sweep of ~78
+    #     instruments sat two hours earlier. Both are valid observations, but they are
+    #     not equally good targets: the median of 6 scattered sensors is a far noisier
+    #     estimate of the airshed than the median of the reporting network, and the
+    #     model is asked to forecast the airshed.
+    #
+    #     So among the hours that CAN be anchored, one whose target rests on a
+    #     qualifying network is preferred over a fresher but thinner one. The bar is
+    #     target.MIN_VALID_STATIONS - the same count the multi-station NCR target
+    #     already has to clear to be considered usable - rather than a number invented
+    #     here.
+    #
+    #     The trade is stated, not hidden: `anchored` reports the hour used, the hour
+    #     requested, and how many stations stood behind the choice.
     anchored_from = None
+    anchor_reason = None
     if at_was_omitted:
+        candidates = []
         for back in range(MAX_ANCHOR_BACKOFF_HOURS + 1):
             candidate = as_of - timedelta(hours=back)
             if not _missing(candidate):
-                if back:
-                    anchored_from, as_of = as_of, candidate
-                break
+                candidates.append(
+                    (candidate, observations[candidate].get("n_stations") or 0))
+
+        if candidates:
+            qualifying = [c for c in candidates if c[1] >= QUALIFYING_STATIONS]
+            chosen, n_at_anchor = (qualifying or candidates)[0]
+            if chosen != as_of:
+                anchored_from, as_of = as_of, chosen
+            anchor_reason = (
+                f"{n_at_anchor} stations"
+                + ("" if qualifying else
+                   f" (no hour in the last {MAX_ANCHOR_BACKOFF_HOURS} h reached "
+                   f"{QUALIFYING_STATIONS})"))
 
     # Lags first: without them there is no forecast, and saying so precisely is
     # more useful than an empty series.
@@ -268,9 +324,9 @@ def forecast(conn, as_of: datetime | None = None,
                      "the capture accumulates them hourly"),
         }
 
-    lag_sources = sorted({observations[as_of - timedelta(hours=h)][1]
+    lag_sources = sorted({observations[as_of - timedelta(hours=h)]["source"]
                           for h in model_lgbm.PM_LAGS})
-    plain = {t: v for t, (v, _src) in observations.items()}
+    plain = {t: o["pm25"] for t, o in observations.items()}
 
     boosters = {}
     for name in OUTPUTS:
@@ -312,17 +368,19 @@ def forecast(conn, as_of: datetime | None = None,
         "generated_at": datetime.now(timezone.utc),
         "horizon_hours": len(series),
         "location": {"lat": lat, "lon": lon, "grid": grid},
-        "observed_now": {
-            "pm25": plain[as_of],
-            "source": observations[as_of][1],
-        },
+        # The whole observation record for the anchor hour, not just a number and a
+        # tag: which target series it came from, and how many monitors stood behind
+        # it. A consumer that wants to say "129 ug/m3 across N stations" must be able
+        # to get N from here or say nothing.
+        "observed_now": dict(observations[as_of]),
         # Present only when a live forecast had to step back for a complete set
         # of lags. Reported rather than hidden, because "issued now, based on
         # observations to 06:00" is a materially different statement from
         # "issued now, based on observations to now".
         "anchored": ({"requested": anchored_from, "used": as_of,
                       "hours_back": round((anchored_from - as_of)
-                                          .total_seconds() / 3600)}
+                                          .total_seconds() / 3600),
+                      "reason": anchor_reason}
                      if anchored_from else None),
         "provenance": {
             "target_source": "+".join(lag_sources),

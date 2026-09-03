@@ -227,7 +227,13 @@ export function RegulatoryContext({
         value={orDash(data.engine_mode)}
         color={modeColor(data.engine_mode)}
       />
-      <KeyValue label="Data type" value="Real-time short window" mono={false} />
+      <KeyValue
+        label="Data type"
+        // The upstream network publishes hourly and arrives 40-100 min late.
+        // "Real-time" overstated that by two orders of magnitude.
+        value="Hourly observation, age reported per station"
+        mono={false}
+      />
       <KeyValue label="Last API poll" value={`${orDash(data.api_time)} UTC`} />
       <KeyValue
         label="High-AQI threshold"

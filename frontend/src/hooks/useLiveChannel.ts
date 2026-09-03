@@ -13,6 +13,16 @@ import type { LiveEvent } from "@/types";
 export type LiveStatus = "connecting" | "open" | "closed";
 
 function wsUrl(): string {
+  // Same-origin when API_URL is empty (the deployment shape that puts the API behind
+  // this app's own /api rewrite). "".replace(/^http/,...) leaves an empty string, and
+  // "/ws/live" is not a URL a WebSocket constructor accepts — so the origin has to
+  // come from the page. Also picks wss automatically when the page is served over
+  // TLS, which a shared tunnel always is.
+  if (!API_URL) {
+    if (typeof window === "undefined") return "";
+    const scheme = window.location.protocol === "https:" ? "wss" : "ws";
+    return `${scheme}://${window.location.host}/ws/live`;
+  }
   const base = API_URL.replace(/^http/, "ws");
   return `${base}/ws/live`;
 }

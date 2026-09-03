@@ -10,7 +10,45 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import CommandBar from "@/components/CommandBar";
 import CommandPalette from "@/components/CommandPalette";
 import Sidebar from "@/components/Sidebar";
-import { LiveDataProvider } from "@/components/providers/LiveDataProvider";
+import {
+  LiveDataProvider,
+  useSystemStatus,
+} from "@/components/providers/LiveDataProvider";
+import { OutlookModeProvider } from "@/components/providers/OutlookModeProvider";
+
+/** What the system is actually running, named from /api/system/status. */
+function SystemFooter() {
+  const { data: status } = useSystemStatus();
+
+  const engine = !status
+    ? "engine unknown"
+    : !status.engine_loaded
+      ? "engine offline"
+      : status.mode === "streaming"
+        ? "Pathway streaming engine"
+        : "direct engine";
+
+  const parts = [
+    "AREE v2.2",
+    engine,
+    "observations CAQM / CPCB",
+    "meteorology Open-Meteo",
+    status
+      ? `policy retrieval ${status.rag_status === "active" ? "active" : "unavailable"}`
+      : "policy retrieval unknown",
+  ];
+
+  return (
+    <footer
+      className="mt-auto px-6 pb-4 pt-4 text-center"
+      style={{ borderTop: "1px solid var(--aree-border)" }}
+    >
+      <span className="text-aree-faint text-[10px] tracking-[0.14em] uppercase">
+        {parts.join(" · ")}
+      </span>
+    </footer>
+  );
+}
 
 function Shell({ children }: { children: ReactNode }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -76,16 +114,15 @@ function Shell({ children }: { children: ReactNode }) {
           />
 
           {/* Page content */}
-          <main id="main-content" className="flex flex-col p-4 sm:p-5">
+          <main id="main-content" className="flex flex-1 flex-col p-4 sm:p-5">
             {children}
           </main>
 
-          {/* Footer */}
-          <footer className="px-6 pb-6 pt-8 text-center" style={{ borderTop: "1px solid var(--aree-border)" }}>
-            <span className="text-aree-faint text-[10px] tracking-[0.14em] uppercase">
-              AREE v2.2 · Pathway streaming · WAQI direct · NASA FIRMS verified · live policy index
-            </span>
-          </footer>
+          {/* Footer. This was a fixed strip reading "Pathway streaming · WAQI direct ·
+              NASA FIRMS verified · live policy index" — four subsystem claims, all four
+              false in the mode that actually runs on this machine, printed on every
+              page and every screenshot. It now describes the running system. */}
+          <SystemFooter />
         </div>
       </div>
 
@@ -98,7 +135,9 @@ function Shell({ children }: { children: ReactNode }) {
 export default function AppShell({ children }: { children: ReactNode }) {
   return (
     <LiveDataProvider>
-      <Shell>{children}</Shell>
+      <OutlookModeProvider>
+        <Shell>{children}</Shell>
+      </OutlookModeProvider>
     </LiveDataProvider>
   );
 }

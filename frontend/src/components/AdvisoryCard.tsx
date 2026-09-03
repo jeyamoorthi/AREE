@@ -149,20 +149,32 @@ export function MethodologyCard({
   return (
     <div className="space-y-3 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 text-[12.5px] leading-[1.8] text-aree-muted shadow-[var(--aree-shadow-sm)]">
       <p>
-        <span className="font-semibold text-aree-text">WAQI AQI</span> is used directly
-        from the API payload for all escalation logic — the US EPA-standard AQI reported
-        by the WAQI network. PM2.5 concentration is displayed for reference only. This
-        station is currently reporting{" "}
+        <span className="font-semibold text-aree-text">CAQM AQI</span> is used directly
+        from the published payload for all escalation logic — the Commission&rsquo;s own
+        station sub-index. PM2.5 concentration comes from CPCB via data.gov.in and is
+        a separate, slower feed. This station is currently reporting{" "}
         <span className="font-semibold text-aree-text">
-          {pollutantsAvailable} of 6
-        </span>{" "}
-        pollutants.
+          {/* Was hardcoded "of 6". CPCB publishes seven for most NCR stations —
+              NH3 included — so a station reporting all of them read "7 of 6". */}
+          {pollutantsAvailable} pollutant{pollutantsAvailable === 1 ? "" : "s"}
+        </span>
+        .
       </p>
       <p>
-        <span className="font-semibold text-aree-text">Escalation logic</span> triggers
-        when AQI ≥ {highThreshold} is sustained across {persistenceThreshold} consecutive
-        sliding windows ({windowDuration} min duration, {windowHop} min hop). Every
-        decision is traceable to the WAQI payload timestamp and feed ID.
+        <span className="font-semibold text-aree-text">Station escalation logic</span>{" "}
+        triggers when AQI ≥ {highThreshold} is sustained across {persistenceThreshold}{" "}
+        consecutive sliding windows ({windowDuration} min duration, {windowHop} min hop).
+        Every decision is traceable to the published observation timestamp and feed ID.
+      </p>
+      {/* Two rules run in this product and they answer different questions. Saying so
+          is better than letting a reader assume the 3-minute one is what produced the
+          72-hour warning on the Atmospheric Outlook. */}
+      <p>
+        This is the <span className="font-semibold text-aree-text">per-station</span>{" "}
+        rule and it reacts to observed AQI only. The predictive warning on the
+        Atmospheric Outlook is a different, airshed-wide rule — upper-tail PM2.5 above
+        250 µg/m³ for six sustained hours — and it is the one validated against
+        historical episodes.
       </p>
     </div>
   );

@@ -48,6 +48,13 @@ class SystemStatus(BaseModel):
     engine_loaded: bool
     engine_error: Optional[str] = None
     pipeline: str
+    #: Which engine is actually running: "streaming" (Pathway) or "direct".
+    #: Published because the dashboard used to print "Pathway pipeline - Running" as a
+    #: literal string regardless of what had started, and the footer advertised four
+    #: subsystems that direct mode does not have.
+    mode: Optional[str] = None
+    #: True when subsystems are unavailable in the running mode (RAG, event-time windows).
+    degraded: bool = False
     active_stations: int
     known_stations: int
     decisions_processed: int

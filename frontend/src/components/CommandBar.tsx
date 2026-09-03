@@ -7,19 +7,20 @@
 
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   Clock,
-  Compass,
   FileText,
+  History,
   LayoutDashboard,
   MapPin,
   Menu,
-  Radio,
   Search,
   Wind,
 } from "lucide-react";
 
 import { useSystemStatus } from "@/components/providers/LiveDataProvider";
-import { istClock } from "@/lib/clock";
+import { useOutlookMode } from "@/components/providers/OutlookModeProvider";
+import { istClock, istDateTime } from "@/lib/clock";
 
 interface CommandBarProps {
   onOpenSearch?: () => void;
@@ -33,6 +34,7 @@ export default function CommandBar({
   const pathname = usePathname();
   const statusState = useSystemStatus();
   const status = statusState.data;
+  const { mode: pageMode, asOf } = useOutlookMode();
 
   const offline = Boolean(statusState.error) && !status;
   const engineDown = Boolean(status && !status.engine_loaded);
@@ -52,6 +54,11 @@ export default function CommandBar({
 
   const clock = istClock(status?.server_time);
 
+  // The page may be reconstructing a past moment while the engine behind it is live.
+  // That is a different question from "is the server up", and the header used to answer
+  // only the second one — so a replay of November 2024 carried a green LIVE pill.
+  const replayAt = pageMode === "replay" ? asOf : null;
+
   // Derive current location breadcrumb
   let pageTitle = "National Overview";
   let PageIcon = MapPin;
@@ -59,6 +66,10 @@ export default function CommandBar({
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/stations")) {
     pageTitle = "Command Center";
     PageIcon = LayoutDashboard;
+  } else if (pathname.startsWith("/outlook")) {
+    // Was missing entirely, so the demo page announced itself as "National Overview".
+    pageTitle = "Atmospheric Outlook";
+    PageIcon = Activity;
   } else if (pathname.startsWith("/ventilation")) {
     pageTitle = "Ventilation Outlook";
     PageIcon = Wind;
@@ -120,7 +131,29 @@ export default function CommandBar({
           </button>
         )}
 
-        {/* Live Status & Clock Pill */}
+        {/* Replay takes precedence over engine liveness: what the user is LOOKING AT
+            outranks whether the server is up. */}
+        {replayAt ? (
+          <div
+            className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs shadow-2xs"
+            style={{ borderColor: "#c7c2f0", background: "#f2f1fd" }}
+            role="status"
+            aria-live="polite"
+          >
+            <History className="h-3.5 w-3.5" style={{ color: "#4338ca" }} aria-hidden />
+            <span
+              className="text-[11px] font-bold tracking-wider"
+              style={{ color: "#4338ca" }}
+            >
+              REPLAY
+            </span>
+            <span className="h-3.5 w-px" style={{ background: "#c7c2f0" }} aria-hidden />
+            <span className="aree-num text-[11px] font-semibold" style={{ color: "#4338ca" }}>
+              {istDateTime(replayAt) ?? replayAt}
+            </span>
+          </div>
+        ) : (
+        /* Live Status & Clock Pill */
         <div
           className="flex items-center gap-3 rounded-lg border border-aree-border bg-aree-surface-1 px-3 py-1.5 shadow-2xs text-xs"
           role="status"
@@ -161,6 +194,7 @@ export default function CommandBar({
             {clock ?? "—"}
           </span>
         </div>
+        )}
       </div>
     </header>
   );

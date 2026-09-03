@@ -107,22 +107,31 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
               </span>
             </div>
             <ProgressBar percent={transportScore} color={scoreColor} label="Transport score" />
-            <div className="mt-3">
-              <div className="mb-1.5 flex items-center justify-between">
-                <span className="aree-eyebrow text-[10.5px]">Confidence</span>
-                <span
-                  className="aree-num text-[13px] font-bold"
-                  style={{ color: confidenceColor(data.confidence_score) }}
-                >
-                  {data.confidence_score ?? 0}%
-                </span>
+            {/* Shown only when the engine actually computes one. The direct engine
+                does not, and a null used to render as a red 0% bar — a fabricated
+                certainty in the opposite direction. */}
+            {data.confidence_score !== null && data.confidence_score !== undefined ? (
+              <div className="mt-3">
+                <div className="mb-1.5 flex items-center justify-between">
+                  <span className="aree-eyebrow text-[10.5px]">Confidence</span>
+                  <span
+                    className="aree-num text-[13px] font-bold"
+                    style={{ color: confidenceColor(data.confidence_score) }}
+                  >
+                    {data.confidence_score}%
+                  </span>
+                </div>
+                <ProgressBar
+                  percent={data.confidence_score}
+                  color={confidenceColor(data.confidence_score)}
+                  label="Signal confidence"
+                />
               </div>
-              <ProgressBar
-                percent={data.confidence_score ?? 0}
-                color={confidenceColor(data.confidence_score)}
-                label="Signal confidence"
-              />
-            </div>
+            ) : (
+              <p className="mt-3 text-[11px] text-aree-dim">
+                Signal confidence is not computed in this engine mode.
+              </p>
+            )}
           </div>
         </div>
 

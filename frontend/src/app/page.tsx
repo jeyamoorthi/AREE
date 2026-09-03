@@ -66,10 +66,10 @@ export default function HomePage() {
             <div className="flex items-center justify-between mb-3">
               <div>
                 <h2 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
-                  NATIONAL ENVIRONMENTAL MAP
+                  DELHI NCR MONITORING NETWORK
                 </h2>
                 <p className="text-[11px] text-[#788796] mt-0.5">
-                  Live air quality and regulatory status across India
+                  Observed air quality and regulatory status across the NCR airshed
                 </p>
               </div>
               <button
@@ -97,23 +97,49 @@ export default function HomePage() {
                 />
               )}
 
-              {/* Floating Bottom Freshness Legend matching image */}
-              <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 backdrop-blur-xs border border-[#e4e0d4] px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-4 text-[11px] font-semibold text-[#17231c]">
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#16a34a]" />
-                  <span>Current</span>
+              {/* LEGEND — one row per ENCODING, not one row per concept.
+                  This used to list the four freshness bands as coloured dots while
+                  the markers on the map were coloured by AQI, so the key described
+                  something the map was not doing. Colour and border are now separated
+                  and each is named. */}
+              <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 backdrop-blur-xs border border-[#e4e0d4] px-3 py-2 rounded-lg shadow-sm text-[10.5px] text-[#17231c]">
+                <div className="flex items-center gap-3">
+                  <span className="font-bold uppercase tracking-wide text-[9px] text-[#788796] w-[52px]">
+                    AQI
+                  </span>
+                  {[
+                    ["0–50", "#16a34a"],
+                    ["51–100", "#65a30d"],
+                    ["101–200", "#d97706"],
+                    ["201–300", "#ea580c"],
+                    ["301–400", "#dc2626"],
+                    ["401+", "#991b1b"],
+                  ].map(([range, colour]) => (
+                    <span key={range} className="flex items-center gap-1">
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ background: colour }}
+                      />
+                      <span className="font-mono">{range}</span>
+                    </span>
+                  ))}
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ca8a04]" />
-                  <span>Aging</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="h-2.5 w-2.5 rounded-full bg-[#ea580c]" />
-                  <span>Stale</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[11px] text-[#788796]">⊗</span>
-                  <span>Unavailable</span>
+                <div className="mt-1.5 flex items-center gap-3 border-t border-[#f0eee4] pt-1.5">
+                  <span className="font-bold uppercase tracking-wide text-[9px] text-[#788796] w-[52px]">
+                    Data
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full border-2 border-solid border-[#64748b]" />
+                    Current
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-[#64748b]" />
+                    Aging / stale
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-2.5 w-2.5 rounded-full border-2 border-dotted border-[#64748b]" />
+                    No reading
+                  </span>
                 </div>
               </div>
             </div>

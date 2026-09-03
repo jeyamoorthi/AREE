@@ -241,7 +241,12 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         "api_time": _iso(now),
 
         "forecast": forecast,
-        "confidence_score": 85 if aqi is not None else 0,
+        # NOT a confidence score. This published a flat 85 for every station that
+        # had any reading at all, which the dashboard rendered as "Confidence 85%"
+        # beside a progress bar - a number with no computation behind it, on a screen
+        # whose whole claim is that its numbers are traceable. Direct mode computes no
+        # confidence, so it reports none and the UI omits the field.
+        "confidence_score": None,
 
         # Subsystems this mode cannot provide. Explicit nulls, not defaults.
         "advisory_text": None,

@@ -3,20 +3,19 @@
 import Link from "next/link";
 import { useMemo } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import {
-  AlertTriangle,
-  CheckCircle2,
-  Flame,
-  Globe,
-  Server,
-  Shield,
-  Sparkles,
-  Wind,
-} from "lucide-react";
+import { Flame, Globe, Server, Shield, Sparkles } from "lucide-react";
 
+import { usePolling } from "@/hooks/usePolling";
+import { api } from "@/lib/api";
+import { istDateTime } from "@/lib/clock";
 import { stationLabel } from "@/lib/station";
-import { grapRank } from "@/lib/theme";
-import type { StationListResponse, StationSummary, SystemStatus } from "@/types";
+import { grapColor, grapRank } from "@/lib/theme";
+import type {
+  EscalationsResponse,
+  StationListResponse,
+  StationSummary,
+  SystemStatus,
+} from "@/types";
 
 export interface NetworkFacts {
   withData: StationSummary[];
@@ -79,12 +78,16 @@ export function NationalSummaryPanel({
   const unavailable = status?.unavailable_stations ?? stations?.unavailable ?? 0;
   const current = status?.current_stations ?? stations?.current ?? 0;
 
-  const minAqi = facts.minAqi ?? 68;
-  const maxAqi = facts.maxAqi ?? 167;
+  // No placeholder values. These fell back to 68 / 167 / "Pooth Khurd" / "Stage I" when
+  // the network had not reported, so an empty engine rendered a plausible-looking
+  // summary of a network that was not there.
+  const hasData = facts.withData.length > 0;
+  const minAqi = facts.minAqi;
+  const maxAqi = facts.maxAqi;
   const worstName = facts.worstStation
     ? stationLabel(facts.worstStation.station)
-    : "Pooth Khurd";
-  const grapStage = facts.worstStage ?? "Stage I";
+    : null;
+  const grapStage = facts.worstStage ?? "None";
 
   return (
     <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between h-full">
@@ -101,10 +104,12 @@ export function NationalSummaryPanel({
               AQI RANGE
             </div>
             <div className="text-[20px] font-bold font-mono text-[#17231c]">
-              {minAqi} — {maxAqi}
+              {hasData ? `${minAqi} — ${maxAqi}` : "—"}
             </div>
             <div className="text-[11px] text-[#788796] mt-0.5">
-              Across reporting stations
+              {hasData
+                ? `Across ${facts.withData.length} reporting stations`
+                : "No station is reporting yet"}
             </div>
           </div>
 
@@ -114,10 +119,13 @@ export function NationalSummaryPanel({
               HIGHEST AQI
             </div>
             <div className="text-[20px] font-bold font-mono text-[#17231c]">
-              {maxAqi}
+              {hasData ? maxAqi : "—"}
             </div>
-            <div className="text-[11px] text-[#788796] mt-0.5 truncate" title={worstName}>
-              {worstName}
+            <div
+              className="text-[11px] text-[#788796] mt-0.5 truncate"
+              title={worstName ?? undefined}
+            >
+              {worstName ?? "Awaiting telemetry"}
             </div>
           </div>
 
@@ -148,8 +156,11 @@ export function NationalSummaryPanel({
             <div className="text-[18px] font-bold text-[#17231c]">
               {grapStage}
             </div>
+            {/* "(Watch & Advise)" was hardcoded and describes Stage I regardless of the
+                stage shown. The distinction that matters more: AREE COMPUTES a stage
+                from the highest observed AQI; only CAQM INVOKES one. */}
             <div className="text-[11px] text-[#788796] mt-0.5">
-              (Watch &amp; Advise)
+              Computed from highest station AQI · not a CAQM invocation
             </div>
           </div>
 
@@ -161,8 +172,12 @@ export function NationalSummaryPanel({
             <div className="text-[20px] font-bold font-mono text-[#17231c]">
               {facts.triggered}
             </div>
+            {/* The caption used to read "No escalations at this time" even when the
+                count beside it was non-zero. */}
             <div className="text-[11px] text-[#788796] mt-0.5">
-              No escalations at this time
+              {facts.triggered > 0
+                ? `${facts.triggered} station${facts.triggered === 1 ? "" : "s"} in a triggered state`
+                : "No escalations at this time"}
             </div>
           </div>
 
@@ -193,14 +208,38 @@ export function NationalSummaryPanel({
         </div>
       </div>
 
-      {/* Bottom Pipeline Status Bar */}
+      {/* Engine status. This read "Pathway pipeline - Running" as two literal strings,
+          on a machine where Pathway had never started and the direct engine was doing
+          the work. Both halves now come from /api/system/status. */}
       <div className="mt-4 pt-3.5 border-t border-[#f0eee4] flex items-center justify-between text-[12px]">
         <div className="flex items-center gap-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-[#16a34a]" />
-          <span className="font-semibold text-[#17231c]">Pathway pipeline</span>
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{
+              background: status?.engine_loaded ? "#16a34a" : "#dc2626",
+            }}
+          />
+          <span className="font-semibold text-[#17231c]">
+            {status?.mode === "streaming"
+              ? "Pathway streaming engine"
+              : status?.mode === "direct"
+                ? "Direct engine"
+                : "Engine"}
+          </span>
         </div>
-        <span className="font-bold text-[#16a34a]">Running</span>
+        <span
+          className="font-bold"
+          style={{ color: status?.engine_loaded ? "#16a34a" : "#dc2626" }}
+        >
+          {status ? (status.engine_loaded ? "Running" : "Offline") : "—"}
+        </span>
       </div>
+      {status?.degraded ? (
+        <p className="mt-1.5 text-[10.5px] text-[#788796] leading-snug">
+          Direct mode: GRAP state machine, causal attribution and the forecast layer are
+          unchanged. Event-time windowing and policy retrieval are unavailable.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -226,16 +265,10 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
     else bands[5].count++;
   }
 
-  const total = facts.withData.length || 24;
-  if (facts.withData.length === 0) {
-    bands[0].count = 2;
-    bands[1].count = 9;
-    bands[2].count = 10;
-    bands[3].count = 3;
-    bands[4].count = 0;
-    bands[5].count = 0;
-  }
-
+  // No synthetic distribution. This used to fill 2/9/10/3 across the bands and set the
+  // denominator to 24 when no station had reported, so an empty engine drew a complete,
+  // entirely invented donut.
+  const total = facts.withData.length;
   const chartData = bands.filter((b) => b.count > 0);
 
   return (
@@ -248,6 +281,12 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
           Distribution of stations by AQI category
         </p>
 
+        {total === 0 ? (
+          <p className="py-10 text-center text-[12px] text-[#788796]">
+            No station has reported yet — the distribution appears once the network is
+            online.
+          </p>
+        ) : (
         <div className="flex flex-col sm:flex-row items-center gap-5">
           <div className="relative w-36 h-36 shrink-0 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
@@ -303,6 +342,7 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
             })}
           </div>
         </div>
+        )}
       </div>
     </div>
   );
@@ -310,25 +350,21 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
 
 /* ── Middle Col 2: Top 5 Stations by AQI ── */
 export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
-  const topList = useMemo(() => {
-    if (facts.withData.length > 0) {
-      return [...facts.withData]
+  // The fallback list (Pooth Khurd 167, Bawana 154, ...) rendered five named Delhi
+  // stations with plausible AQI values that no feed had produced. Removed: an empty
+  // network must look empty.
+  const topList = useMemo(
+    () =>
+      [...facts.withData]
         .sort((a, b) => (b.aqi ?? 0) - (a.aqi ?? 0))
         .slice(0, 5)
         .map((s) => ({
           station: s.station,
           name: stationLabel(s.station),
           aqi: s.aqi ?? 0,
-        }));
-    }
-    return [
-      { station: "pooth_khurd", name: "Pooth Khurd", aqi: 167 },
-      { station: "bawana", name: "Bawana", aqi: 154 },
-      { station: "anand_vihar", name: "Anand Vihar", aqi: 143 },
-      { station: "mundka", name: "Mundka", aqi: 138 },
-      { station: "jahangirpuri", name: "Jahangirpuri", aqi: 132 },
-    ];
-  }, [facts.withData]);
+        })),
+    [facts.withData],
+  );
 
   return (
     <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between">
@@ -341,6 +377,11 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
         </p>
 
         <div className="space-y-2.5">
+          {topList.length === 0 ? (
+            <p className="py-8 text-center text-[12px] text-[#788796]">
+              No station has reported yet.
+            </p>
+          ) : null}
           {topList.map((st, i) => (
             <div
               key={st.station}
@@ -377,47 +418,103 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
   );
 }
 
-/* ── Middle Col 3: Data Health Overview ── */
+/* ── Middle Col 3: Data Health Overview ──
+   Every row here used to be a literal. "NASA FIRMS - Live", "Weather - Live",
+   "RAG Engine - Active" and "Policy Index - Indexed" were printed as constants while
+   the API reported rag_status "unavailable" and the satellite poller had never run.
+   Two of them were not even reported by this endpoint, so there was nothing to be
+   right or wrong about.
+
+   Now: only subsystems /api/system/status actually reports, each with its real state.
+   FIRMS and the meteorological feed are deliberately absent - they belong to the
+   forecast layer and are reported on the Atmospheric Outlook, which knows about them. */
 export function DataHealthOverviewCard({ status }: { status: SystemStatus | null }) {
-  const stale = (status?.stale_stations ?? 0) > 0;
-  const isLlmReady = status?.llm_ready !== false;
+  const stale = status?.stale_stations ?? 0;
+  const aging = status?.aging_stations ?? 0;
+  const unavailable = status?.unavailable_stations ?? 0;
+
+  const unknown = { label: "Unknown", color: "#788796" };
+
+  const networkState = !status
+    ? unknown
+    : stale > 0
+      ? { label: `${stale} stale`, color: "#ea580c" }
+      : aging > 0
+        ? { label: `${aging} aging`, color: "#ca8a04" }
+        : { label: "Current", color: "#16a34a" };
+
+  const engineState = !status
+    ? unknown
+    : !status.engine_loaded
+      ? { label: "Offline", color: "#dc2626" }
+      : status.mode === "streaming"
+        ? { label: "Streaming", color: "#16a34a" }
+        : { label: "Direct", color: "#ca8a04" };
+
+  const ragState = !status
+    ? unknown
+    : status.rag_status === "active"
+      ? { label: "Active", color: "#16a34a" }
+      : { label: status.rag_status ?? "Unavailable", color: "#ca8a04" };
+
+  const docs = status?.rag_docs_indexed ?? null;
+  const policyState =
+    docs === null
+      ? unknown
+      : docs > 0
+        ? { label: `${docs} on disk`, color: "#16a34a" }
+        : { label: "Empty", color: "#ca8a04" };
+
+  const llmState = !status
+    ? unknown
+    : status.llm_ready === true
+      ? { label: "Ready", color: "#16a34a" }
+      : status.llm_ready === false
+        ? { label: "Fallback", color: "#ca8a04" }
+        : unknown;
 
   const sources = [
     {
-      name: "WAQI (AQI)",
-      status: stale ? "Stale" : "Live",
-      color: stale ? "#ea580c" : "#16a34a",
+      name: "Station network",
+      sub: status ? `${status.active_stations}/${status.known_stations} reporting` : null,
+      status: networkState.label,
+      color: networkState.color,
       icon: <Globe className="w-3.5 h-3.5" />,
     },
     {
-      name: "NASA FIRMS",
-      status: "Live",
-      color: "#16a34a",
-      icon: <Flame className="w-3.5 h-3.5" />,
-    },
-    {
-      name: "Weather",
-      status: "Live",
-      color: "#16a34a",
-      icon: <Wind className="w-3.5 h-3.5" />,
-    },
-    {
-      name: "RAG Engine",
-      status: "Active",
-      color: "#16a34a",
+      name: "Engine",
+      sub: status?.pipeline ?? null,
+      status: engineState.label,
+      color: engineState.color,
       icon: <Server className="w-3.5 h-3.5" />,
     },
     {
-      name: "Policy Index",
-      status: "Indexed",
-      color: "#16a34a",
+      name: "Policy documents",
+      sub: null,
+      status: policyState.label,
+      color: policyState.color,
       icon: <Shield className="w-3.5 h-3.5" />,
     },
     {
-      name: "Gemini AI",
-      status: isLlmReady ? "Ready" : "Fallback",
-      color: isLlmReady ? "#16a34a" : "#ca8a04",
+      name: "Policy retrieval",
+      sub: status?.degraded ? "requires Pathway" : null,
+      status: ragState.label,
+      color: ragState.color,
+      icon: <Server className="w-3.5 h-3.5" />,
+    },
+    {
+      name: "LLM narrative",
+      sub: status?.llm_model ?? null,
+      status: llmState.label,
+      color: llmState.color,
       icon: <Sparkles className="w-3.5 h-3.5" />,
+    },
+    {
+      name: "Unavailable feeds",
+      sub: "no usable AQI",
+      status: status ? String(unavailable) : "—",
+      color: unavailable > 0 ? "#ca8a04" : "#16a34a",
+      icon: <Flame className="w-3.5 h-3.5" />,
     },
   ];
 
@@ -437,11 +534,16 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
               key={src.name}
               className="flex items-center justify-between text-[12px] py-1 border-b border-[#f0eee4] last:border-b-0"
             >
-              <div className="flex items-center gap-2.5 text-[#17231c]">
-                <span className="text-[#788796]">{src.icon}</span>
-                <span className="font-semibold">{src.name}</span>
+              <div className="flex items-center gap-2.5 text-[#17231c] min-w-0">
+                <span className="text-[#788796] shrink-0">{src.icon}</span>
+                <span className="font-semibold truncate">{src.name}</span>
+                {src.sub ? (
+                  <span className="text-[10.5px] text-[#788796] truncate shrink">
+                    {src.sub}
+                  </span>
+                ) : null}
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <span
                   className="h-2 w-2 rounded-full"
                   style={{ background: src.color }}
@@ -458,62 +560,34 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[#f0eee4] text-right">
-        <Link
-          href="/?section=health"
-          className="text-[11px] font-bold text-[#143828] hover:underline inline-flex items-center gap-1"
-        >
-          View All Sources &rarr;
-        </Link>
+      {/* The old "View All Sources" link pointed at /?section=health, which no route
+          reads - it reloaded this same page. */}
+      <div className="mt-4 pt-3 border-t border-[#f0eee4]">
+        <p className="text-[10.5px] text-[#788796] leading-snug">
+          Freshness: current 0–90 min · aging 90–120 min · stale beyond 120 min. Satellite
+          and meteorological feeds are reported on the Atmospheric Outlook.
+        </p>
       </div>
     </div>
   );
 }
 
-/* ── Bottom Row: Recent Events Stream ── */
+/* ── Bottom Row: Recent Events Stream ──
+   This was five hardcoded cards: a "09:15 AM Data Stale Alert" about 24 stations, a
+   "FIRMS Update - 14 fire detections", a "System Check - All systems operational".
+   None of them referred to anything that had happened; they rendered identically on an
+   empty engine and on a live one, and a judge asking "what triggered the 09:15 alert?"
+   had no answer.
+
+   Now: real GRAP transitions from /api/escalations. When the state machine has recorded
+   nothing, the row says so - an empty operations log is a fact, not a gap to fill. */
 export function RecentEventsRow() {
-  const events = [
-    {
-      time: "09:15 AM",
-      title: "Data Stale Alert",
-      desc: "24 stations data is stale up to 24 hours",
-      bg: "#fef3c7",
-      border: "#fde68a",
-      icon: <AlertTriangle className="w-4 h-4 text-[#d97706]" />,
-    },
-    {
-      time: "08:40 AM",
-      title: "GRAP Stage I Active",
-      desc: "Applies to Delhi NCR (Watch & Advise)",
-      bg: "#ecfdf5",
-      border: "#a7f3d0",
-      icon: <Shield className="w-4 h-4 text-[#16a34a]" />,
-    },
-    {
-      time: "08:10 AM",
-      title: "Weather Update",
-      desc: "NW winds 15 km/h · Transport risk moderate",
-      bg: "#eff6ff",
-      border: "#bfdbfe",
-      icon: <Wind className="w-4 h-4 text-[#2563eb]" />,
-    },
-    {
-      time: "07:50 AM",
-      title: "FIRMS Update",
-      desc: "14 fire detections in last 24h",
-      bg: "#fff7ed",
-      border: "#fed7aa",
-      icon: <Flame className="w-4 h-4 text-[#ea580c]" />,
-    },
-    {
-      time: "07:30 AM",
-      title: "System Check",
-      desc: "All systems operational",
-      bg: "#ecfdf5",
-      border: "#a7f3d0",
-      icon: <CheckCircle2 className="w-4 h-4 text-[#16a34a]" />,
-    },
-  ];
+  const state = usePolling<EscalationsResponse>(
+    (signal) => api.escalations(undefined, signal),
+    { intervalMs: 15000 },
+  );
+
+  const events = (state.data?.events ?? []).slice(0, 5);
 
   return (
     <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs">
@@ -523,44 +597,55 @@ export function RecentEventsRow() {
             RECENT EVENTS
           </h3>
           <p className="text-[11px] text-[#788796]">
-            Latest system and regulatory events
+            GRAP stage transitions recorded by the state machine
           </p>
         </div>
-        <Link
-          href="/dashboard"
-          className="text-[11px] font-bold text-[#143828] hover:underline"
-        >
-          View All Events &rarr;
-        </Link>
+        {state.data && state.data.total > events.length ? (
+          <span className="text-[11px] text-[#788796]">
+            {events.length} of {state.data.total}
+          </span>
+        ) : null}
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-        {events.map((ev) => (
-          <div
-            key={ev.time + ev.title}
-            className="rounded-lg p-3 border flex flex-col justify-between"
-            style={{
-              backgroundColor: ev.bg,
-              borderColor: ev.border,
-            }}
-          >
-            <div>
-              <div className="text-[10px] font-bold font-mono text-[#788796] mb-1">
-                {ev.time}
+      {state.initialLoading ? (
+        <p className="py-6 text-center text-[12px] text-[#788796]">Loading events…</p>
+      ) : state.error && !state.data ? (
+        <p className="py-6 text-center text-[12px] text-[#788796]">
+          Event log unavailable — {state.error.message}
+        </p>
+      ) : events.length === 0 ? (
+        <p className="py-6 text-center text-[12px] text-[#788796]">
+          No stage transition recorded in this session. Events appear here when a
+          station&apos;s GRAP stage changes.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+          {events.map((ev, i) => {
+            const colour = grapColor(ev.to_stage);
+            return (
+              <div
+                key={`${ev.timestamp}-${ev.city ?? ev.station ?? i}`}
+                className="rounded-lg p-3 border flex flex-col justify-between bg-[#faf9f4]"
+                style={{ borderColor: "#e4e0d4" }}
+              >
+                <div className="text-[10px] font-bold font-mono text-[#788796] mb-1">
+                  {istDateTime(ev.timestamp) ?? ev.timestamp ?? "—"}
+                </div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Shield className="w-4 h-4 shrink-0" style={{ color: colour }} />
+                  <span className="text-[12px] font-bold text-[#17231c] leading-tight truncate">
+                    {stationLabel(ev.city ?? ev.station ?? "—")}
+                  </span>
+                </div>
+                <div className="text-[11px] text-[#4a5568] leading-tight">
+                  {ev.from_stage ?? "—"} → <b style={{ color: colour }}>{ev.to_stage}</b>
+                  {ev.aqi !== null && ev.aqi !== undefined ? ` · AQI ${ev.aqi}` : ""}
+                </div>
               </div>
-              <div className="flex items-center gap-1.5 mb-1">
-                {ev.icon}
-                <span className="text-[12px] font-bold text-[#17231c] leading-tight">
-                  {ev.title}
-                </span>
-              </div>
-              <div className="text-[11px] text-[#4a5568] leading-tight">
-                {ev.desc}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

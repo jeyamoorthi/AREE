@@ -5,6 +5,7 @@ from . import (  # noqa: F401
     ai,
     aqi,
     carbon,
+    cases,
     dashboard,
     escalations,
     forecast,
@@ -30,6 +31,8 @@ ROUTERS = [
     ai.router,
     carbon.router,
     escalations.router,
+    # Human authority: the approve/reject half of the decision chain.
+    cases.router,
     policy.router,
     reports.router,
     # PS 26082 forecast layer. Mounted last, and deliberately free of the

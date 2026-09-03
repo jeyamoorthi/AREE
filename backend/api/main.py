@@ -18,7 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from . import engine, ws
+from . import capture_scheduler, engine, ws
 from .routes import ROUTERS
 from .schemas import HealthResponse
 
@@ -35,7 +35,15 @@ def _start_engine_background() -> None:
         log.info("Loading AREE engine (Pathway pipeline, ingestion, RAG)...")
         ok = engine.load_engine()
         if ok:
-            log.info("AREE engine loaded. Streaming pipeline is running.")
+            # Was an unconditional "Streaming pipeline is running", printed verbatim
+            # while the direct engine was doing the work and Pathway had never loaded.
+            st = engine.status()
+            if st.get("mode") == "streaming":
+                log.info("AREE engine loaded. Pathway streaming pipeline is running.")
+            else:
+                log.info("AREE engine loaded in DIRECT mode: interval sampling, no "
+                         "event-time windowing, no policy retrieval. Reason: %s",
+                         st.get("pathway_error") or "direct mode selected")
         else:
             st = engine.status()
             log.error("AREE engine failed to load: %s: %s",
@@ -47,7 +55,12 @@ def _start_engine_background() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     _start_engine_background()
+    # The live forecast needs observed PM2.5 lags out to 24 h. Capturing them was a
+    # separate process someone had to remember to run, and when it stopped the hero
+    # screen answered 424 while replay carried on working - so it is in here now.
+    capture_scheduler.start()
     yield
+    capture_scheduler.stop()
     log.info("AREE API shutting down.")
 
 
@@ -94,6 +107,14 @@ async def http_exception_handler(request: Request, exc: HTTPException):
         }
         if detail.get("hint"):
             body["hint"] = detail["hint"]
+        # Carry everything else the raiser attached. This used to forward only
+        # error/detail/hint, so the useful half of a structured error was silently
+        # dropped on the way out: `valid` on a rejected enum, `expected`/`received` on
+        # a case-id mismatch, `status` on a conflict. A caller was told something was
+        # wrong but not what would be right.
+        for key, value in detail.items():
+            if key not in ("error", "detail", "hint") and key not in body:
+                body[key] = value
     else:
         body = {
             "error": "http_error",

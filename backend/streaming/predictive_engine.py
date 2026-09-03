@@ -350,6 +350,28 @@ def assess(observed: dict[str, Any],
     }
 
 
+def case_id_for(forecast_as_of: datetime, jurisdiction: str,
+                trigger_rule: str) -> str:
+    """
+    A case's identity, derived rather than minted.
+
+    WHY NOT A UUID
+        A replay of 02 November 2024 is reproducible by construction: the same as_of
+        yields the same assessment every time. If the case that assessment opens were
+        given a fresh random id on every request, then demonstrating replay twice
+        would create two cases for one moment, and "reproduce yesterday's decision"
+        would produce a different record each time it was asked.
+
+        Deriving the id from the moment, the jurisdiction and the rule means the case
+        for a given decision point IS one row, no matter how often it is recomputed.
+        That is also what lets the approval endpoint be create-or-update without
+        needing the caller to have opened anything first.
+    """
+    import hashlib
+    seed = f"{forecast_as_of.isoformat()}|{jurisdiction}|{trigger_rule}"
+    return hashlib.sha1(seed.encode("utf-8")).hexdigest()[:12]
+
+
 def build_case(assessment: dict[str, Any], jurisdiction: str = "Delhi NCR",
                authority: str = "CAQM / DPCC") -> dict[str, Any] | None:
     """
@@ -366,7 +388,15 @@ def build_case(assessment: dict[str, Any], jurisdiction: str = "Delhi NCR",
     window = assessment.get("intervention_window_hours") or 0.0
     collapse = (assessment.get("evidence") or {}).get("collapse") or {}
 
+    # The case is keyed on the FORECAST moment, not on when it happened to be built:
+    # two requests for the same replay must address one case.
+    forecast_as_of = (assessment.get("evidence") or {}).get("observed_at") \
+        or assessment["assessed_at"]
+
     return {
+        "case_id": case_id_for(forecast_as_of, jurisdiction,
+                               assessment["trigger_rule"]),
+        "forecast_as_of": forecast_as_of,
         "opened_at": assessment["assessed_at"],
         "jurisdiction": jurisdiction,
         "responsible_authority": authority,

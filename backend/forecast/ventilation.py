@@ -83,8 +83,15 @@ def load_operating_point(mode: str | None = None) -> dict[str, Any]:
     return {
         "mode": chosen,
         "threshold_m2_s": point.get("threshold_m2_s", FALLBACK_THRESHOLD_M2S),
+        # TRAINING skill. The dashboard used to label these "validation", which
+        # overstates them by a wide margin: the same threshold scores hit 0.20 /
+        # FAR 0.50 on the held-out episodes. Both are published here so a caller
+        # cannot show one without the other being available.
         "hit_rate": point.get("hit_rate"),
         "false_alarm_rate": point.get("false_alarm_rate"),
+        "holdout_hit_rate": cfg.get("holdout_hit_rate"),
+        "holdout_false_alarm_rate": cfg.get("holdout_false_alarm_rate"),
+        "n_holdout_episodes": cfg.get("n_holdout_episodes"),
         "auc_training": cfg.get("auc_training"),
         "n_train_episodes": cfg.get("n_train_episodes"),
         "outcome_window_hours": cfg.get("outcome_window_hours"),

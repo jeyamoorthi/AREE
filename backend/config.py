@@ -78,13 +78,34 @@ CPCB_BANDS = [
     (401, 500, "Severe"),
 ]
 
-# GRAP stages (official CAQM table)
+# GRAP stages, as published by CAQM.
+#
+# CORRECTION, 2026-09: this table previously read 101-200 -> "Stage I (Poor)", which
+# shifted every stage down by one and made ordinary Delhi air (AQI 101-200, CPCB
+# "Moderate") display as a GRAP stage. The CAQM schedule in policies/ is explicit:
+#
+#     Stage I   'Poor'      AQI 201-300
+#     Stage II  'Very Poor' AQI 301-400
+#     Stage III 'Severe'    AQI 401-450
+#     Stage IV  'Severe+'   AQI >450
+#
+# The stage bands are NOT the CPCB_BANDS above: CPCB's "Poor" band starts at 201 and
+# GRAP Stage I starts with it, but the two tables diverge from there (CPCB tops out at
+# 401-500 "Severe", GRAP splits 401-450 / >450). Keeping both tables is correct; keeping
+# them in disagreement about GRAP was the bug.
+#
+# streaming/predictive_engine.py::GRAP_BY_AQI carries the same boundaries for the
+# predictive path. backend/tests_grap.py asserts the two agree for every AQI in 0..600 -
+# a GRAP stage that differs depending on which code path produced it is worse than
+# either answer alone.
 GRAP_STAGES = [
-    (0,   100, "None",                   "No GRAP action required"),
-    (101, 200, "Stage I (Poor)",         "Actions under GRAP Stage I"),
-    (201, 300, "Stage II (Very Poor)",   "Actions under GRAP Stage II"),
-    (301, 400, "Stage III (Severe)",     "Actions under GRAP Stage III"),
-    (401, 500, "Stage IV (Severe+)",     "Emergency actions under GRAP Stage IV"),
+    (0,    200,  "None",                  "No GRAP action required"),
+    (201,  300,  "Stage I (Poor)",        "Actions under GRAP Stage I"),
+    (301,  400,  "Stage II (Very Poor)",  "Actions under GRAP Stage II"),
+    (401,  450,  "Stage III (Severe)",    "Actions under GRAP Stage III"),
+    # 9999 rather than 500: AQI is uncapped above 450 and the dashboard renders this
+    # sentinel as "451+". A 500 upper bound silently returned "None" for AQI 501.
+    (451,  9999, "Stage IV (Severe+)",    "Emergency actions under GRAP Stage IV"),
 ]
 
 # NASA FIRMS

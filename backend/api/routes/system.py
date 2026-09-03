@@ -23,6 +23,8 @@ def system_status() -> SystemStatus:
             engine_loaded=False,
             engine_error=st.get("error"),
             pipeline="offline",
+            mode=st.get("mode"),
+            degraded=True,
             active_stations=0,
             known_stations=0,
             decisions_processed=0,
@@ -44,13 +46,16 @@ def system_status() -> SystemStatus:
         states = engine.latest_state()
         diagnostics = engine.feed_diagnostics()
         for name in engine.stations():
-            st = states.get(name)
+            # Named `station_state`, not `st`: `st` above holds the ENGINE status and
+            # this loop used to shadow it, so every field read from `st` after this
+            # point was silently reading a station payload instead.
+            station_state = states.get(name)
             has_data = bool(
-                isinstance(st, dict)
-                and st.get("aqi") is not None
-                and st.get("status") != "DATA_INVALID"
+                isinstance(station_state, dict)
+                and station_state.get("aqi") is not None
+                and station_state.get("status") != "DATA_INVALID"
             )
-            age = st.get("stale_seconds") if has_data else None
+            age = station_state.get("stale_seconds") if has_data else None
             counts[classify(
                 age,
                 cfg.FRESH_DATA_THRESHOLD_SECONDS,
@@ -70,6 +75,8 @@ def system_status() -> SystemStatus:
         engine_loaded=True,
         engine_error=None,
         pipeline="running",
+        mode=engine.status().get("mode"),
+        degraded=bool(engine.status().get("degraded")),
         active_stations=len(engine.active_states()),
         known_stations=len(engine.stations()),
         decisions_processed=int(engine.carbon_state().get("decision_count", 0)),

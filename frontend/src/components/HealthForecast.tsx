@@ -117,18 +117,17 @@ export default function HealthForecast({ health }: { health: HealthImpactRespons
         </div>
       )}
 
-      <div className="mt-6 grid gap-x-8 border-t border-aree-border pt-4 sm:grid-cols-2">
-        <KeyValue label="Impact radius" value={`${health.impact_radius_km} km`} />
-        <KeyValue
-          label="Est. population in radius"
-          value={health.est_population.toLocaleString()}
-        />
+      {/* The population row printed a configured constant (500,000) as if it were an
+          exposure estimate. AREE holds no census layer, so the claim is dropped and the
+          radius is stated as the assumption it is. */}
+      <div className="mt-6 border-t border-aree-border pt-4">
+        <KeyValue label="Assumed impact radius" value={`${health.impact_radius_km} km`} />
       </div>
 
       <div className="mt-3">
         <Note>
           Deterministic multipliers, no ML. Advisory only — does not affect GRAP
-          escalation logic. Population figure is a configured constant, not census data.
+          escalation logic. The scores are relative risk weightings, not people.
         </Note>
       </div>
     </Panel>

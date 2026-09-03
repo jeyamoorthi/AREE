@@ -227,6 +227,12 @@ body {
 
 .aree-main {
   flex: 1;
+  /* Column, so <main> can grow and push the footer to the bottom of the
+     viewport. Without this the children simply stack: a page with little
+     content leaves the footer floating mid-screen and a dead band of
+     background beneath it. */
+  display: flex;
+  flex-direction: column;
   margin-left: var(--aree-sidebar-width);
   min-width: 0;
   background-color: var(--aree-bg);
@@ -293,4 +299,22 @@ body {
 
 .leaflet-bar a:hover {
   background: var(--aree-surface-2) !important;
+}
+
+/* Permanent place labels on the spatial outlook map. Leaflet's default tooltip
+   is a white box with a border and an arrow, which at 77 stations becomes
+   visual noise — these are labels, not callouts. */
+.leaflet-tooltip.aree-map-label {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: #1a1a17;
+  font-size: 10px;
+  font-weight: 700;
+  text-shadow:
+    0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+}
+.leaflet-tooltip.aree-map-label::before {
+  display: none;
 }

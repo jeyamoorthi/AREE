@@ -44,7 +44,9 @@ from fastapi import APIRouter, HTTPException, Query
 
 from ...backfill import db, model_lgbm
 from ...forecast import pm25_forecast as fc
+from ...streaming import case_store as cs
 from ...streaming import predictive_engine as pe
+from . import intelligence as intel
 
 router = APIRouter(tags=["aree"])
 
@@ -214,6 +216,56 @@ def _plume(conn, as_of: datetime, grid: str) -> dict[str, Any]:
     }
 
 
+def compute(conn, as_of: Optional[datetime], *, lat: float = fc.ws.DEFAULT_LAT,
+            lon: float = fc.ws.DEFAULT_LON,
+            grid: str = model_lgbm.DEFAULT_GRID,
+            hours: int = fc.HORIZON) -> dict[str, Any]:
+    """
+    Forecast -> ventilation -> assessment -> case, for one moment.
+
+    WHY THIS IS A FUNCTION AND NOT INLINE IN THE ROUTE
+        Two callers need it and they must not diverge. The outlook renders it; the
+        case-decision endpoint RE-DERIVES it, so that an approval is recorded against
+        evidence the server computed rather than evidence a browser posted. Two
+        implementations of "what did AREE conclude at time T" would eventually
+        disagree, and the disagreement would live inside the audit trail.
+
+        Because the computation is deterministic in `as_of`, both callers get the same
+        answer, and so does anyone re-running it months later.
+    """
+    forecast = fc.forecast(conn, as_of=as_of, lat=lat, lon=lon,
+                           horizon=hours, grid=grid)
+    if not forecast.get("available"):
+        raise HTTPException(
+            status_code=424,
+            detail={"error": "forecast_unavailable",
+                    "detail": forecast.get("reason", "no forecast"),
+                    "hint": forecast.get("hint"),
+                    "as_of": str(forecast.get("as_of")),
+                    "mode": forecast.get("mode")})
+
+    resolved = forecast["as_of"]
+    observed = forecast["observed_now"]
+    ventilation = _ventilation_forecast(forecast["series"], resolved)
+    assessment = pe.assess(
+        {"station": "Delhi NCR composite", "pm25": observed["pm25"],
+         "aqi": None, "observed_at": resolved},
+        ventilation,
+        pm25_forecast=forecast)
+    case = pe.build_case(assessment)
+    if case is not None:
+        # Carried so the stored row records WHICH of the four states opened it.
+        case["risk_status"] = assessment["status"]
+    return {
+        "as_of": resolved,
+        "mode": forecast["mode"],
+        "forecast": forecast,
+        "ventilation": ventilation,
+        "assessment": assessment,
+        "case": case,
+    }
+
+
 @router.get("/aree/outlook",
             summary="The complete AREE outlook: forecast, cause, risk, decision")
 def outlook(at: Optional[str] = Query(
@@ -232,29 +284,78 @@ def outlook(at: Optional[str] = Query(
     as_of = _parse_at(at)
     conn = db.connect()
 
-    forecast = fc.forecast(conn, as_of=as_of, lat=lat, lon=lon,
-                           horizon=hours, grid=grid)
-    if not forecast.get("available"):
-        raise HTTPException(
-            status_code=424,
-            detail={"error": "forecast_unavailable",
-                    "detail": forecast.get("reason", "no forecast"),
-                    "hint": forecast.get("hint"),
-                    "as_of": str(forecast.get("as_of")),
-                    "mode": forecast.get("mode")})
-
-    resolved = forecast["as_of"]
+    core = compute(conn, as_of, lat=lat, lon=lon, grid=grid, hours=hours)
+    forecast = core["forecast"]
+    resolved = core["as_of"]
     series = forecast["series"]
     observed = forecast["observed_now"]
-
-    ventilation = _ventilation_forecast(series, resolved)
-    assessment = pe.assess(
-        {"station": "Delhi NCR composite", "pm25": observed["pm25"],
-         "aqi": None, "observed_at": resolved},
-        ventilation,
-        pm25_forecast=forecast)
-    case = pe.build_case(assessment)
+    ventilation = core["ventilation"]
+    assessment = core["assessment"]
+    case = core["case"]
     risk = assessment["forecast_risk"]
+
+    # The intelligence layer. Composed here, beside the engine, so the story
+    # the reader sees and the decision the system made cannot diverge.
+    atmosphere = _atmosphere(conn, series, resolved, grid)
+    threshold = atmosphere["ventilation"].get("threshold_m2_s")
+    collapse = (ventilation.get("collapse") or None)
+    # THE OBSERVATION CONTRACT.
+    #
+    # A number and a band are not enough for a screen that also shows a forecast: the
+    # reader has to know WHICH target this is and how many instruments stand behind it,
+    # because those differ by two orders of magnitude between a replay and a live hour.
+    #
+    #   replay 02 Nov 2024  ->  legacy composite, 1 monitor
+    #   live   03 Sep 2026  ->  network median, ~78 stations
+    #
+    # Both are published here from the stored record. `n_stations` is null when the
+    # store does not know it, and nothing downstream may substitute a current count.
+    _target = observed.get("target", "legacy")
+    observation = {
+        "value": observed["pm25"],
+        "unit": "ug/m3",
+        "band": _band(observed["pm25"]),
+        "observed_at": resolved,
+        "target": _target,
+        "target_label": ("Network median across reporting stations"
+                         if _target == "network"
+                         else "Legacy NCR composite (research series)"),
+        "n_stations": observed.get("n_stations"),
+        "source": observed["source"],
+    }
+    mech = intel.mechanism(series, threshold)
+    # CASE IDENTITY AND ITS PERSISTED STATE.
+    #
+    # The id is deterministic, so it can be published from a GET without writing
+    # anything: viewing an outlook must never mint a regulatory record. The row is
+    # created by the decision endpoint. What IS read here is whether a decision has
+    # already been taken, so a screen shows "approved by ..." instead of offering the
+    # same case for approval on every reload.
+    case_id = (case or {}).get("case_id")
+    persisted_status = cs.status_of(conn, case_id)
+
+    decision_block = {
+        "case_id": case_id,
+        # The stored status wins when there is one; otherwise the engine's proposal.
+        "case_status": persisted_status or (case or {}).get("status"),
+        "case_decided": persisted_status in (cs.APPROVED, cs.REJECTED),
+        "grap_stage_observed": assessment["grap_stage_observed"],
+        "grap_stage_description": assessment["grap_stage_description"],
+        "triggered": assessment["triggered"],
+        "trigger_rule": assessment["trigger_rule"],
+        "priority": assessment["priority"],
+        "priority_rationale": assessment["priority_rationale"],
+        "reasons": assessment["reasons"],
+        "intervention_window_hours": assessment["intervention_window_hours"],
+        "approval_state": (case or {}).get("status", "NO_CASE"),
+        "approval_required": (case or {}).get("approval_required", True),
+        "recommended_measures": (case or {}).get("recommended_measures", []),
+        "responsible_authority": (case or {}).get(
+            "responsible_authority", "CAQM / DPCC"),
+        "note": assessment["confidence_note"],
+    }
+    decision_block["recommendation"] = intel.recommendation(
+        assessment["status"], decision_block, risk)
 
     return {
         "as_of": resolved,
@@ -262,12 +363,15 @@ def outlook(at: Optional[str] = Query(
         "generated_at": forecast["generated_at"],
         "location": forecast["location"],
 
-        "observation": {
-            "value": observed["pm25"],
-            "unit": "ug/m3",
-            "source": observed["source"],
-            "band": _band(observed["pm25"]),
-        },
+        "observation": observation,
+
+        "narrative": intel.narrative(assessment["status"], risk, mech,
+                                     observation, collapse),
+        "mechanism": mech,
+        "timeline": intel.timeline(series, resolved, threshold, collapse),
+        # `resolved` and never datetime.now(): this panel showed the September 2026
+        # network inside a November 2024 replay until it was given the anchor.
+        "exposure": intel.exposure(conn, resolved),
 
         "forecast": {
             "horizon_hours": forecast["horizon_hours"],
@@ -276,33 +380,27 @@ def outlook(at: Optional[str] = Query(
             "series": series,
         },
 
-        "atmosphere": {**_atmosphere(conn, series, resolved, grid),
-                       "ventilation_forecast": ventilation},
+        "atmosphere": {
+            **atmosphere,
+            "ventilation_forecast": ventilation,
+            "ventilation_profile": intel.ventilation_profile(
+                series, threshold, resolved),
+        },
         "plume": _plume(conn, resolved, grid),
 
         "risk": {
             "status": assessment["status"],
             "status_detail": assessment["status_detail"],
+            # Label and tone are composed here so the dashboard renders a string it was
+            # handed instead of deriving a state from forecast_risk - which it did, in
+            # three branches, silently collapsing the four-state contract to three.
+            **{f"status_{k}": v
+               for k, v in intel.status_presentation(assessment["status"]).items()},
             "severe_episode_underway": assessment["severe_episode_underway"],
             **risk,
         },
 
-        "decision": {
-            "grap_stage_observed": assessment["grap_stage_observed"],
-            "grap_stage_description": assessment["grap_stage_description"],
-            "triggered": assessment["triggered"],
-            "trigger_rule": assessment["trigger_rule"],
-            "priority": assessment["priority"],
-            "priority_rationale": assessment["priority_rationale"],
-            "reasons": assessment["reasons"],
-            "intervention_window_hours": assessment["intervention_window_hours"],
-            "approval_state": (case or {}).get("status", "NO_CASE"),
-            "approval_required": (case or {}).get("approval_required", True),
-            "recommended_measures": (case or {}).get("recommended_measures", []),
-            "responsible_authority": (case or {}).get(
-                "responsible_authority", "CAQM / DPCC"),
-            "note": assessment["confidence_note"],
-        },
+        "decision": decision_block,
 
         "provenance": {
             **forecast["provenance"],

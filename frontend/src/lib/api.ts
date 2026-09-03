@@ -28,6 +28,8 @@ import type {
   OperatingPoint,
   ObservedComposite,
   OutlookResponse,
+  CaseRecord,
+  CasesResponse,
 } from "@/types";
 
 export const API_URL =
@@ -232,6 +234,38 @@ export const api = {
       at ? `/api/aree/outlook?at=${enc(at)}` : "/api/aree/outlook",
       { signal },
     ),
+
+  // --- Case management: the human-authority half of the decision chain ------
+  //
+  // The decision endpoint is given `as_of` rather than the evidence. The server
+  // recomputes the assessment from that moment and refuses if the case id it derives
+  // does not match the one being decided, so a decision cannot be attached to
+  // evidence the browser supplied.
+
+  cases: (status?: string, signal?: AbortSignal) =>
+    request<CasesResponse>(
+      status ? `/api/cases?status=${enc(status)}` : "/api/cases",
+      { signal },
+    ),
+
+  case: (caseId: string, signal?: AbortSignal) =>
+    request<CaseRecord>(`/api/cases/${enc(caseId)}`, { signal }),
+
+  decideCase: (
+    caseId: string,
+    body: {
+      decision: "approve" | "reject";
+      as_of: string;
+      actor?: string;
+      actor_role?: string;
+      reason?: string;
+    },
+  ) =>
+    request<CaseRecord>(`/api/cases/${enc(caseId)}/decision`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
 
   ventilationOperatingPoint: (mode?: string, signal?: AbortSignal) =>
     request<OperatingPoint>(

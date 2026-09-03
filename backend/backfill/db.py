@@ -156,6 +156,56 @@ CREATE TABLE IF NOT EXISTS ncr_target (
     source              TEXT
 );
 
+-- Regulatory cases, and the decisions taken on them.
+--
+-- WHY THESE EXIST
+--   The decision layer produced a case with status AWAITING_APPROVAL and then had
+--   nowhere to put it: no row, no transition, no approver, no record. "The system
+--   proposes, the authority disposes" was a sentence in a payload rather than a
+--   thing that had happened, and a regulatory decision that leaves no trace is the
+--   one part of this architecture a reviewer cannot be asked to take on faith.
+--
+-- WHY case_id IS DETERMINISTIC AND NOT A UUID
+--   It is derived from (forecast_as_of, jurisdiction, trigger_rule). Replaying the
+--   same moment therefore addresses the SAME case rather than minting a new one on
+--   every page load, which is what makes replay safe to demonstrate repeatedly.
+--
+-- WHY THE SNAPSHOT IS STORED
+--   The assessment is reproducible from forecast_as_of alone, so the snapshot is
+--   strictly a convenience - but storing it means the audit record can be read
+--   without re-running a model, and it can be compared against a fresh recompute to
+--   prove the two agree.
+CREATE TABLE IF NOT EXISTS cases (
+    case_id                 TEXT PRIMARY KEY,
+    created_at              TEXT NOT NULL,
+    status                  TEXT NOT NULL,   -- AWAITING_APPROVAL | APPROVED | REJECTED
+    risk_status             TEXT,            -- the four-state enum at case time
+    priority                TEXT,
+    trigger                 TEXT,
+    jurisdiction            TEXT,
+    mode                    TEXT,            -- live | replay
+    forecast_as_of          TEXT NOT NULL,
+    crossing_at             TEXT,
+    recommendation_snapshot TEXT NOT NULL    -- JSON: the evidence as it stood
+);
+
+-- Append-only. Rows are never updated or deleted: the history of a decision is the
+-- decision. `actor` is self-declared in this build - there is no authentication - and
+-- actor_verified records that plainly rather than implying an identity was checked.
+CREATE TABLE IF NOT EXISTS case_actions (
+    action_id      INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id        TEXT NOT NULL,
+    action         TEXT NOT NULL,            -- OPENED | APPROVED | REJECTED
+    actor          TEXT,
+    actor_role     TEXT,
+    actor_verified INTEGER NOT NULL DEFAULT 0,
+    timestamp      TEXT NOT NULL,
+    reason         TEXT,
+    FOREIGN KEY (case_id) REFERENCES cases (case_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_case_actions ON case_actions (case_id, action_id);
+CREATE INDEX IF NOT EXISTS ix_cases_status ON cases (status, created_at);
 CREATE INDEX IF NOT EXISTS ix_readings_time ON station_readings (timestamp);
 CREATE INDEX IF NOT EXISTS ix_met_time      ON met_hourly (timestamp);
 CREATE INDEX IF NOT EXISTS ix_fire_time     ON fire_events (timestamp);
