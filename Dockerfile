@@ -23,9 +23,24 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# curl is kept only because the container healthcheck uses it.
+# SYSTEM PACKAGES — both are load-bearing, neither is a convenience.
+#
+#   libgomp1  LightGBM links against the OpenMP runtime and dlopens
+#             libgomp.so.1 at import. python:3.13-slim does not ship it, so
+#             WITHOUT THIS every forecast fails at request time with
+#             "OSError: libgomp.so.1: cannot open shared object file" while
+#             /api/health still answers 200 — an image that looks healthy and
+#             cannot forecast.
+#
+#             The previous image got it by accident: build-essential pulled it
+#             in transitively. Dropping build-essential (it was there for the
+#             OCR/torch stack that no longer exists) removed it, and the failure
+#             only surfaced when the container was actually asked for a
+#             forecast. It is declared explicitly now.
+#
+#   curl      the HEALTHCHECK below uses it.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends libgomp1 curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -41,6 +56,7 @@ RUN pip install --upgrade pip \
        fi
 
 COPY . .
+RUN chmod +x /app/docker-entrypoint.sh
 
 # THE STORE.
 #
@@ -54,10 +70,26 @@ COPY . .
 # into the image would make it slow to ship and stale the moment it was built.
 RUN mkdir -p /app/data
 
-# Run as a non-root user. The image writes to /app/data (the store) and
-# /app/backend/policies (uploads), so those are the only paths it needs.
-RUN useradd --create-home --uid 10001 aree \
-    && chown -R aree:aree /app/data /app/backend/policies
+# Run as a non-root user.
+#
+# EVERY path the process writes to has to be listed here, and the list is longer
+# than it looks:
+#
+#   /app/data              the store
+#   /app/backend/policies  policy uploads
+#   /app/.tmp              capture.py runs `_TMP.mkdir()` AT IMPORT TIME and then
+#                          points tempfile at it. Miss this one and the hourly
+#                          capture thread dies with
+#                          "PermissionError: [Errno 13] ... '/app/.tmp'" while
+#                          /api/health keeps answering 200 — so the container
+#                          looks healthy while live forecasting silently never
+#                          accumulates the observations it needs.
+#
+#                          Found by running the image and reading its log, not by
+#                          reading the Dockerfile.
+RUN mkdir -p /app/.tmp \
+    && useradd --create-home --uid 10001 aree \
+    && chown -R aree:aree /app/data /app/.tmp /app/backend/policies
 USER aree
 
 ENV AREE_ENGINE_MODE=direct \

@@ -1,0 +1,74 @@
+# AREE on Render — backend only.
+#
+# The frontend goes to Vercel (see DEPLOYMENT.md). It can also run here as a
+# second service, but Vercel is where Next.js is cheapest and fastest.
+#
+# WHY THE BACKEND CANNOT BE SERVERLESS
+#   Three things rule it out, and none are preferences:
+#     1. SQLite + WAL needs a real, persistent filesystem.
+#     2. The hourly capture runs as an in-process thread and must keep running
+#        between requests, or the live forecast loses the observation continuity
+#        its lag set requires.
+#     3. Two 2.3 MB LightGBM boosters are read from disk at request time.
+#   Render's Web Service with a persistent disk satisfies all three.
+
+services:
+  - type: web
+    name: aree-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore          # closest to Delhi NCR of Render's regions
+    plan: starter              # a persistent disk requires a paid instance type
+    healthCheckPath: /api/health
+
+    # THE STORE.
+    #
+    # Mounted at /app/data, which AREE_DB_PATH points into. The entrypoint seeds
+    # it on first boot from the committed 1 MB fixture, so replay works
+    # immediately; live fills in as capture accumulates.
+    #
+    # WITHOUT A DISK the store is lost on every deploy and restart, and the live
+    # forecast can never accumulate the ~24 h of observations it needs.
+    disk:
+      name: aree-store
+      mountPath: /app/data
+      sizeGB: 2
+
+    envVars:
+      - key: AREE_ENGINE_MODE
+        value: direct
+      - key: AREE_DB_PATH
+        value: /app/data/aree.db
+
+      # Signing key for access tokens. generateValue makes Render create a
+      # strong random value once and keep it across deploys — which is what
+      # stops every restart invalidating live sessions.
+      - key: AREE_JWT_SECRET
+        generateValue: true
+
+      # Operators: user:role:pbkdf2hash;user:role:pbkdf2hash
+      # sync:false means "prompt me in the dashboard, do not store in git".
+      # Generate a hash with:
+      #   python -c "from backend.api.auth import hash_password; print(hash_password('...'))"
+      # LEAVING THIS UNSET IS NOT A CONFIGURATION — it produces demo operators
+      # with random passwords that change on every restart, and /api/auth/config
+      # will report mode "demo-credentials" for anyone to see.
+      - key: AREE_OPERATORS
+        sync: false
+
+      # Upstream feed keys. All optional: each feed degrades and reports itself
+      # rather than failing the service.
+      - key: DATA_GOV_API_KEY
+        sync: false
+      - key: OPENAQ_API_KEY
+        sync: false
+      - key: WAQI_TOKEN
+        sync: false
+      - key: FIRMS_API_KEY
+        sync: false
+
+      # Optional narrative explainer. Absent means llm_status reports
+      # ready:false; nothing in the decision chain depends on it.
+      - key: GEMINI_API_KEY
+        sync: false

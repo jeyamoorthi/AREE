@@ -1,39 +1,72 @@
-# AREE — backend (Pathway engine + FastAPI) and frontend (Next.js).
+# AREE — backend (FastAPI, direct engine) and frontend (Next.js).
 #
-# The backend runs in Linux where Pathway's wheels exist. Start with:
-#   docker compose up --build
+#   docker compose up --build      backend :8000/docs · frontend :3000
 #
-# Secrets come from the root .env (WAQI_TOKEN, FIRMS_API_KEY, GEMINI_API_KEY).
-# They are never passed to the frontend image.
+# WHAT CHANGED FROM THE PREVIOUS VERSION
+#   The frontend was built with `NEXT_PUBLIC_API_URL: http://localhost:8000`.
+#   That is compiled into the client bundle, so every visitor's browser fetched
+#   THEIR OWN localhost — working only for someone browsing on the Docker host.
+#   The frontend is now same-origin and reaches the API through the Next rewrite,
+#   which resolves AREE_API_ORIGIN at run time inside the container network.
+#
+#   The backend also gained a persistent volume: SQLite needs a real filesystem,
+#   and without one every restart discarded the observations the live forecast
+#   depends on.
 
 services:
   backend:
     build:
       context: .
       dockerfile: Dockerfile
+      # args:
+      #   INSTALL_STREAMING: "1"   # the Pathway stack. UNVERIFIED pins.
     ports:
       - "8000:8000"
     environment:
       PORT: "8000"
+      AREE_ENGINE_MODE: direct
+      AREE_DB_PATH: /app/data/aree.db
+      # SECRETS — set these in .env, never here.
+      #   AREE_JWT_SECRET   a long random string. Unset means a random key per
+      #                     process, so tokens die on restart.
+      #   AREE_OPERATORS    user:role:pbkdf2hash;user:role:pbkdf2hash
+      #                     Unset means demo operators with random passwords,
+      #                     printed to the log and valid for that process only.
+      AREE_JWT_SECRET: ${AREE_JWT_SECRET:-}
+      AREE_OPERATORS: ${AREE_OPERATORS:-}
     env_file:
       - .env
     volumes:
-      # Persist uploaded policy documents across container restarts.
+      # The store. Seeded on first run from the committed 1 MB fixture so replay
+      # works immediately; live builds up as the hourly capture runs.
+      - aree-data:/app/data
+      # Uploaded policy documents, so they survive a restart.
       - ./backend/policies:/app/backend/policies
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 120s
+      start_period: 45s
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+      # NO NEXT_PUBLIC_API_URL. The browser talks to the frontend's own origin;
+      # the Next server forwards /api and /ws to the backend below.
     ports:
       - "3000:3000"
+    environment:
+      # Resolved inside the compose network at run time, not baked into the
+      # bundle. This is the whole difference between a demo that works for
+      # everyone and one that works only on the host machine.
+      AREE_API_ORIGIN: http://backend:8000
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  aree-data:

@@ -1,0 +1,15 @@
+# Shell scripts MUST keep LF endings.
+#
+# This repository is developed on Windows with core.autocrlf=true, which rewrites
+# checkouts to CRLF. A shell script with CRLF has a shebang of "#!/bin/sh\r", and
+# Linux then looks for an interpreter literally named "/bin/sh\r", which does not
+# exist — the container fails to start with an exec error that says nothing about
+# line endings.
+#
+# The entrypoint is the only thing standing between a deploy and a running
+# service, so it is pinned explicitly rather than left to client configuration.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
