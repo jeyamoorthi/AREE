@@ -1,32 +1,76 @@
-# --- API layer (Next.js frontend talks to this) ---
-fastapi>=0.115
-uvicorn[standard]>=0.30
-python-multipart>=0.0.9
-websockets>=12.0
+# AREE — RUNTIME dependencies for the deployed application (direct mode).
+#
+# This file is the answer to one question: what must be installed for a fresh
+# environment to serve the API, produce a forecast, record a case decision and
+# generate a report? Nothing else belongs here.
+#
+# WHAT THIS FILE USED TO SAY, AND WHY IT WAS REPLACED
+#   It declared pathway, sentence-transformers, unstructured, docling, tiktoken,
+#   pdf2image, pillow, codecarbon and python-docx, and the Dockerfile added torch
+#   on top. NONE of those are installed in the environment where the application
+#   actually runs and passes its tests. It also pinned numpy==1.26.4 against an
+#   installed 2.5.2, reportlab==4.2.2 against 5.0.1, and google-generativeai
+#   ==0.3.2 against 0.8.6.
+#
+#   So the file did not describe this system. It described a different, heavier
+#   system that was never realised — and anyone building from it got several GB
+#   of machinery the request path never touches, plus three version conflicts.
+#
+# HOW THESE VERSIONS WERE CHOSEN
+#   Pinned from the working environment, not selected by judgement. Each is the
+#   version this application is known to run and pass GRAP, contract and temporal
+#   tests against.
+#
+# Optional extras live beside this file and are deliberately NOT included:
+#   requirements-llm.txt        Gemini narrative text        (degrades gracefully)
+#   requirements-streaming.txt  the Pathway engine           (UNVERIFIED)
+#   requirements-research.txt   backfill / offline analysis  (partly UNVERIFIED)
+#   requirements-dev.txt        test and lint tooling
 
-# Pathway core. The [xpack-llm-docs] extra is deliberately NOT used: it pulls
-# docling, paddleocr[doc-parser] and unstructured[all-docs] (several GB of OCR /
-# document-parsing machinery) that this app never touches -- policy files are
-# ingested with pw.io.fs.read(format="plaintext"), no parser is instantiated.
-# The four pins below are the only pieces of that stack the code path really
-# needs: pathway.xpacks.llm.parsers hard-imports pdf2image / PIL / unstructured
-# at module level (and document_store imports parsers), while TokenCountSplitter
-# needs tiktoken. Constraints mirror pathway's own, so resolution stays clean.
-pathway==0.29.1
-unstructured~=0.18.1
-pdf2image
-pillow
-tiktoken>=0.5
-docling
+# --- API layer -------------------------------------------------------------
+# uvicorn[standard] is what supplies the websockets implementation behind the
+# /ws endpoints, plus httptools and watchfiles. The bare package would leave the
+# WebSocket routes unserved, so the extra is load-bearing rather than cosmetic.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
 
-# Policy document parsers. The RAG engine imports these directly to extract
-# text per format (.pdf / .docx) instead of decoding every file as UTF-8.
-pypdf>=4.0
-python-docx>=1.1
+# The policy upload is a multipart form. FastAPI raises at request time, not at
+# import time, if this is absent — so its absence would surface as a broken
+# endpoint in production rather than as a failed start.
+python-multipart==0.0.32
 
-sentence-transformers==2.6.1
-numpy==1.26.4
-google-generativeai==0.3.2
-python-dotenv==1.0.1
-codecarbon==2.3.5
-reportlab==4.2.2
+# Imported directly by the response models rather than only reached through
+# FastAPI, so it is declared rather than left transitive.
+pydantic==2.13.4
+
+# --- forecasting -----------------------------------------------------------
+# scipy is intentionally left transitive: lightgbm requires it, and no AREE
+# module imports it. Declaring it would assert a direct dependency that does not
+# exist.
+lightgbm==4.7.0
+numpy==2.5.2
+
+# --- upstream data feeds ---------------------------------------------------
+# urllib3 is declared even though requests already brings it, because
+# backend/ingestion imports it directly (for retry configuration). A module that
+# imports a package depends on it, regardless of who else installs it.
+requests==2.34.2
+urllib3==2.7.0
+
+# --- configuration ---------------------------------------------------------
+# backend/config.py imports this at module level, so it is required for the API
+# to import at all — not merely for .env files to be honoured.
+python-dotenv==1.2.3
+
+# --- the authority boundary ------------------------------------------------
+# Used by backend/api/auth.py to sign and verify access tokens. A vetted library
+# rather than fifty lines of hmac, because the parts that are easy to get wrong
+# are algorithm confusion (alg:none, HS/RS substitution), constant-time
+# comparison and the exp/nbf/aud/iss checks - not the signature itself.
+PyJWT==2.13.0
+
+# --- escalation report -----------------------------------------------------
+# backend/report_generator.py imports reportlab at module level and
+# engine.generate_report() imports it WITHOUT a guard, so the PDF endpoint is a
+# hard runtime feature, not an optional one.
+reportlab==5.0.1

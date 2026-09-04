@@ -41,9 +41,12 @@ def _start_engine_background() -> None:
             if st.get("mode") == "streaming":
                 log.info("AREE engine loaded. Pathway streaming pipeline is running.")
             else:
-                log.info("AREE engine loaded in DIRECT mode: interval sampling, no "
-                         "event-time windowing, no policy retrieval. Reason: %s",
-                         st.get("pathway_error") or "direct mode selected")
+                log.info("AREE engine loaded in DIRECT mode (production path): "
+                         "interval sampling, no event-time windowing, no policy "
+                         "retrieval, no FIRMS poll. Selected: %s",
+                         st.get("engine_selection")
+                         or ("fell back after streaming failed: "
+                             + str(st.get("pathway_error"))))
         else:
             st = engine.status()
             log.error("AREE engine failed to load: %s: %s",

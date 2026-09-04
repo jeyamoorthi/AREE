@@ -1,0 +1,166 @@
+name: CI
+
+# WHAT THIS PIPELINE IS FOR
+#
+# Not "pytest went green". The thing worth protecting is that a CLEAN
+# environment, given only the documented runtime dependencies, can actually
+# execute the application:
+#
+#   install -> import -> start backend -> real HTTP -> forecast -> outlook
+#           -> case/auth -> PDF
+#
+# That chain is what the Phase 2 audit found broken, and it is what these jobs
+# assert. Every HTTP assertion crosses a TCP socket, because a decorator once
+# landed on the wrong function and left the primary endpoint answering 422 while
+# every direct-call test stayed green.
+#
+# NO NETWORK IS REQUIRED. The tests run in replay against a committed 1 MB store
+# (backend/tests/fixtures/aree_test.db) which reproduces the 3,274-field golden
+# baseline exactly. Tests that genuinely need live upstream feeds are marked
+# `network` and are excluded here — deliberately, and named in the summary rather
+# than silently skipped.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend — clean runtime install and the full chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Pinned rather than "3.x": the runtime set is verified against this,
+          # and a silent minor bump is exactly the sort of drift this repository
+          # has already been bitten by.
+          python-version: "3.13"
+
+      # A clean virtualenv, installed from the RUNTIME file alone plus the test
+      # runner. Nothing else. If the application needs a package that
+      # backend/requirements.txt does not declare, this job is where that is
+      # supposed to hurt.
+      - name: Install documented runtime dependencies only
+        run: |
+          python -m venv .venv
+          . .venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+          echo "--- installed ---"
+          pip list --format=freeze
+
+      - name: Assert the optional stacks are ABSENT
+        # The runtime set must not drag in Pathway, torch, the OCR stack or the
+        # Gemini SDK. If one of them appears here, something has quietly moved
+        # from optional to mandatory.
+        run: |
+          . .venv/bin/activate
+          python - <<'PY'
+          import importlib.util, sys
+          must_be_absent = ["pathway", "torch", "sentence_transformers",
+                            "unstructured", "docling", "google.generativeai",
+                            "codecarbon", "pyarrow"]
+          present = [m for m in must_be_absent if importlib.util.find_spec(m.split(".")[0])]
+          if present:
+              sys.exit(f"optional packages leaked into the runtime set: {present}")
+          print(f"{len(must_be_absent)}/{len(must_be_absent)} optional packages absent, as intended")
+          PY
+
+      - name: The test store is present and is what the baseline expects
+        run: |
+          . .venv/bin/activate
+          test -f backend/tests/fixtures/aree_test.db || {
+            echo "missing backend/tests/fixtures/aree_test.db"
+            echo "rebuild with: python -m backend.tests.build_fixture_db"
+            exit 1
+          }
+          ls -l backend/tests/fixtures/aree_test.db backend/tests/golden/
+
+      - name: Models are present and named for the leakage guard
+        # load_for() parses __YYYYMMDD out of the filename and offers only models
+        # with train_end <= as_of. A rename is not cosmetic; it changes which
+        # model a replay is allowed to load.
+        run: |
+          . .venv/bin/activate
+          python - <<'PY'
+          import re, sys
+          from pathlib import Path
+          models = sorted(Path("backend/config/models").glob("*.txt"))
+          if not models:
+              sys.exit("no model artefacts in backend/config/models")
+          for path in models:
+              if not re.fullmatch(r"[a-z]+__\d{8}\.txt", path.name):
+                  sys.exit(f"{path.name} does not carry a __YYYYMMDD train_end; "
+                           f"the leakage guard reads that date")
+              print(f"  {path.name}  {path.stat().st_size:,} bytes")
+          PY
+
+      - name: Offline test suite — the full chain over real HTTP
+        run: |
+          . .venv/bin/activate
+          python -m pytest -m "not network" -v --tb=short
+
+      - name: Clean-environment runtime gate
+        # The same chain again, asserted end to end by the gate that Phase 2
+        # produced. Overlaps with pytest deliberately: this one is the artefact a
+        # reviewer can run by hand and read the output of.
+        run: |
+          . .venv/bin/activate
+          python -m backend.tests_runtime_gate
+
+      - name: Report what was NOT run
+        if: always()
+        run: |
+          . .venv/bin/activate
+          echo "Tests requiring live upstream feeds (excluded, not silently skipped):"
+          python -m pytest -m network --collect-only -q || true
+
+  frontend:
+    name: Frontend — typecheck and lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Lint
+        working-directory: frontend
+        # There are 3 known react-hooks errors predating this pipeline. They are
+        # not suppressed and not silently tolerated: the count is asserted, so a
+        # FOURTH fails the build and fixing one of the three also fails it, which
+        # forces the number here to be updated in the same commit.
+        run: |
+          set +e
+          npx eslint . 2>&1 | tee eslint.log
+          set -e
+          count=$(grep -cE "^\s+[0-9]+:[0-9]+\s+error" eslint.log || true)
+          echo "eslint errors: $count (expected 3 pre-existing)"
+          if [ "$count" -ne 3 ]; then
+            echo "::error::eslint error count changed (expected 3, got $count)."
+            echo "If this is an intentional fix, update the expected count in ci.yml."
+            exit 1
+          fi

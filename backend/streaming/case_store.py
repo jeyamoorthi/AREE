@@ -208,13 +208,22 @@ def ensure_open(conn: sqlite3.Connection, case: dict[str, Any],
 
 def decide(conn: sqlite3.Connection, case_id: str, decision: str,
            actor: str | None, actor_role: str | None,
-           reason: str | None) -> dict[str, Any]:
+           reason: str | None, *, actor_verified: bool = False) -> dict[str, Any]:
     """
     Record an authority's decision. Raises CaseConflict if one is already recorded.
 
     The caller supplies only who and why. What the decision was TAKEN ON is the
     snapshot already stored against the case, so a decision cannot be attached to
     evidence other than the evidence that opened it.
+
+    `actor_verified` is KEYWORD-ONLY and defaults to False.
+
+    Both of those are deliberate. Keyword-only means no caller can set it by
+    position while meaning something else, and defaulting to False means a caller
+    that has not thought about identity records an unverified action rather than
+    silently asserting a verified one. The only caller that passes True is the
+    decision route, and only after `auth.requires("case:decide")` has produced a
+    Principal from a signed token - never from anything in the request body.
     """
     case = get(conn, case_id)
     if case is None:
@@ -235,9 +244,10 @@ def decide(conn: sqlite3.Connection, case_id: str, decision: str,
                 action,
                 (actor or DEMO_ACTOR).strip()[:120] or DEMO_ACTOR,
                 (actor_role or DEMO_ROLE).strip()[:120] or DEMO_ROLE,
-                # Always 0. There is no authentication in this build and the record
-                # says so rather than implying the name was checked.
-                0,
+                # 1 only when the caller established this identity from a verified
+                # token. A self-declared name still writes 0, so the trail keeps
+                # distinguishing "the server checked this" from "someone typed it".
+                1 if actor_verified else 0,
                 now,
                 (reason or "").strip()[:500] or None,
             ),

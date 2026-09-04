@@ -16,16 +16,23 @@
      derives differs from the one being decided. So an approval is recorded against
      what the engine concluded, never against what this screen happened to display.
 
-   NO PRETEND AUTHENTICATION
-     There is none in the build, and the panel says so rather than dressing a demo
-     name up as an identity. Every stored action carries actor_verified = false and
-     the recorded decision repeats it.
+   AUTHENTICATION IS REAL, AND THE PANEL DOES NOT OVERSTATE IT
+     An officer signs in; the server issues a short-lived signed token; the acting
+     identity written into the audit trail is the token's subject. This screen
+     cannot name the actor — the field for typing one is gone, because it had no
+     effect worth offering. Actions recorded this way carry actor_verified = true.
+
+     What the panel still says out loud is WHICH register the identity came from.
+     An instance running on demo operators generated at startup has genuinely
+     verified identity against a register that is not real, and those are two
+     different claims. GET /api/auth/config reports the difference and the footer
+     repeats it.
    ========================================================================== */
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { CheckCircle2, ChevronRight, Lock, ShieldCheck, XCircle } from "lucide-react";
 
-import { api, errorMessage } from "@/lib/api";
+import { api, auth, errorMessage } from "@/lib/api";
 import type { CaseRecord, OutlookDecision, OutlookRisk } from "@/types";
 
 const C = {
@@ -74,7 +81,16 @@ export default function CaseAuthorisation({
   onDecided: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [actor, setActor] = useState("");
+  const session = useSyncExternalStore(
+    auth.subscribe,
+    auth.session,
+    auth.serverSession,
+  );
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [signingIn, setSigningIn] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [demoRegister, setDemoRegister] = useState(false);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState<"approve" | "reject" | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,6 +119,40 @@ export default function CaseAuthorisation({
     };
   }, [caseId, decision.case_decided]);
 
+  // Restore an existing tab session, and ask the server which operator register
+  // it is running. Both are read-only and safe to do on every mount.
+  useEffect(() => {
+    let cancelled = false;
+    auth
+      .config()
+      .then((c) => {
+        if (!cancelled) setDemoRegister(c.mode === "demo-credentials");
+      })
+      .catch(() => {
+        /* Not knowing is not worth blocking the panel over. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function signIn() {
+    setSigningIn(true);
+    setAuthError(null);
+    try {
+      await auth.signIn(username.trim(), password);
+      setPassword("");
+    } catch (err) {
+      setAuthError(errorMessage(err));
+    } finally {
+      setSigningIn(false);
+    }
+  }
+
+  function signOut() {
+    auth.signOut();
+  }
+
   if (!caseId || !decision.triggered) return null;
 
   const decided =
@@ -119,7 +169,6 @@ export default function CaseAuthorisation({
       const result = await api.decideCase(caseId, {
         decision: kind,
         as_of: asOf,
-        actor: actor.trim() || undefined,
         reason: reason.trim() || undefined,
       });
       setRecord(result);
@@ -176,7 +225,7 @@ export default function CaseAuthorisation({
         <p className="mt-2 text-[10.5px]" style={{ color: C.dim }}>
           Recorded in the audit trail · case {caseId} · decision is final
           {act && !act.actor_verified
-            ? " · identity self-declared, not authenticated"
+            ? " · identity self-declared, recorded unverified"
             : ""}
         </p>
 
@@ -267,19 +316,83 @@ export default function CaseAuthorisation({
             ))}
           </dl>
 
-          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
-            <label className="block">
-              <span className="text-[10px] font-bold uppercase" style={{ color: C.muted }}>
-                Officer
+          {/* IDENTITY. Not an input — a state. Either the server has verified an
+              officer, or it has not, and no field on this screen changes which. */}
+          {session ? (
+            <div
+              className="mt-3 flex flex-wrap items-center gap-2 rounded-md border px-3 py-2"
+              style={{ background: C.greenBg, borderColor: C.green }}
+            >
+              <ShieldCheck className="h-4 w-4" style={{ color: C.greenInk }} />
+              <span className="text-[12px] font-bold" style={{ color: C.greenInk }}>
+                {session.subject}
               </span>
-              <input
-                value={actor}
-                onChange={(e) => setActor(e.target.value)}
-                placeholder="Demo Authority"
-                className="mt-1 w-full rounded border px-2 py-1.5 text-[12px]"
-                style={{ borderColor: C.line, color: C.ink }}
-              />
-            </label>
+              <span className="text-[11px]" style={{ color: C.body }}>
+                signed in as {session.role}
+              </span>
+              <button
+                type="button"
+                onClick={signOut}
+                className="ml-auto text-[11px] font-semibold underline"
+                style={{ color: C.muted }}
+              >
+                Sign out
+              </button>
+            </div>
+          ) : (
+            <div
+              className="mt-3 rounded-md border p-3"
+              style={{ background: C.wash, borderColor: C.line }}
+            >
+              <p className="text-[11.5px] font-semibold" style={{ color: C.ink }}>
+                Sign in to record a decision
+              </p>
+              <p className="mt-0.5 text-[11px]" style={{ color: C.muted }}>
+                The acting officer is taken from your session, not from this page.
+              </p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <input
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="Operator ID"
+                  autoComplete="username"
+                  className="rounded border px-2 py-1.5 text-[12px]"
+                  style={{ borderColor: C.line, color: C.ink }}
+                />
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void signIn();
+                  }}
+                  placeholder="Password"
+                  autoComplete="current-password"
+                  className="rounded border px-2 py-1.5 text-[12px]"
+                  style={{ borderColor: C.line, color: C.ink }}
+                />
+                <button
+                  type="button"
+                  disabled={signingIn || !username.trim() || !password}
+                  onClick={() => void signIn()}
+                  className="rounded-md px-4 py-1.5 text-[12px] font-bold text-white transition disabled:opacity-50"
+                  style={{ background: C.ink }}
+                >
+                  {signingIn ? "Signing in…" : "Sign in"}
+                </button>
+              </div>
+              {authError ? (
+                <p
+                  className="mt-1.5 text-[11.5px] font-semibold"
+                  style={{ color: C.redInk }}
+                >
+                  {authError}
+                </p>
+              ) : null}
+            </div>
+          )}
+
+          <div className="mt-2 grid gap-2">
             <label className="block">
               <span className="text-[10px] font-bold uppercase" style={{ color: C.muted }}>
                 Reason (recorded verbatim)
@@ -303,7 +416,7 @@ export default function CaseAuthorisation({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              disabled={busy !== null}
+              disabled={busy !== null || !session}
               onClick={() => void send("approve")}
               className="rounded-md px-4 py-2 text-[12px] font-bold text-white transition disabled:opacity-60"
               style={{ background: C.greenInk }}
@@ -312,7 +425,7 @@ export default function CaseAuthorisation({
             </button>
             <button
               type="button"
-              disabled={busy !== null}
+              disabled={busy !== null || !session}
               onClick={() => void send("reject")}
               className="rounded-md border px-4 py-2 text-[12px] font-bold transition disabled:opacity-60"
               style={{ borderColor: C.red, color: C.redInk, background: C.redBg }}
@@ -324,8 +437,11 @@ export default function CaseAuthorisation({
               style={{ color: C.dim }}
             >
               <Lock className="h-3 w-3" />
-              No authentication in this build — the name is self-declared and stored
-              unverified.
+              {!session
+                ? "Sign in to act. The server rejects an unauthenticated decision."
+                : demoRegister
+                  ? "Identity verified against DEMO operators generated at startup — real, but not a real register."
+                  : "Identity verified from your signed token and stored with the decision."}
             </span>
           </div>
         </>

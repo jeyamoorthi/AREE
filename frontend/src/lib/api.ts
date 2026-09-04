@@ -54,6 +54,148 @@ import type {
 const CONFIGURED_API = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "").trim();
 export const API_URL = CONFIGURED_API ? CONFIGURED_API : "";
 
+/* ── the authority session ────────────────────────────────────────────────
+ *
+ * The backend derives the acting officer from a signed token and ignores any
+ * actor a client sends, so this layer's only job is to hold that token and put
+ * it on the requests that write.
+ *
+ * WHY sessionStorage AND NOT localStorage
+ *   A regulatory approval should not be one reopened tab away. sessionStorage is
+ *   scoped to the tab and cleared when it closes, which matches how long an
+ *   officer's authority to act at this terminal should reasonably last. Tokens
+ *   are short-lived server-side regardless (15 minutes), so this is a
+ *   convenience boundary, not the security one — the server is.
+ *
+ * Nothing here can grant authority. A forged or edited token fails signature,
+ * audience and expiry checks server-side, and `actor_verified` is set by the
+ * backend from the verified principal; it is not a field this code can reach.
+ */
+
+const TOKEN_KEY = "aree.auth.token";
+const SESSION_KEY = "aree.auth.session";
+
+export interface AuthSession {
+  subject: string;
+  role: string;
+  capabilities: string[];
+  expiresAt: number;
+}
+
+function readStore(key: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(key);
+  } catch {
+    return null; // private mode, or storage disabled
+  }
+}
+
+function writeStore(key: string, value: string | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (value === null) window.sessionStorage.removeItem(key);
+    else window.sessionStorage.setItem(key, value);
+  } catch {
+    /* Storage being unavailable must not break signing in for this page load. */
+  }
+}
+
+/* The session is external state (sessionStorage), so components read it through
+ * useSyncExternalStore rather than copying it into useState inside an effect.
+ *
+ * That is not a style preference. Reading it during render would differ between
+ * the server (no storage, always null) and the client, producing a hydration
+ * mismatch; copying it in an effect means a setState on every mount, which is the
+ * cascading-render pattern the lint rules reject. useSyncExternalStore is the
+ * mechanism React provides for exactly this shape, and it also gives sign-in and
+ * sign-out a way to notify every mounted consumer.
+ *
+ * `getSnapshot` must be referentially stable while nothing has changed, or React
+ * re-renders forever — hence the cache keyed on the raw stored string.
+ */
+let cachedRaw: string | null = null;
+let cachedSession: AuthSession | null = null;
+const sessionListeners = new Set<() => void>();
+
+function notifySession(): void {
+  for (const listener of sessionListeners) listener();
+}
+
+export const auth = {
+  token: (): string | null => readStore(TOKEN_KEY),
+
+  subscribe(listener: () => void): () => void {
+    sessionListeners.add(listener);
+    return () => {
+      sessionListeners.delete(listener);
+    };
+  },
+
+  /** The signed-in officer, or null. An expired session reads as signed out. */
+  session(): AuthSession | null {
+    const raw = readStore(SESSION_KEY);
+    if (raw !== cachedRaw) {
+      cachedRaw = raw;
+      try {
+        cachedSession = raw ? (JSON.parse(raw) as AuthSession) : null;
+      } catch {
+        cachedSession = null;
+      }
+    }
+    // Expiry is checked without clearing storage: a snapshot getter must be free
+    // of side effects, or React may call it mid-render and mutate as it reads.
+    if (cachedSession && cachedSession.expiresAt <= Date.now()) return null;
+    return cachedSession;
+  },
+
+  /** Server-render snapshot: there is no storage there, so nobody is signed in. */
+  serverSession: (): AuthSession | null => null,
+
+  async signIn(username: string, password: string): Promise<AuthSession> {
+    const body = await request<{
+      access_token: string;
+      expires_in: number;
+      subject: string;
+      role: string;
+      capabilities: string[];
+    }>("/api/auth/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+
+    const session: AuthSession = {
+      subject: body.subject,
+      role: body.role,
+      capabilities: body.capabilities,
+      // A minute of headroom, so the UI stops offering an action slightly before
+      // the server would refuse it rather than slightly after.
+      expiresAt: Date.now() + (body.expires_in - 60) * 1000,
+    };
+    writeStore(TOKEN_KEY, body.access_token);
+    writeStore(SESSION_KEY, JSON.stringify(session));
+    notifySession();
+    return session;
+  },
+
+  signOut(): void {
+    writeStore(TOKEN_KEY, null);
+    writeStore(SESSION_KEY, null);
+    notifySession();
+  },
+
+  /** How this instance is configured — notably whether operators are demo ones. */
+  config: (signal?: AbortSignal) =>
+    request<{
+      mode: "demo-credentials" | "configured";
+      issuer: string;
+      token_ttl_seconds: number;
+      roles: Record<string, string[]>;
+      note: string;
+    }>("/api/auth/config", { signal }),
+};
+
 /** Error carrying the backend's structured JSON body. */
 export class ApiError extends Error {
   readonly status: number;
@@ -93,13 +235,25 @@ export class NetworkError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  opts?: { authenticated?: boolean },
+): Promise<T> {
   let response: Response;
+  // Opt-in rather than automatic. Attaching the token to every call would send an
+  // officer's credential to endpoints that neither need nor check it, and would
+  // make it harder to see, reading a route, whether it is a protected one.
+  const bearer = opts?.authenticated ? auth.token() : null;
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...init,
       cache: "no-store",
-      headers: { Accept: "application/json", ...(init?.headers ?? {}) },
+      headers: {
+        Accept: "application/json",
+        ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
+        ...(init?.headers ?? {}),
+      },
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
@@ -190,8 +344,10 @@ export const api = {
 
     let response: Response;
     try {
+      const bearer = auth.token();
       response = await fetch(`${API_URL}/api/policy/upload`, {
         method: "POST",
+        headers: bearer ? { Authorization: `Bearer ${bearer}` } : {},
         body: form,
       });
     } catch {
@@ -270,21 +426,26 @@ export const api = {
   case: (caseId: string, signal?: AbortSignal) =>
     request<CaseRecord>(`/api/cases/${enc(caseId)}`, { signal }),
 
+  /**
+   * Record a decision. Requires a signed-in officer holding `case:decide`.
+   *
+   * `actor` is deliberately NOT in this signature. The server takes the acting
+   * officer from the verified token and ignores anything a body claims, so
+   * offering the field here would imply an influence the client does not have.
+   */
   decideCase: (
     caseId: string,
-    body: {
-      decision: "approve" | "reject";
-      as_of: string;
-      actor?: string;
-      actor_role?: string;
-      reason?: string;
-    },
+    body: { decision: "approve" | "reject"; as_of: string; reason?: string },
   ) =>
-    request<CaseRecord>(`/api/cases/${enc(caseId)}/decision`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
+    request<CaseRecord>(
+      `/api/cases/${enc(caseId)}/decision`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      },
+      { authenticated: true },
+    ),
 
   ventilationOperatingPoint: (mode?: string, signal?: AbortSignal) =>
     request<OperatingPoint>(

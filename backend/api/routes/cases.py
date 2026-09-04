@@ -18,20 +18,27 @@ WHY GET STAYS PURE
     never as a side effect of viewing the outlook. Reloading a page must not mint
     regulatory records.
 
-NO AUTHENTICATION, SAID OUT LOUD
-    There is none in this build. `actor` is self-declared, every stored action carries
-    actor_verified = false, and the responses repeat it. The demo default is an
-    explicitly named demo authority.
+AUTHORITY
+    The decision endpoint requires a verified access token carrying the
+    `case:decide` capability. The actor written into the audit trail is the token
+    subject; `actor` in the request body is accepted for backwards compatibility
+    and ignored. Actions recorded this way carry actor_verified = true, and a
+    client has no path to that flag.
+
+    The two GETs are deliberately left open. They read; they mint nothing. Putting
+    a token in front of viewing the queue would not protect anything that writing
+    is not already protecting.
 """
 
 from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from ...backfill import db
+from .. import auth
 from ...streaming import case_store as cs
 
 router = APIRouter(tags=["cases"])
@@ -67,15 +74,44 @@ def _recompute(conn, as_of_raw: str) -> dict[str, Any]:
                     "detail": f"{as_of_raw!r} is not an ISO-8601 timestamp."})
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
+    # DELIBERATELY the uncached `compute`, not `compute_cached`.
+    #
+    # This is the call that decides what an approval is recorded against. A cached
+    # value is a claim that nothing relevant changed; an audit trail should not
+    # rest on that claim when the cost of being certain is one recomputation on a
+    # rare POST. Correctness over performance, and the trail is where it matters
+    # most. Do not "optimise" this to the cached path.
     return outlook.compute(conn, moment)
 
 
-def _demo_notice() -> dict[str, Any]:
+def _identity_notice(principal: auth.Principal | None = None) -> dict[str, Any]:
+    """
+    Who the server established the caller to be.
+
+    Reported on every decision response so a screen never has to infer whether the
+    name attached to a regulatory action was checked. When the instance is running
+    on generated demo credentials that is said here too - a verified identity from
+    a demo operator is genuinely verified, but the operator register is not real,
+    and those are different claims.
+    """
+    if principal is None:
+        return {
+            "authenticated": False,
+            "note": ("Unauthenticated. Any actor would be self-declared and the "
+                     "recorded action would carry actor_verified = false."),
+        }
     return {
-        "authenticated": False,
-        "note": ("This build has no authentication. The actor on a decision is "
-                 "self-declared and every recorded action carries "
-                 "actor_verified = false."),
+        "authenticated": True,
+        "subject": principal.subject,
+        "role": principal.role,
+        "capabilities": sorted(principal.capabilities),
+        "operator_register": "demo-credentials" if auth.is_demo_mode() else "configured",
+        "note": ("Identity was taken from a verified access token; the request "
+                 "body cannot influence it. This action is recorded with "
+                 "actor_verified = true."
+                 + (" NOTE: this instance is running on demo operators generated "
+                    "at startup, so the identity is verified but the register is "
+                    "not a real one." if auth.is_demo_mode() else "")),
     }
 
 
@@ -96,7 +132,7 @@ def list_cases(status: Optional[str] = Query(
         for row in conn.execute("SELECT status, COUNT(*) n FROM cases GROUP BY status"):
             counts[row["status"]] = row["n"]
         return {"total": sum(counts.values()), "counts": counts, "cases": cases,
-                "identity": _demo_notice()}
+                "identity": _identity_notice()}
     finally:
         conn.close()
 
@@ -113,7 +149,7 @@ def get_case(case_id: str) -> dict[str, Any]:
                         "detail": f"No case {case_id}.",
                         "hint": "A case exists once its decision point has been "
                                 "opened. Call GET /api/cases for the queue."})
-        case["identity"] = _demo_notice()
+        case["identity"] = _identity_notice()
         return case
     finally:
         conn.close()
@@ -121,7 +157,24 @@ def get_case(case_id: str) -> dict[str, Any]:
 
 @router.post("/cases/{case_id}/decision",
              summary="Record an authority's approval or rejection")
-def decide(case_id: str, body: DecisionRequest) -> dict[str, Any]:
+def decide(case_id: str, body: DecisionRequest,
+           principal: auth.Principal = Depends(auth.requires("case:decide"))
+           ) -> dict[str, Any]:
+    """
+    Record a decision against a case.
+
+    IDENTITY COMES FROM THE TOKEN, AND ONLY FROM THE TOKEN.
+        `principal` is produced by verifying a signed token before this function
+        runs. `body.actor` and `body.actor_role` are accepted by the schema for
+        backwards compatibility and are then IGNORED - what lands in the audit
+        trail is `principal.subject` and `principal.role`. A client cannot name
+        the actor, and it has no way to reach `actor_verified` at all.
+
+        The request body is therefore untrusted for identity while remaining
+        trusted for intent (approve/reject, the reason, and which moment to
+        recompute) - and even the moment is only used to RE-DERIVE evidence the
+        server computes for itself.
+    """
     decision = (body.decision or "").strip().lower()
     if decision not in cs.DECISIONS:
         raise HTTPException(
@@ -159,8 +212,9 @@ def decide(case_id: str, body: DecisionRequest) -> dict[str, Any]:
             cs.ensure_open(conn, case, core["mode"])
 
         try:
-            case = cs.decide(conn, case_id, decision, body.actor,
-                             body.actor_role, body.reason)
+            case = cs.decide(conn, case_id, decision,
+                             principal.subject, principal.role, body.reason,
+                             actor_verified=True)
         except KeyError:
             raise HTTPException(
                 status_code=404,
@@ -179,7 +233,7 @@ def decide(case_id: str, body: DecisionRequest) -> dict[str, Any]:
                         "hint": "A decision is final in this build. The history is "
                                 "at GET /api/cases/{case_id}."}) from exc
 
-        case["identity"] = _demo_notice()
+        case["identity"] = _identity_notice(principal)
         return case
     finally:
         conn.close()

@@ -33,9 +33,42 @@ const API_ORIGIN = process.env.AREE_API_ORIGIN ?? "http://127.0.0.1:8102";
  * Set AREE_DEV_ORIGIN to the tunnel host when sharing. This is a DEV-SERVER
  * allowance only and has no effect on a production build.
  */
+/**
+ * THE PATTERN SYNTAX IS GLOB, NOT A SUFFIX. This was wrong and it mattered.
+ *
+ *   ".trycloudflare.com"   ← what this used to say, and it NEVER matched
+ *   "**.trycloudflare.com" ← what actually works
+ *
+ * Next matches with `matchWildcardDomain` (server/app-render/csrf-protection),
+ * which splits the pattern on "." and compares segment by segment. A leading dot
+ * produces an empty first segment, and an empty segment is explicitly rejected —
+ * so every tunnel host fell through to blocked.
+ *
+ * WHY IT LOOKED FINE FOR SO LONG
+ *   Next only blocks when the request carries a cross-site Origin/Referer. curl
+ *   sends neither, so every command-line check of a chunk returned 200 while a
+ *   real browser got 403 on the same URL. The page then served its HTML, failed
+ *   to fetch its JS, and sat on "Loading outlook…" — with the API answering 200
+ *   throughout, which makes it look like a data problem instead of an asset one.
+ *
+ *   Verifying this needs `-H "Origin: https://<tunnel-host>"`. Without that
+ *   header the check cannot fail, which makes it worthless.
+ */
 const DEV_ORIGINS = [
   process.env.AREE_DEV_ORIGIN,
-  ".trycloudflare.com",
+  "**.trycloudflare.com",
+  // 127.0.0.1 IS NOT localhost, as far as this check is concerned.
+  //
+  // Next allows "localhost" and "**.localhost" out of the box, plus whatever
+  // hostname the dev server was started with. The loopback IP matches none of
+  // them, so opening http://127.0.0.1:3101 got its chunks blocked while
+  // http://localhost:3101 worked — same server, same port, different spelling.
+  //
+  // The symptom was the Ventilation page sitting on "Loading ventilation
+  // diagnostic…" forever, which reads as a data problem and is not one.
+  "127.0.0.1",
+  // For a LAN address (Next prints one as "Network:" at startup) set
+  // AREE_DEV_ORIGIN=192.168.x.x — a bare IP cannot be globbed usefully.
 ].filter((v): v is string => Boolean(v));
 
 const nextConfig: NextConfig = {

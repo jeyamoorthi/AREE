@@ -1,0 +1,27 @@
+# AREE — OPTIONAL: Gemini narrative generation.
+#
+# Install with:  pip install -r backend/requirements.txt -r backend/requirements-llm.txt
+#
+# WHY THIS IS OPTIONAL AND NOT RUNTIME
+#   The only entry point is engine.llm_status() -> rag.llm_engine, and that import
+#   sits inside a try/except that returns {"ready": False, "error": ...} on any
+#   failure. A missing package is therefore reported through the same channel as a
+#   bad API key or a retired model id: the system says the explainer is
+#   unavailable and keeps serving.
+#
+#   Nothing in the decision chain depends on it. The forecast, the ventilation
+#   assessment, the four-state status, the GRAP mapping and the case workflow are
+#   all computed without it. It writes prose about a conclusion that has already
+#   been reached — so making it mandatory would let a third-party LLM outage stop
+#   a regulatory system that does not need the LLM to function.
+#
+# VERSION
+#   Pinned from the working environment (0.8.6). The previous declaration said
+#   0.3.2, which was never what was installed.
+#
+#   Upstream note, carried forward from the Phase 0 audit and NOT resolved here:
+#   google-generativeai is deprecated in favour of the google-genai SDK. Migrating
+#   is a code change to rag/llm_engine.py and is out of scope for a dependency
+#   phase. Recorded so it is a known debt rather than a surprise.
+
+google-generativeai==0.8.6

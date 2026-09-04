@@ -3,6 +3,7 @@
 from . import (  # noqa: F401
     advisory,
     ai,
+    auth,
     aqi,
     carbon,
     cases,
@@ -20,6 +21,8 @@ from . import (  # noqa: F401
 )
 
 ROUTERS = [
+    # Token issuance first: everything else that writes depends on it.
+    auth.router,
     system.router,
     dashboard.router,
     stations.router,

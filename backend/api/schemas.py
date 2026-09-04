@@ -259,8 +259,11 @@ class RiskResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     station: str
-    eri_score: int = 0
-    eri_category: str = "LOW READINESS"
+    # Optional because direct mode does not compute ERI. A non-optional int with
+    # a 0 default does not merely permit a fabricated value, it REQUIRES one - the
+    # route had no way to say "not computed" while satisfying this schema.
+    eri_score: Optional[int] = None
+    eri_category: Optional[str] = None
     eri_factors: List[str] = Field(default_factory=list)
     confidence_score: Optional[int] = None
     transport_score: Optional[int] = None

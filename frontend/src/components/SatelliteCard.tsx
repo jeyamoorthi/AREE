@@ -6,6 +6,21 @@
  * Fire counts and alignment come from NASA FIRMS through the engine; wind from
  * the weather stream. The transport verdict is the engine's label, rendered
  * here with its supporting evidence rather than restated as a new conclusion.
+ *
+ * WHY EVERY FIRMS FIGURE IS GUARDED ON `measured`
+ *   The direct engine does not poll FIRMS, and it used to report that absence as
+ *   zeros. This card read `fire_count ?? 0`, coloured 0 GREEN, and drew a full
+ *   panel of confident-looking numbers: "0 fire detections", "0 aligned
+ *   detections", "0/100 transport score". Every one of those is a measurement
+ *   claim, and none had been measured.
+ *
+ *   The failure mode is not merely inaccuracy. Green means all-clear, so an
+ *   unpolled satellite feed rendered as positive evidence of safety on a screen
+ *   used to decide whether to escalate. Absence of a measurement now looks like
+ *   absence of a measurement.
+ *
+ *   Wind is unaffected and still shown: it comes from the weather stream, which
+ *   direct mode does read.
  */
 
 import { Flame, Satellite, Wind } from "lucide-react";
@@ -21,20 +36,30 @@ function compass(deg: number): string {
 }
 
 export default function SatelliteCard({ data }: { data: StationDetail }) {
-  const fireCount = data.fire_count ?? 0;
-  const transportScore = data.transport_score ?? 0;
+  const fireCount = data.fire_count ?? null;
+  const transportScore = data.transport_score ?? null;
   const windSpeed = data.wind_speed;
   const windDir = data.wind_direction;
   const label = transportLabel(data.transport_label);
 
-  const fireColor =
-    fireCount > 5 ? "var(--aree-red)" : fireCount > 0 ? "var(--aree-yellow)" : "var(--aree-green)";
-  const scoreColor =
-    transportScore > 50
+  // The single question this card must answer honestly: did anyone look?
+  const measured = fireCount !== null;
+
+  const fireColor = !measured
+    ? "var(--aree-dim)"
+    : fireCount > 5
       ? "var(--aree-red)"
-      : transportScore > 20
+      : fireCount > 0
         ? "var(--aree-yellow)"
         : "var(--aree-green)";
+  const scoreColor =
+    !measured || transportScore === null
+      ? "var(--aree-dim)"
+      : transportScore > 50
+        ? "var(--aree-red)"
+        : transportScore > 20
+          ? "var(--aree-yellow)"
+          : "var(--aree-green)";
 
   const firmsStatus = data.firms_status ?? "awaiting";
   const statusColor =
@@ -66,10 +91,14 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
         <div className="grid gap-6 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-5 shadow-[var(--aree-shadow-sm)] sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Fire detections"
-            value={fireCount}
+            value={measured ? fireCount : "Not computed"}
             color={fireColor}
-            size="lg"
-            sub={`${data.high_conf_fires ?? 0} high confidence`}
+            size={measured ? "lg" : "sm"}
+            sub={
+              measured
+                ? `${data.high_conf_fires ?? 0} high confidence`
+                : "FIRMS was not polled in this engine mode"
+            }
           />
           <Stat
             label="Wind"
@@ -93,20 +122,30 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
           />
           <Stat
             label="Transport"
-            value={label.text}
-            color={label.color}
+            value={measured ? label.text : "Not computed"}
+            color={measured ? label.color : "var(--aree-dim)"}
             mono={false}
             size="sm"
-            sub={`${data.aligned_fires ?? 0} aligned detections`}
+            sub={
+              measured
+                ? `${data.aligned_fires ?? 0} aligned detections`
+                : "No attribution is made either way"
+            }
           />
           <div className="min-w-0">
             <div className="mb-1.5 flex items-center justify-between">
               <span className="aree-eyebrow text-[10.5px]">Transport score</span>
               <span className="aree-num text-[13px] font-bold" style={{ color: scoreColor }}>
-                {transportScore}/100
+                {transportScore !== null ? `${transportScore}/100` : "—"}
               </span>
             </div>
-            <ProgressBar percent={transportScore} color={scoreColor} label="Transport score" />
+            {transportScore !== null ? (
+              <ProgressBar percent={transportScore} color={scoreColor} label="Transport score" />
+            ) : (
+              <p className="text-[11px] text-aree-dim">
+                Not computed. An empty bar would read as a low score.
+              </p>
+            )}
             {/* Shown only when the engine actually computes one. The direct engine
                 does not, and a null used to render as a red 0% bar — a fabricated
                 certainty in the opposite direction. */}

@@ -1356,24 +1356,131 @@ OPENAQ_API_KEY=…        openaq.org    (NCR composite)
 ```bash
 python -m venv venv
 venv\Scripts\activate                 # Linux/macOS: source venv/bin/activate
-pip install fastapi "uvicorn[standard]" requests python-dotenv python-multipart numpy reportlab
+pip install -r backend/requirements.txt
 python -m uvicorn backend.api.main:api --port 8077
 ```
 
 ```bash
 cd frontend
 npm install
-set NEXT_PUBLIC_API_URL=http://127.0.0.1:8077     # Linux/macOS: export …
 npx next dev --port 3077
 ```
 
-→ **http://localhost:3077**. The engine reports `mode: "direct"`; the RAG panel reports
-itself unavailable rather than faking output.
+→ **http://localhost:3077**. The frontend proxies `/api` to the backend through
+`next.config.ts`, so the API is same-origin and no `NEXT_PUBLIC_API_URL` is needed.
+Set `AREE_API_ORIGIN` only if the backend is not on `127.0.0.1:8102`.
+
+The engine reports `mode: "direct"`; the RAG panel reports itself unavailable rather
+than faking output, and the Gemini explainer reports `ready: false` — both are optional
+extras, and both say so instead of failing.
+
+### Authority (who may write)
+
+Two endpoints write, and both require a verified access token:
+
+| Endpoint | Capability | Held by |
+|---|---|---|
+| `POST /api/cases/{id}/decision` | `case:decide` | `authority` |
+| `POST /api/policy/upload` | `policy:write` | `admin` |
+
+No role holds both. An administrator curating the policy corpus should not also be
+able to approve escalations against it.
+
+The acting officer is taken from the token's subject. `actor` in a decision body is
+accepted for backwards compatibility and **ignored**, and `actor_verified` is set by
+the server — a client has no path to either.
+
+```bash
+# 1. hash a password (never store or transmit a plaintext one)
+python -c "from backend.api.auth import hash_password; print(hash_password('CHANGE-ME'))"
+
+# 2. configure operators:  username:role:hash;username:role:hash
+export AREE_OPERATORS='ncr.officer:authority:pbkdf2_sha256$...;corpus.admin:admin:pbkdf2_sha256$...'
+export AREE_JWT_SECRET='a-long-random-string'
+
+# 3. sign in
+curl -sX POST localhost:8077/api/auth/token \
+     -H 'Content-Type: application/json' \
+     -d '{"username":"ncr.officer","password":"CHANGE-ME"}'
+```
+
+**Leaving these unset is safe but not production.** `AREE_JWT_SECRET` unset yields a
+random per-process key, so tokens stop working across a restart. `AREE_OPERATORS`
+unset seeds two demo operators with **randomly generated** passwords printed once to
+the startup log — random rather than default, because a shipped default password is
+a backdoor that travels with the image. `GET /api/auth/config` reports
+`mode: "demo-credentials"` in that state, and the approval panel repeats it, so demo
+authority is never presented as real.
+
+This is a **local HS256 issuer, not an OIDC deployment**, and does not claim to be:
+there is no external identity provider in this project and nothing here has been
+verified against one. Claims are OIDC-shaped (`iss`/`aud`/`sub`/`exp`/`iat`/`jti`)
+and every route depends on a `Principal` from a `TokenVerifier`, so swapping in an
+RS256/JWKS verifier against a real IdP is a change to `backend/api/auth.py` alone.
+
+### Tests
+
+```bash
+pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+python -m pytest -m "not network"        # the offline gate — 61 tests, ~8 s
+python -m pytest                         # adds 4 tests needing live feeds
+python -m backend.tests_runtime_gate     # the clean-environment chain, readable output
+```
+
+**No network and no 148 MB store are required.** The suite runs in replay against
+a committed 1 MB fixture (`backend/tests/fixtures/aree_test.db`) that reproduces
+the golden baseline exactly. Tests needing live upstream feeds are marked
+`network` and excluded from the offline gate rather than silently skipped.
+
+| Suite | Protects |
+|---|---|
+| `test_golden.py` | the 3,274-field baseline across three replay moments, and its determinism |
+| `test_http_chain.py` | install → import → start → HTTP → forecast → outlook → case/auth → PDF |
+| `test_authority.py` | tokens, expiry, audience, separation of duties, identity injection |
+| `test_claims.py` | no manufactured values; computed capability still present |
+| `test_route_table.py` | each endpoint is served by the intended handler |
+| `test_legacy_suites.py` | GRAP table agreement, engine shape contract, temporal integrity |
+
+Every HTTP assertion crosses a real TCP socket — no `TestClient`, no ASGI
+shortcut. A decorator once landed on the wrong function and left the primary
+endpoint answering 422 while every direct-call test stayed green.
+
+The golden baseline is **protected**: regenerate it only deliberately, and review
+the diff. Rebuild the fixture store with
+`python -m backend.tests.build_fixture_db`.
+
+CI (`.github/workflows/ci.yml`) installs the runtime set into a clean virtualenv,
+asserts the optional stacks are absent, checks the model filenames still carry the
+`__YYYYMMDD` the leakage guard reads, then runs the suite and the runtime gate.
+
+### Dependency sets
+
+`backend/requirements.txt` is the **runtime** set and nothing else: what the deployed
+application needs to serve the API, forecast, record a case decision and generate a
+report. It is verified — a clean virtualenv with only this file installed passes the
+full flow and all three test suites.
+
+| File | Contains | Status |
+|---|---|---|
+| `requirements.txt` | runtime — FastAPI, uvicorn, LightGBM, NumPy, requests, dotenv, ReportLab | **verified** in a clean environment |
+| `requirements-llm.txt` | Gemini narrative text | optional; absence is reported, not fatal |
+| `requirements-research.txt` | backfill / offline analysis | pyarrow verified; the rest unpinned and unverified |
+| `requirements-streaming.txt` | the Pathway engine | **unverified** — not installed in any working environment |
+| `requirements-dev.txt` | test / lint tooling | currently empty, deliberately |
+
+Extras compose with the runtime set:
+
+```bash
+pip install -r backend/requirements.txt -r backend/requirements-llm.txt
+```
 
 ### Full streaming engine · Docker
 
+Pathway ships Linux/macOS wheels only, and its pins have **not** been resolved against
+the current environment — expect dependency-resolution work.
+
 ```bash
-pip install -r backend/requirements.txt           # Linux/macOS/WSL — Pathway wheels
+pip install -r backend/requirements.txt -r backend/requirements-streaming.txt
 python -m uvicorn backend.api.main:api --reload --port 8000
 ```
 

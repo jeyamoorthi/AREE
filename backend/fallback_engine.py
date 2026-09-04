@@ -16,8 +16,6 @@ WHAT IS REAL HERE AND WHAT IS NOT
     Real, reusing the same code the Pathway path uses:
       * GRAP stage + hysteresis        streaming/state_machine.py, unmodified
       * persistence tracking           same module, same thresholds
-      * causal attribution / transport streaming/risk_engine.py
-      * satellite fire intelligence    ingestion/firms_stream.py
       * short-term projection          same linear fit as app.py
       * ground observations            live CPCB/DPCC network via OpenAQ
 
@@ -27,6 +25,25 @@ WHAT IS REAL HERE AND WHAT IS NOT
       * Pathway's sliding-window aggregates. This mode samples on an interval
         instead of computing event-time windows, so late or out-of-order data
         is not reconciled. That difference is stated in the status payload.
+      * satellite fire intelligence - ingestion/firms_stream.py is imported by
+        app.py alone. This module does not poll NASA FIRMS.
+      * causal attribution / transport - streaming/risk_engine.py, likewise
+        imported only by app.py. Nothing here classifies a pollution cause.
+
+    THIS DOCSTRING USED TO CLAIM THE LAST TWO AS REAL, AND THEY NEVER WERE.
+        It listed risk_engine.py and firms_stream.py under "reusing the same code
+        the Pathway path uses". This module imports neither, and never did. The
+        station payload was filled with defaults instead - fire_count 0,
+        transport_score 0, pollution_cause "unclassified", firms_status
+        "not_polled" - and a zero is not a missing value. It is a measurement,
+        and the dashboard read it as one: with no FIRMS poll ever made, the
+        satellite card rendered GREEN, which says "we looked and there are no
+        fires" rather than "we did not look".
+
+        In a product about disaster escalation, an unmeasured quantity that
+        displays as an all-clear is the worst possible default. Those fields are
+        now None. firms_status stays, because "not_polled" is the true statement
+        and the UI keys its unavailable state off it.
 
     Every state carries mode="direct" so nothing downstream, and nobody
     reading the UI, can mistake this for the streaming engine.
@@ -262,25 +279,37 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         "vulnerability_max": prev.get("vulnerability_max"),
         "preemptive_advisory": [],
 
-        # Fire / transport intelligence is filled by the poller when available.
-        "fire_count": station.get("fire_count", 0),
-        "high_conf_fires": station.get("high_conf_fires", 0),
-        "transport_score": station.get("transport_score", 0),
-        "transport_label": station.get("transport_label", "unknown"),
-        "pollution_cause": station.get("pollution_cause", "unclassified"),
-        "cause_confidence": station.get("cause_confidence", 0),
+        # FIRE / TRANSPORT INTELLIGENCE - NOT COMPUTED IN THIS MODE.
+        #
+        # These were defaults dressed as measurements. `0` fires is a finding;
+        # "no data" is not, and only one of them is true here. The station dict
+        # is still consulted so that a poller which DOES populate these (the
+        # Pathway path, or a future direct-mode FIRMS poll) needs no change to
+        # this block - but the fallback is None, not zero.
+        #
+        # firms_status is the exception and is deliberately kept: "not_polled"
+        # is an accurate statement about what happened, and it is the flag the
+        # UI keys its unavailable state off.
+        "fire_count": station.get("fire_count"),
+        "high_conf_fires": station.get("high_conf_fires"),
+        "transport_score": station.get("transport_score"),
+        "transport_label": station.get("transport_label"),
+        "pollution_cause": station.get("pollution_cause"),
+        "cause_confidence": station.get("cause_confidence"),
+        # An empty list is not a claim - it says "no factors supplied", which is
+        # exactly right. Left as [] so consumers can iterate without a guard.
         "cause_factors": [],
         "firms_status": station.get("firms_status", "not_polled"),
         "firms_error": None,
         "firms_dataset": None,
         "firms_sync": None,
         "fire_bbox": None,
-        "aligned_fires": 0,
-        "transport_probability": 0.0,
+        "aligned_fires": station.get("aligned_fires"),
+        "transport_probability": station.get("transport_probability"),
         "fire_centroid": None,
-        "plume_distance_km": 0.0,
-        "wind_alignment_deg": 0.0,
-        "wind_label": "unknown",
+        "plume_distance_km": station.get("plume_distance_km"),
+        "wind_alignment_deg": station.get("wind_alignment_deg"),
+        "wind_label": station.get("wind_label"),
 
         # No event-time windows in this mode; stated rather than fabricated.
         "avg_aqi_5min": None, "avg_aqi_15min": None,

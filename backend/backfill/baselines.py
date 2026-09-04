@@ -67,12 +67,30 @@ def _parse(raw: str) -> datetime:
         tzinfo=timezone.utc)
 
 
-def load_observations(conn: sqlite3.Connection, station: str
-                      ) -> dict[datetime, float]:
-    """Every observed hour for one station, as a lookup."""
-    rows = conn.execute(
-        "SELECT timestamp, pm25 FROM station_readings "
-        "WHERE station_id = ? AND pm25 IS NOT NULL", (station,)).fetchall()
+def load_observations(conn: sqlite3.Connection, station: str,
+                      since: datetime | None = None,
+                      until: datetime | None = None) -> dict[datetime, float]:
+    """
+    Observed hours for one station, as a lookup.
+
+    Unbounded by default because every current caller - scoring, baselines,
+    diagnostics - legitimately walks the whole record. The window exists so a
+    caller that needs a slice is not forced to load 29,953 rows to read a few;
+    it is a range scan on the (station_id, timestamp) primary key.
+
+    Note for anyone wiring this into a request path: this function has no notion
+    of as_of. Pass `until` explicitly - do not assume the caller filters later.
+    """
+    sql = ("SELECT timestamp, pm25 FROM station_readings "
+           "WHERE station_id = ? AND pm25 IS NOT NULL")
+    params: list = [station]
+    if since is not None:
+        sql += " AND timestamp >= ?"
+        params.append(since.strftime("%Y-%m-%dT%H:00:00Z"))
+    if until is not None:
+        sql += " AND timestamp <= ?"
+        params.append(until.strftime("%Y-%m-%dT%H:00:00Z"))
+    rows = conn.execute(sql, params).fetchall()
     return {_parse(r["timestamp"]): r["pm25"] for r in rows}
 
 

@@ -1,0 +1,22 @@
+# AREE — development and test tooling.
+#
+# Install with:
+#   pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+#
+# Deliberately small. pytest is here because the suites needed a runner that
+# reports which check failed rather than a module that prints and exits; nothing
+# else has earned a place yet.
+#
+# No Python linter is configured. Adding one would produce a large diff of
+# unrelated style changes across ~18,000 lines and is not what the test phase is
+# for. Lint enforcement currently exists on the frontend only (eslint, tsc).
+
+pytest==9.1.1
+
+# The HTTP integration tests start uvicorn in-process and talk to it over a real
+# socket with urllib from the standard library. That is deliberate: no test
+# client, no ASGI shortcut. A decorator once landed on the wrong function and
+# left the primary endpoint returning 422 while the handler worked perfectly
+# when called directly, and only a real request found it.
+#
+# uvicorn itself is already in the runtime set, so nothing extra is needed here.

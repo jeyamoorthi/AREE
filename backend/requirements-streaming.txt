@@ -1,0 +1,59 @@
+# AREE — OPTIONAL: the Pathway streaming engine.
+#
+# =========================== UNVERIFIED ====================================
+# NOTHING IN THIS FILE IS INSTALLED IN THE WORKING ENVIRONMENT.
+#
+# These pins are carried forward VERBATIM from the previous requirements.txt.
+# They are preserved so the information is not lost, but they have not been
+# resolved, installed or exercised by this audit, and they must not be treated
+# as a known-good set. The versions are whatever was written down previously,
+# not evidence.
+# ===========================================================================
+#
+# WHY THIS IS SEPARATE
+#   The application ships and runs in DIRECT mode. In direct mode the Pathway
+#   code path is never reached: engine.rag_state() and engine.scan_policy_files()
+#   both return early with "Policy RAG requires the Pathway runtime", listing the
+#   policy files present on disk without embedding them. The imports below are
+#   consequently never executed by the deployed system.
+#
+#   Folding them into runtime cost several GB of OCR and embedding machinery, a
+#   torch install in the Dockerfile, and a Linux-only constraint (Pathway ships
+#   no Windows wheels) — all to support a path that does not execute.
+#
+# THE PATHWAY DECISION IS STILL OPEN
+#   Pathway is NOT being deleted. Whether the streaming engine is revived,
+#   replaced or retired is a separate decision. This file's job is only to stop
+#   an undecided dependency from being mandatory in the meantime.
+#
+# Install with:
+#   pip install -r backend/requirements.txt -r backend/requirements-streaming.txt
+# Expect resolution work: these pins have not been tested together.
+
+# Pathway core. The [xpack-llm-docs] extra is deliberately NOT used: it pulls
+# docling, paddleocr[doc-parser] and unstructured[all-docs] (several GB of OCR /
+# document-parsing machinery) that this app never touches -- policy files are
+# ingested with pw.io.fs.read(format="plaintext"), no parser is instantiated.
+# The pins below are the only pieces of that stack the code path really needs:
+# pathway.xpacks.llm.parsers hard-imports pdf2image / PIL / unstructured at
+# module level (and document_store imports parsers), while TokenCountSplitter
+# needs tiktoken.
+pathway==0.29.1
+unstructured~=0.18.1
+pdf2image
+pillow
+tiktoken>=0.5
+docling
+
+# Embeddings for the policy document store.
+sentence-transformers==2.6.1
+
+# Policy document parsers. rag/advisory_engine.py imports these lazily to
+# extract text per format (.pdf / .docx). Only reached on the Pathway path --
+# direct mode lists policy files without parsing them.
+pypdf>=4.0
+python-docx>=1.1
+
+# Emissions accounting for the streaming run. Imported only by backend/app.py,
+# which is the Pathway entry point.
+codecarbon==2.3.5

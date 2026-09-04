@@ -20,8 +20,14 @@ def risk(station: str = Path(...)) -> RiskResponse:
 
     return RiskResponse(
         station=station,
-        eri_score=state.get("eri_score", 0) or 0,
-        eri_category=state.get("eri_category", "LOW READINESS"),
+        # ERI is computed in app.py (the Pathway path) and nowhere else. These
+        # used to default to 0 / "LOW READINESS", so a station whose readiness had
+        # never been computed was served a score AND a verbal verdict. The verdict
+        # is the worse half: a reader can discount a suspicious 0, but
+        # "LOW READINESS" reads as an assessment. Both are now null in a mode that
+        # does not compute them.
+        eri_score=state.get("eri_score"),
+        eri_category=state.get("eri_category"),
         eri_factors=list(state.get("eri_factors", []) or []),
         confidence_score=state.get("confidence_score"),
         transport_score=state.get("transport_score"),

@@ -99,9 +99,52 @@ QUALIFYING_STATIONS = 20
 
 # --- observations ----------------------------------------------------------
 
-def observation_series(conn) -> dict[datetime, dict[str, Any]]:
+def _window_clause(since: datetime | None,
+                   until: datetime | None) -> tuple[str, list[str]]:
+    """SQL fragment and parameters for an optional inclusive time window."""
+    clause, params = "", []
+    if since is not None:
+        clause += " AND timestamp >= ?"
+        params.append(since.strftime("%Y-%m-%dT%H:00:00Z"))
+    if until is not None:
+        clause += " AND timestamp <= ?"
+        params.append(until.strftime("%Y-%m-%dT%H:00:00Z"))
+    return clause, params
+
+# How far back a forecast has to see. Derived from the two constants that
+# actually decide it rather than written as a number, because a number would
+# silently stop covering the lags the day either constant moved:
+#
+#   max(PM_LAGS)              the oldest lag a feature vector needs (24 h)
+#   MAX_ANCHOR_BACKOFF_HOURS  how far live anchoring may step back, and every
+#                             candidate hour needs its OWN full set of lags
+#
+# The +1 is an inclusive-bound allowance, not a fudge factor.
+OBSERVATION_WINDOW_HOURS = MAX_ANCHOR_BACKOFF_HOURS + max(model_lgbm.PM_LAGS) + 1
+
+
+def observation_series(conn, since: datetime | None = None,
+                       until: datetime | None = None) -> dict[datetime, dict[str, Any]]:
     """
     One PM2.5 history, assembled from every source, each hour fully described.
+
+    `since`/`until` bound the read. Both default to None, meaning the whole
+    history, so callers that genuinely want everything - scoring, diagnostics -
+    are unchanged.
+
+    WHY A FORECAST PASSES A WINDOW
+        A 72-hour forecast reads at most OBSERVATION_WINDOW_HOURS of history.
+        Unbounded, this materialised 30,068 rows to keep about 31 of them, and
+        the cost - measured at 233 ms - was paid on every single request. The
+        bound is a range scan on the (station_id, timestamp) primary key and on
+        ix_readings_time, so it needs no new index.
+
+        The window does NOT change which hours are eligible: `forecast` never
+        reads an observation newer than `as_of`, and OBSERVATION_WINDOW_HOURS is
+        derived from the lag set rather than guessed, so every hour the
+        unbounded version could have used is still inside it. Temporal semantics
+        are untouched - the window is a floor on how far BACK to look, never a
+        ceiling that could admit something newer than as_of.
 
     Priority is capture over legacy: where the live network has an hour, that
     hour is an airshed median across ~80 instruments, which is a better
@@ -120,9 +163,14 @@ def observation_series(conn) -> dict[datetime, dict[str, Any]]:
     """
     out: dict[datetime, dict[str, Any]] = {}
 
+    # Timestamps are ISO-8601 UTC text (db.iso), which sorts lexicographically in
+    # chronological order, so comparing the raw column is correct and indexable.
+    clause, bounds = _window_clause(since, until)
+
     for row in conn.execute(
             "SELECT timestamp, pm25, n_stations FROM station_readings "
-            "WHERE station_id = ? AND pm25 IS NOT NULL", (LEGACY_STATION,)):
+            "WHERE station_id = ? AND pm25 IS NOT NULL" + clause,
+            (LEGACY_STATION, *bounds)):
         out[model_lgbm._parse(row["timestamp"])] = {
             "pm25": row["pm25"],
             "source": "legacy",
@@ -140,7 +188,7 @@ def observation_series(conn) -> dict[datetime, dict[str, Any]]:
     for row in conn.execute(
             "SELECT timestamp, pm25, source FROM station_readings "
             "WHERE (source LIKE 'live:%' OR source LIKE 'openaq:%') "
-            "AND pm25 IS NOT NULL"):
+            "AND pm25 IS NOT NULL" + clause, tuple(bounds)):
         hour = model_lgbm._parse(row["timestamp"])
         network.setdefault(hour, []).append(row["pm25"])
         tags.setdefault(hour, set()).add(row["source"].split(":")[0])
@@ -158,8 +206,9 @@ def observation_series(conn) -> dict[datetime, dict[str, Any]]:
 
 # --- meteorology -----------------------------------------------------------
 
-def _met_from_store(conn, grid: str) -> dict[datetime, dict]:
-    return model_lgbm.load_met(conn, grid)
+def _met_from_store(conn, grid: str, since: datetime | None = None,
+                    until: datetime | None = None) -> dict[datetime, dict]:
+    return model_lgbm.load_met(conn, grid, since=since, until=until)
 
 
 def _met_from_live_forecast(lat: float, lon: float,
@@ -260,9 +309,31 @@ def forecast(conn, as_of: datetime | None = None,
     mode = "live" if abs((now - as_of).total_seconds()) <= LIVE_WINDOW_HOURS * 3600 \
         else "replay"
 
-    observations = observation_series(conn)
+    # Read only the history this forecast can actually consume.
+    #
+    # The window is measured from `as_of` BEFORE any anchor backoff, and backoff
+    # only ever moves the anchor EARLIER, so the earliest hour reachable is
+    # as_of - MAX_ANCHOR_BACKOFF_HOURS and its oldest lag is another
+    # max(PM_LAGS) before that. OBSERVATION_WINDOW_HOURS is exactly that sum.
+    #
+    # `until=as_of` is not an optimisation, it is the temporal contract restated
+    # at the storage layer: an as_of forecast may not see an observation newer
+    # than as_of. The unbounded version relied on every downstream lookup being
+    # keyed at or before as_of; the bound now makes it structural.
+    observations = observation_series(
+        conn,
+        since=as_of - timedelta(hours=OBSERVATION_WINDOW_HOURS),
+        until=as_of,
+    )
+    # Meteorology is read at VALID time, which is ahead of as_of - that is
+    # perfect prognosis and is the one place where reading forward is correct.
+    # Leads run 1..horizon from an anchor that may have stepped back, so the
+    # window opens MAX_ANCHOR_BACKOFF_HOURS early and closes one hour late.
     met = (_met_from_live_forecast(lat, lon, horizon) if mode == "live"
-           else _met_from_store(conn, grid))
+           else _met_from_store(
+               conn, grid,
+               since=as_of - timedelta(hours=MAX_ANCHOR_BACKOFF_HOURS),
+               until=as_of + timedelta(hours=horizon + 1)))
     met_source = ("openmeteo:forecast" if mode == "live"
                   else f"store:{grid} (era5)")
 
