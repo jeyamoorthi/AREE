@@ -32,8 +32,27 @@ import type {
   CasesResponse,
 } from "@/types";
 
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") ?? "http://localhost:8000";
+/**
+ * Where the API lives, from the BROWSER's point of view.
+ *
+ * Empty string means same origin, and that is the right default: next.config.ts
+ * rewrites /api and /ws to the backend, so a relative request works whether the page
+ * is opened on this machine, on the LAN, or through a tunnel.
+ *
+ * THE BUG THIS REPLACES, BECAUSE IT WAS INVISIBLE FROM THE DEVELOPER'S CHAIR
+ *   The fallback used to be "http://localhost:8000", reached whenever the env var was
+ *   unset — and Next inlines an EMPTY var as undefined, so setting it to blank landed
+ *   on the fallback too. Every visitor's browser then fetched THEIR OWN localhost.
+ *   On the machine running AREE that resolves and everything looks correct; for
+ *   anyone else the page hangs on "Loading outlook…" forever with the API answering
+ *   200 to every check the developer runs. A default that only works where the server
+ *   happens to be is worse than no default.
+ *
+ * An explicit absolute URL is still honoured, for running the frontend against a
+ * backend somewhere else.
+ */
+const CONFIGURED_API = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "").trim();
+export const API_URL = CONFIGURED_API ? CONFIGURED_API : "";
 
 /** Error carrying the backend's structured JSON body. */
 export class ApiError extends Error {
