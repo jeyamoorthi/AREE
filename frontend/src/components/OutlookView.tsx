@@ -57,6 +57,7 @@ import {
 
 import SpatialOutlookMapLoader from "@/components/SpatialOutlookMapLoader";
 import CaseAuthorisation from "@/components/CaseAuthorisation";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 import { usePublishOutlookMode } from "@/components/providers/OutlookModeProvider";
 import { useSyncPresetToUrl } from "@/hooks/useSyncPresetToUrl";
@@ -459,17 +460,7 @@ export default function OutlookView() {
       )}
 
       {error && !loading && (
-        <div
-          className="rounded-lg border p-4"
-          style={{ background: "#fdf2f0", borderColor: "#f0d5cd" }}
-        >
-          <p className="text-[12.5px] font-bold" style={{ color: C.redInk }}>
-            Outlook unavailable
-          </p>
-          <p className="mt-1 text-[12px]" style={{ color: C.body }}>
-            {error}
-          </p>
-        </div>
+        <UnavailableNotice title="Outlook unavailable" detail={error} />
       )}
 
       {data && !loading && (

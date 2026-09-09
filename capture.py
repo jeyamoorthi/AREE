@@ -53,6 +53,7 @@ import os
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -178,6 +179,11 @@ def cmd_loop(conn, args) -> int:
     return 0
 
 
+# How many locations the bootstrap reads at once. See the note beside the pool
+# itself: the rate limiter is the governor, this is only latency overlap.
+BOOTSTRAP_WORKERS = 6
+
+
 def cmd_bootstrap(conn, args) -> int:
     """
     Backfill the last few days of hourly station data from OpenAQ.
@@ -200,25 +206,60 @@ def cmd_bootstrap(conn, args) -> int:
         audited Novembers). It only fills the recent window.
     """
     now = datetime.now(timezone.utc)
-    print(f"\nBootstrap — last {args.days} days of NCR hourly PM2.5 from OpenAQ")
-    print("  " + "-" * 74)
-
     try:
         stations = aq.discover_stations()
     except aq.AuthFailed as exc:
         print(f"  {exc}\n", file=sys.stderr)
         return 2
 
-    # Only locations reporting recently, and only their pm25 sensors. A sensor
-    # retired in 2018 has nothing to contribute to the last three days.
-    active = [st for st in stations
-              if st.get("last") and (now - st["last"]).days <= 7
-              and any(x["parameter"] == "pm25" for x in st["sensors"])]
-    print(f"  {len(active)} locations reporting within 7 days")
+    # `hours` bounds the pull to the hole that actually needs filling; `days`
+    # remains the CLI's unit and the default. They are the same knob at two
+    # granularities, and the finer one matters: the location filter below keys
+    # off this window, so asking for three days when four hours are missing
+    # admits every location that reported in three days rather than the handful
+    # that can reach into the last four.
+    window_hours = int(getattr(args, "hours", None) or args.days * 24)
+    lo = now - timedelta(hours=window_hours)
 
-    lo = now - timedelta(days=args.days)
-    rows, reached = [], 0
-    for st in active:
+    # Only locations that CAN contribute to the requested window, and only their
+    # pm25 sensors.
+    #
+    # WHY THE BOUND IS THE WINDOW AND NOT A FLAT SEVEN DAYS
+    #     `last` is the location's newest reading across every sensor ever sited
+    #     there. The module docstring warns - correctly - that reading coverage
+    #     off a LOCATION is how you invent date ranges that do not exist. That
+    #     warning is about the positive direction: `first` does not mean this
+    #     sensor has data back that far.
+    #
+    #     The negative direction is exact. If the newest reading anywhere at a
+    #     location predates the window, then no sensor there has a row inside it,
+    #     because `last` IS the newest row. Rejecting on that is not a heuristic.
+    #
+    #     It matters because the flat seven-day filter was admitting work that
+    #     provably could not pay: measured on the live feed, 136 NCR locations
+    #     carry a pm25 sensor, 94 pass `last <= 7 days`, and 7 have a reading
+    #     inside the last four hours. Eighty-odd requests were being spent to be
+    #     told "no rows", at roughly two seconds each, while the forecast sat
+    #     unavailable waiting for them.
+    active = [st for st in stations
+              if st.get("last") and st["last"] >= lo
+              and any(x["parameter"] == "pm25" for x in st["sensors"])]
+    with_pm25 = sum(1 for st in stations
+                    if any(x["parameter"] == "pm25" for x in st["sensors"]))
+    print(f"\nBootstrap — last {window_hours} h of NCR hourly PM2.5 from OpenAQ")
+    print("  " + "-" * 74)
+    print(f"  {len(active)} of {with_pm25} pm25 locations report inside that "
+          f"window")
+
+    def _rows_for(st: dict) -> list[dict]:
+        """Every hour one location can give, from the first sensor that answers.
+
+        Stops at the first sensor that actually RETURNED data, not the first one
+        listed. Many locations list a retired sensor first, and breaking on it
+        silently costs the whole station: measured 7 of 93 locations before this,
+        because the retired one was tried alone. That ordering is sequential
+        WITHIN a location and is preserved exactly; only locations run together.
+        """
         for sensor in (x for x in st["sensors"] if x["parameter"] == "pm25"):
             try:
                 points = aq._sensor_hours(sensor["sensor_id"], lo, now)
@@ -226,23 +267,31 @@ def cmd_bootstrap(conn, args) -> int:
                 continue
             if not points:
                 continue    # retired sensor at a live location; try the next
-            reached += 1
-            for point in points:
-                rows.append({
-                    "station_id": st["station"],
-                    "timestamp": db.iso(point["timestamp"]),
-                    "pm25": point["value"],
-                    "latitude": st.get("latitude"),
-                    "longitude": st.get("longitude"),
-                    "n_stations": 1,
-                    "source": "openaq:hourly",
-                })
-            # Stop at the first sensor that actually RETURNED data, not the
-            # first one listed. Many locations list a retired sensor first, and
-            # breaking on it silently costs the whole station: measured 7 of 93
-            # locations before this, because the retired one was tried alone.
-            break
+            return [{
+                "station_id": st["station"],
+                "timestamp": db.iso(point["timestamp"]),
+                "pm25": point["value"],
+                "latitude": st.get("latitude"),
+                "longitude": st.get("longitude"),
+                "n_stations": 1,
+                "source": "openaq:hourly",
+            } for point in points]
+        return []
 
+    # Locations are independent, so they run together. The pool size is NOT what
+    # bounds the request rate - openaq_history._limiter is, with the budget the
+    # API itself reports - so this number only decides how much latency can be
+    # overlapped underneath that budget. Six is comfortably enough to keep the
+    # limiter, rather than the network, the thing in charge.
+    rows, reached = [], 0
+    with ThreadPoolExecutor(max_workers=BOOTSTRAP_WORKERS) as pool:
+        for got in pool.map(_rows_for, active):
+            if got:
+                reached += 1
+                rows.extend(got)
+
+    # One writer, on this thread, after every read has finished. SQLite is
+    # perfectly happy with that and unhappy with the alternative.
     written = db.upsert(conn, "station_readings",
                         ("station_id", "timestamp"), rows)
     hours = len({r["timestamp"] for r in rows})
@@ -287,7 +336,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("command", choices=sorted(COMMANDS))
     p.add_argument("--interval", type=int, default=INTERVAL_SECONDS)
     p.add_argument("--days", type=int, default=3,
-                   help="lookback for `bootstrap`")
+                   help="lookback for `bootstrap`, in days")
+    p.add_argument("--hours", type=int, default=None,
+                   help="lookback for `bootstrap`, in hours; overrides --days")
     p.add_argument("-v", "--verbose", action="store_true")
     args = p.parse_args(argv)
 

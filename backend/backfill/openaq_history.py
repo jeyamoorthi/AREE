@@ -39,8 +39,9 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
-from collections import defaultdict
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -58,10 +59,67 @@ WANTED = {
     "no2": "no2", "so2": "so2", "co": "co",
 }
 
-# OpenAQ's free tier is around 60 requests a minute. One second between calls
-# keeps us inside it without a token bucket; the backfill is not latency bound.
-REQUEST_SPACING_S = 1.0
+# OpenAQ's budget, read from the API rather than assumed. Every response carries
+# it, and it was verified on this key:
+#
+#     X-Ratelimit-Limit: 60      X-Ratelimit-Reset: 60
+#
+# i.e. sixty requests per rolling sixty seconds. WINDOW_REQUESTS keeps a small
+# margin under that, because our window and the server's do not start at the same
+# instant and a burst that straddles the boundary would otherwise 429.
+WINDOW_REQUESTS = 55
+WINDOW_SECONDS = 60.0
 PAGE_LIMIT = 1000
+
+# Retained: other modules import it, and it is still the right SERIAL spacing.
+# It is no longer what enforces the limit - see _RateLimiter.
+REQUEST_SPACING_S = 1.0
+
+
+class _RateLimiter:
+    """One request budget, shared by every thread in this process.
+
+    WHY A SLEEP AFTER EACH CALL WAS NOT A RATE LIMITER
+        `_get` used to end with time.sleep(1.0). Serially that approximates 60
+        requests a minute, and it was fine while nothing ran concurrently. It has
+        two faults the moment anything does:
+
+          * N workers each sleeping one second make N requests a second, which is
+            N times the budget. The sleep does not bound a rate; it bounds one
+            caller's pace and knows nothing about the others.
+          * Sleeping AFTER a call also pays the price whether or not the budget
+            was tight, so a serial walk of 90 sensors cost 90 s of pure sleep on
+            top of 90 x 0.9 s of latency - measured, ~171 s for work the budget
+            would have allowed in 90.
+
+        A sliding window fixes both: it is shared, it only blocks when the budget
+        is actually exhausted, and it lets latency overlap instead of serialising
+        behind a timer. The 429 backoff in `_get` stays as the backstop for the
+        case where our accounting and the server's disagree.
+    """
+
+    def __init__(self, limit: int, window: float):
+        self._limit = limit
+        self._window = window
+        self._lock = threading.Lock()
+        self._stamps: deque[float] = deque()
+
+    def acquire(self) -> None:
+        while True:
+            with self._lock:
+                now = time.monotonic()
+                while self._stamps and now - self._stamps[0] >= self._window:
+                    self._stamps.popleft()
+                if len(self._stamps) < self._limit:
+                    self._stamps.append(now)
+                    return
+                wait = self._window - (now - self._stamps[0])
+            # Slept OUTSIDE the lock, or every waiting thread would queue behind
+            # the sleeping one and the limiter would become a serialiser.
+            time.sleep(max(0.01, wait))
+
+
+_limiter = _RateLimiter(WINDOW_REQUESTS, WINDOW_SECONDS)
 
 
 def _headers() -> dict:
@@ -87,6 +145,9 @@ def _get(path: str, params: dict | None = None, retries: int = 3) -> dict:
     url = f"{BASE}{path}"
     for attempt in range(retries):
         try:
+            # Before the request, not after it: the budget is what we are
+            # spending, so it is taken when it is spent.
+            _limiter.acquire()
             r = requests.get(url, params=params, headers=_headers(), timeout=60)
             if r.status_code in (401, 403):
                 raise AuthFailed(
@@ -97,7 +158,6 @@ def _get(path: str, params: dict | None = None, retries: int = 3) -> dict:
                 time.sleep(5 * (attempt + 1))
                 continue
             r.raise_for_status()
-            time.sleep(REQUEST_SPACING_S)
             return r.json()
         except AuthFailed:
             raise

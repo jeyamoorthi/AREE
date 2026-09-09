@@ -1943,3 +1943,225 @@ policy retrieval whether or not Pathway is importable.
 Rate limiting on `/api/auth/token`; the two Docker blockers (unnecessary `torch`
 install, `NEXT_PUBLIC_API_URL` baked into the frontend build); direct-mode FIRMS
 wiring; Pathway's unverified pins.
+
+# 23. Phase 7 — cold-start latency, and the readiness signal that was missing
+
+Full write-up, with the traces and the phase-4 design, in `STARTUP_ARCHITECTURE.md`.
+This section records the decisions.
+
+## 23.1 Two faults were being read as one
+
+"The backend is slow to fetch live data" and "the Atmospheric/Ventilation Outlook
+says unavailable and comes back a few minutes later" are **not the same fault**, and
+conflating them is why the instinct was to change hosting.
+
+- **Fault A** — the first live publish took 26.9 s, measured cold.
+- **Fault B** — `/api/aree/outlook` answers 424 because `station_readings` has
+  holes, so no anchor in the six-hour backoff window has a complete lag set.
+
+Fault A is fixed here. Fault B is a storage-continuity problem, is designed in
+`STARTUP_ARCHITECTURE.md` §5, and is deliberately **not** built in this phase —
+it changes where the capture runs and probably what it writes to, which is not a
+change to make in the same commit as a latency fix.
+
+## 23.2 The station table was held hostage by its own enrichment
+
+`_poll_once()` called `_attach_pollutants()` — a four-state data.gov.in pull,
+measured at 6.3 + 7.9 + 9.0 + 10.7 s — **before** the loop that writes
+`latest_state`. So nothing was served until concentrations for a detail panel had
+arrived, for a table that `_attach_pollutants`'s own docstring already described as
+complete without them.
+
+Now: fetch → publish → enrich. Concentrations no longer gate the table — they
+cost ~6 s *before* the publish and now cost ~1.5 s *after* it.
+
+**The end-to-end number is honest about what it is.** Two runs after the change
+measured first data at 13.1 s and 24.5 s, against 26.9 s before. The spread is
+`caqm.nic.in`, whose 73 per-station sweep took 11 s and then 22 s; it is not a
+clean 2× win and should not be reported as one. What changed structurally is that
+the CAQM sweep and the data.gov.in pull no longer stack — the second is off the
+critical path entirely.
+
+**The enrichment patches and must never rebuild.** `_build_state()` appends to
+`aqi_history` and calls `engine.process()`, which advances the persistence counter
+and the hysteresis confirmation. Re-running it for one observation would count that
+observation twice and could fire an escalation a window early. Only the pollutant
+fields are written, onto a copy that then replaces the entry in a single
+assignment — `latest_state` is read by request threads without a lock.
+
+## 23.3 Parallelising data.gov.in, against this file's own earlier advice
+
+`cpcb_stream` warns that the endpoint degrades steeply under parallel requests.
+That warning stands — but what it measured was several **callers** each running a
+full four-state pull, up to sixteen requests in flight. `_ncr_lock` already
+removed that case: one pull runs per process at a time.
+
+Inside that one pull, four independent queries on an indexed column is a bounded
+fan-out. 33.9 s serial → 1.1 s isolated, 2.8 s in situ. Paging *within* a state
+stays sequential, and one state failing no longer costs the other three — NCR
+spans all four, and three quarters of the airshed is still a usable pull.
+
+## 23.4 `/api/health` was answering a question it could not know
+
+`load_engine()` returns True as soon as the sampling **thread** exists — measured
+at t+0.011 s. `/api/health` reported `engine_loaded: true` from that instant and
+went on doing so through 27 s of serving nothing, which the frontend could only
+render as a failure. A warming-up system that reports itself as broken is worse
+than one that reports nothing.
+
+`GET /api/ready` now answers `ready` / `warming_up` / `unavailable`, with the HTTP
+status agreeing with the state. The frontend's `UnavailableNotice` polls it only
+while a failure panel is already on screen.
+
+**`render.yaml` keeps `healthCheckPath: /api/health`, deliberately.** Render
+restarts a container that fails its health check, and readiness depends on
+third-party feeds. Pointing the orchestrator at `/api/ready` would restart-loop a
+backend that is serving every replay endpoint perfectly, whenever CAQM has an
+outage — turning someone else's failure into our own.
+
+## 23.5 What was deliberately not optimised
+
+The CAQM sweep — 73 per-station reads at 6 workers, ~12 s — is now the entire
+critical path, and it stays. The bulk endpoint returns the whole network in one
+1 s call and carries **no timestamp**, serving an `aqi` for analysers retired up
+to 24 days ago; `WORKERS` above 6 was already measured to lose stations to
+timeouts. 13 s is close to the floor for this design, and the alternative is the
+class of silent-wrong-answer this repository keeps finding.
+
+## 23.6 Hosting was not changed, and should not be yet
+
+The faults were serial I/O, publish ordering and a missing signal. None is a
+property of Render, and `render.yaml` already records why serverless is ruled out:
+SQLite + WAL needs a real filesystem, the capture is a long-lived thread, and two
+2.3 MB boosters are read from disk at request time. Redeploy, re-measure, and let
+phase 4 rather than the host be the next variable changed.
+
+## 23.7 Verification
+
+`63 passed, 4 deselected` (was 61) — two new tests: `/api/ready`'s status code and
+reported state must agree, an invariant that holds with or without network, and
+the route-table pin for the new endpoint. Frontend `tsc --noEmit` clean; the three
+remaining eslint errors in `VentilationOutlook.tsx` pre-date this phase and are in
+lines it does not touch.
+
+# 24. Phase 8 — observation continuity, and a threshold that was the wrong question
+
+Detail and the measured traces in `STARTUP_ARCHITECTURE.md` §5.
+
+## 24.1 The planned change did not fix the planned bug
+
+The plan was `MAX_TOLERABLE_GAP_HOURS: 2 -> 1`, so the scheduler would notice a
+broken observation chain sooner. Implementing it showed the threshold was never
+the reason the chain stayed broken.
+
+`gap_hours()` measures `now - MAX(timestamp)` — the TRAILING gap. **A hole behind
+the newest row is invisible to it.** And that is the case that actually happens:
+the API restarts, loses six hours, comes back, the hourly capture resumes, and
+from that moment the trailing gap reads healthy forever while the hole sits inside
+the lag window disqualifying every anchor.
+
+Measured on the dev store: trailing gap **1.63 h** against a threshold of 2 h —
+"no backfill needed" — and **ten** missing hours it could not see, with
+`/api/aree/outlook` answering 424 indefinitely. That is the user-visible fault
+from phase 7's Fault B, and lowering a number would not have touched it.
+
+So continuity is now measured directly. `missing_hours()` walks
+`OBSERVATION_WINDOW_HOURS` — imported from the forecast rather than restated, so a
+change to the lag set moves it automatically — and reports every hour with no
+network reading. The repair fires on either signal. The 2 -> 1 change was kept: it
+is still the right trailing tolerance, it is simply not the mechanism.
+
+`PUBLICATION_DELAY_HOURS = 2` excludes the newest hours from the hole count. CPCB
+and CAQM publish 40–100 min behind, so their absence is punctuality, not loss;
+counting them would trigger a repair once an hour, forever.
+
+## 24.2 Bounding the pull to the hole beat parallelising the walk
+
+Parallelising the OpenAQ bootstrap was the plan, and it was done — a bounded pool
+across locations, with the per-location sensor ordering (`break` on the first
+sensor that RETURNED data, which is what recovered 7 locations to 93) preserved
+exactly. On its own it moved a full three-day backfill from ~177 s to 127 s.
+
+The larger win was arithmetic nobody had done. Requests cost **per location**, not
+per hour, and the location population is bimodal: 7 NCR locations report within
+2 h, 93 within 24 h, and 93 within 72 h. A recent hole can only be filled by a
+recently reporting location, so bounding the backfill window to the oldest missing
+hour admits exactly those:
+
+```
+   19 h window  ->   7 of 136 locations  ->   10.1 s   all 10 holes filled
+   72 h window  ->  93 of 136 locations  ->  127.1 s
+```
+
+The three-day pull remains correct, and remains what an empty store gets. It is
+just not what a six-hour outage needs.
+
+## 24.3 A sleep is not a rate limiter
+
+`_get()` ended with `time.sleep(1.0)`, which approximates 60/min serially and
+breaks the moment anything runs concurrently: N workers each sleeping a second
+make N requests a second. It also pays whether or not the budget was tight.
+
+`_RateLimiter` is a shared sliding window acquired BEFORE the request, sized from
+`X-Ratelimit-Limit: 60` / `X-Ratelimit-Reset: 60` as the API itself reports them,
+with a margin (55) because our window and the server's do not start together. It
+is what makes the bounded pool legitimate rather than a way to quietly exceed the
+limit. The 429 backoff stays as the backstop.
+
+## 24.4 What did not get faster, and is not claimed to be
+
+Recovery is not instant. A repaired hour also comes back with ~5–7 stations behind
+it against 80–88 from CPCB: **the backfill restores continuity, not fidelity.**
+That is sufficient for a lag, which only has to exist, and insufficient for an
+anchor, which is why `QUALIFYING_STATIONS = 20` exists and why anchor selection
+still prefers a fuller hour. None of that logic was touched.
+
+The repair also runs at boot only. A hole opened mid-run waits for the next
+restart. Making it periodic risks re-pulling for hours OpenAQ will never have.
+
+## 24.5 Verification
+
+`68 passed, 4 deselected` (was 63). Five new tests in
+`test_capture_continuity.py`, all offline: a six-hour hole behind the newest row
+must be seen while the trailing gap reads healthy; a continuous store reports
+none; punctual-but-unpublished hours are not holes; an empty store reports `None`
+rather than a zero gap; and a legacy research row does not fill a network hour.
+
+End to end on a copy of the real store: 10 holes, trailing gap 1.66 h (which the
+old check called healthy), repaired in 10.1 s, `424 -> forecast available`.
+
+## 24.6 The repair was invisible, which is its own defect
+
+`capture_scheduler.status()` existed and was exposed nowhere. A deployed instance
+could not be asked why its outlook was 424; the answer was only in the log, which
+on Render is the slowest place to look. `GET /api/system/capture` now reports the
+store's continuity - `holes`, `oldest_hole`, `continuous` - alongside the thread's
+own state. It is engine-independent and cannot fail: every store field degrades to
+null rather than raising, because a diagnostic that 500s when the thing it
+diagnoses is broken is worse than no diagnostic.
+
+`bench_startup.py` is committed for the same reason. Every number in phases 1-4
+came from a throwaway script that no longer exists, which is how a repository ends
+up with performance claims nobody can reproduce. The comparison that matters next -
+this machine against Render - is only meaningful if both sides are measured the
+same way.
+
+Measured with it, against a copy of the known-bad store: 12 holes at boot behind a
+trailing gap of 1.54 h that the old check called healthy; repaired by t+6.2 s,
+which is BEFORE /api/ready went green at t+9.3 s; `/api/aree/outlook` answered
+**200 on its first request**; and the continuous probe recorded 0 failures with a
+p50 of 3.5 ms during the repair.
+
+The local store is deliberately left broken. It is the fixture for that scenario,
+and `--broken` runs against a copy so testing it does not consume it.
+
+## 24.7 Still open
+
+The capture worker. The gap should rarely open at all, and it will keep opening
+while ingestion lives inside the process that serves requests. The storage
+argument for that split is **not** that SQLite is slow — it is adequate for a
+single-process application — it is that a SQLite file on a Render disk can only be
+written by the container that mounts it, so ingestion cannot outlive the API while
+the store lives there. The requirement is persistent shared storage; Postgres is
+one answer to it, and the decision should follow measurements from a deployed
+phase 8, not precede them.

@@ -8,6 +8,25 @@ export interface HealthResponse {
   engine_error: string | null;
 }
 
+/**
+ * Whether the backend has live data to serve — a different question to whether
+ * it is alive.
+ *
+ * `engine_loaded` is NOT the answer and never was: it goes true the instant the
+ * sampling thread is spawned, roughly at boot, and says nothing about whether a
+ * cycle has completed. Branch on `state`.
+ */
+export interface ReadinessResponse {
+  ready: boolean;
+  /** "ready" | "warming_up" | "unavailable" */
+  state: string;
+  detail: string;
+  engine_loaded: boolean;
+  mode: string | null;
+  stations: number;
+  engine_error: string | null;
+}
+
 export interface ApiErrorBody {
   error: string;
   detail: string;

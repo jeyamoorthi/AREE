@@ -1,15 +1,66 @@
-"""System status and engine configuration."""
+"""System status, store continuity and engine configuration."""
 
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from .. import engine
+from .. import capture_scheduler, engine
 from ..freshness import classify
 from ..deps import require_engine
-from ..schemas import EngineConfig, SystemStatus
+from ..schemas import CaptureStatus, EngineConfig, SystemStatus
 
 router = APIRouter(tags=["system"])
+
+
+@router.get("/system/capture", response_model=CaptureStatus,
+            summary="Observation-store continuity and the capture thread")
+def capture_status() -> CaptureStatus:
+    """Can the live forecast be served, and if not, why not?
+
+    Deliberately engine-independent and deliberately incapable of failing: a
+    diagnostic that 500s when the thing it diagnoses is broken is worse than no
+    diagnostic. Every store field degrades to null rather than raising.
+    """
+    st = dict(capture_scheduler.status())
+
+    newest = gap = holes = oldest = None
+    window = 0
+    continuous = False
+    try:
+        from ...backfill import db                            # noqa: PLC0415
+        from ...forecast import pm25_forecast as fc           # noqa: PLC0415
+
+        conn = db.connect()
+        window = fc.OBSERVATION_WINDOW_HOURS
+        newest_dt = capture_scheduler.newest_captured_hour(conn)
+        newest = newest_dt.isoformat() if newest_dt else None
+        gap = capture_scheduler.gap_hours(conn)
+        missing = capture_scheduler.missing_hours(conn)
+        holes = len(missing)
+        oldest = min(missing).isoformat() if missing else None
+        # Continuous means the forecast's lag window is intact. It is NOT the
+        # same as "recently captured": a store can be one hour behind and still
+        # be missing an hour from yesterday, which is the failure this exists
+        # to make visible.
+        continuous = holes == 0
+    except Exception:                                          # noqa: BLE001
+        pass
+
+    return CaptureStatus(
+        enabled=bool(st.get("enabled")),
+        running=bool(st.get("running")),
+        cycles=int(st.get("cycles") or 0),
+        last_snapshot_at=st.get("last_snapshot_at"),
+        last_written=st.get("last_written"),
+        last_error=st.get("last_error"),
+        bootstrapped=bool(st.get("bootstrapped")),
+        newest_hour=newest,
+        trailing_gap_hours=round(gap, 2) if gap is not None else None,
+        holes=holes or 0,
+        oldest_hole=oldest,
+        continuous=continuous,
+        observation_window_hours=window,
+    )
 
 
 @router.get("/system/status", response_model=SystemStatus,
