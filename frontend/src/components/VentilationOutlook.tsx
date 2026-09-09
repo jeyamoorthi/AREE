@@ -46,6 +46,7 @@ import {
   Wind,
 } from "lucide-react";
 
+import UnavailableNotice from "@/components/UnavailableNotice";
 import { usePublishOutlookMode } from "@/components/providers/OutlookModeProvider";
 import { useSyncPresetToUrl } from "@/hooks/useSyncPresetToUrl";
 import { api, errorMessage } from "@/lib/api";
@@ -316,12 +317,7 @@ export default function VentilationOutlook() {
       )}
 
       {error && !loading && (
-        <div className="rounded-lg border p-4" style={{ background: "#fdf2f0", borderColor: "#f0d5cd" }}>
-          <p className="text-[12.5px] font-bold" style={{ color: "#b91c1c" }}>
-            Ventilation outlook unavailable
-          </p>
-          <p className="mt-1 text-[12px]">{error}</p>
-        </div>
+        <UnavailableNotice title="Ventilation outlook unavailable" detail={error} />
       )}
 
       {data && !loading && vp?.available && (

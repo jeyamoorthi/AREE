@@ -143,9 +143,27 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # `next typegen` FIRST, and this is not optional.
+      #
+      # tsconfig.json includes .next/types/**/*.ts, which is where Next generates
+      # the per-route global types the app actually uses - LayoutProps<"/"> in
+      # src/app/layout.tsx and PageProps<...> in src/app/stations/[station]/page.tsx,
+      # both there since the initial commit. .next/ is gitignored, so on a clean
+      # checkout those declarations do not exist and `tsc --noEmit` alone fails with
+      #
+      #     error TS2304: Cannot find name 'LayoutProps'.
+      #     error TS2304: Cannot find name 'PageProps'.
+      #
+      # It passed on a developer's machine only because a previous `next dev` or
+      # `next build` had left the generated types lying around - which is exactly
+      # the class of "works here, fails in CI" this pipeline exists to catch, and
+      # it was catching it correctly. The generation step was simply missing.
+      #
+      # Run through the npm script rather than inline, so `npm run typecheck`
+      # locally and this job cannot drift apart.
       - name: Typecheck
         working-directory: frontend
-        run: npx tsc --noEmit
+        run: npm run typecheck
 
       - name: Lint
         working-directory: frontend

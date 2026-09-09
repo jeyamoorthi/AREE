@@ -384,8 +384,71 @@ def _attach_pollutants(stations: list[dict]) -> int:
     return matched
 
 
+def _enrich_published_pollutants(stations: list[dict]) -> int:
+    """Patch concentrations onto states that are ALREADY being served.
+
+    WHY THIS RUNS AFTER THE PUBLISH AND NOT BEFORE IT
+        _attach_pollutants() reads data.gov.in, which is by a wide margin the
+        slowest thing in a cycle - four state pulls, measured at 6.3, 7.9, 9.0
+        and 10.7 s. It used to sit in front of the loop that writes
+        latest_state, so NOTHING was served until it returned: measured on a
+        cold boot, /api/stations answered its first station at t+27 s, and the
+        last ten of those seconds bought only pollutant concentrations.
+
+        Those concentrations are enrichment, not the table. The AQI, the CPCB
+        band, the GRAP stage and the persistence count all come from CAQM and
+        are complete without them - which _attach_pollutants already says in
+        its own docstring, and already treats as non-fatal. So the table is
+        published as soon as it exists, and the concentrations are patched in
+        when they arrive a few seconds later.
+
+    WHY THE STATE IS PATCHED AND NOT REBUILT
+        _build_state() appends to aqi_history and calls engine.process(), which
+        advances the persistence counter and the hysteresis confirmation.
+        Running it a second time for one observation would count that
+        observation twice and could fire an escalation a window early - a
+        correctness failure in the one path this system exists to get right.
+        So only the pollutant fields are written here.
+
+        They are written onto a COPY which then replaces the entry in a single
+        assignment. latest_state is read by request threads without a lock, and
+        dict item assignment is atomic under the GIL, so a reader sees either
+        the un-enriched state or the enriched one, never a half-written mix.
+    """
+    if not _attach_pollutants(stations):
+        return 0
+
+    patched = 0
+    for st in stations:
+        current = latest_state.get(st["station"])
+        # A station whose enrichment found nothing keeps its published state
+        # untouched: pollutant_source is set only when a match supplied at
+        # least one value, so it is the flag for "this row was enriched".
+        if current is None or st.get("pollutant_source") is None:
+            continue
+        updated = dict(current)
+        for _, raw_key in _POLLUTANT_KEYS:
+            if st.get(raw_key) is not None:
+                updated[raw_key] = st[raw_key]
+        updated["pollutants_available"] = st.get("pollutants_available", 0)
+        updated["pollutant_source"] = st.get("pollutant_source")
+        updated["pollutant_age_minutes"] = st.get("pollutant_age_minutes")
+        if st.get("dominant_pollutant"):
+            updated["dominant_pollutant"] = st["dominant_pollutant"]
+        latest_state[st["station"]] = updated
+        patched += 1
+
+    log.info("pollutants: %d station states patched after publish", patched)
+    return patched
+
+
 def _poll_once() -> int:
-    """One sampling cycle across the NCR network. Returns stations updated."""
+    """One sampling cycle across the NCR network. Returns stations updated.
+
+    ORDER MATTERS, AND IT IS: fetch -> publish -> enrich. The station table is
+    made servable at the earliest instant it is correct; anything that only
+    makes it richer happens afterwards. See _enrich_published_pollutants.
+    """
     from ingestion import ncr_observations as obs
     from streaming.state_machine import StreamingStateEngine
 
@@ -410,8 +473,6 @@ def _poll_once() -> int:
                         composite.get("reason"))
             return 0
         stations = composite.get("stations", [])
-
-    _attach_pollutants(stations)
 
     engine = _engines_for_cycle()
     now = datetime.now(timezone.utc)
@@ -461,6 +522,10 @@ def _poll_once() -> int:
     carbon_state["total_gco2"] = round(
         carbon_state["decision_count"] * CARBON_COST_PER_DECISION, 4)
     carbon_state["per_decision_gco2"] = CARBON_COST_PER_DECISION
+
+    # Everything above this line is already being served. This is the slow,
+    # optional half of the cycle, and it runs last on purpose.
+    _enrich_published_pollutants(stations)
 
     return len(stations)
 

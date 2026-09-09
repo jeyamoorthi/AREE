@@ -33,13 +33,17 @@ WHAT THE ENDPOINT ACTUALLY RETURNS
 
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any
 
 import requests
+
+log = logging.getLogger("aree.cpcb")
 
 # CPCB "Real time Air Quality Index from various locations" resource.
 RESOURCE_ID = "3b01bcb8-0b14-4abf-b6f2-c1bfd384ba69"
@@ -298,16 +302,47 @@ def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9)) -> list[dict]:
         return _fetch_ncr_uncached(now, lat_range, lon_range)
 
 
+# Exact strings the API indexes on. "Uttar_Pradesh" silently returns zero rows
+# rather than erroring, which is the worst kind of wrong.
+NCR_STATES = ("Delhi", "Haryana", "Uttar Pradesh", "Rajasthan")
+
+# The four state pulls run TOGETHER rather than one after another.
+#
+# WHY THIS DOES NOT CONTRADICT THE WARNING ABOVE
+#     The note on _NCR_TTL_SECONDS says data.gov.in degrades steeply under
+#     parallel requests, and it does. But what was measured there was several
+#     CALLERS each running a full four-state pull - up to sixteen requests in
+#     flight, every caller making the others slower. _ncr_lock removed exactly
+#     that: one pull runs in this process at a time and the rest wait on it.
+#
+#     Inside that single pull the four states are independent queries on an
+#     indexed column, and four concurrent requests is a bounded fan-out rather
+#     than a herd. Measured serially the states cost 10.7 + 9.0 + 7.9 + 6.3 =
+#     33.9 s, the largest single block in a cold start; run together the pull
+#     costs about as long as its slowest state.
+#
+#     Paging WITHIN a state stays sequential. An offset is only worth
+#     requesting once the previous page has shown there is more to read, and
+#     every state currently fits inside one 500-row page.
+STATE_WORKERS = 4
+
+
 def _fetch_ncr_uncached(now: datetime, lat_range, lon_range) -> list[dict]:
     """The actual four-state pull. Only ever called holding _ncr_lock."""
-    out: list[dict] = []
-    # Exact strings the API indexes on. "Uttar_Pradesh" silently returns zero
-    # rows rather than erroring, which is the worst kind of wrong.
-    for state in ("Delhi", "Haryana", "Uttar Pradesh", "Rajasthan"):
+    def _one(state: str) -> list[dict]:
         try:
-            out.extend(pivot_stations(fetch_records(state=state)))
+            return pivot_stations(fetch_records(state=state))
         except Exception:                                   # noqa: BLE001
-            continue
+            # One state failing must not cost the other three. NCR spans all
+            # four, but three quarters of the airshed is still a usable pull,
+            # and the alternative is an empty result that suppresses nothing.
+            log.warning("data.gov.in: %s pull failed", state, exc_info=True)
+            return []
+
+    out: list[dict] = []
+    with ThreadPoolExecutor(max_workers=STATE_WORKERS) as pool:
+        for rows in pool.map(_one, NCR_STATES):
+            out.extend(rows)
 
     inside = []
     for st in out:

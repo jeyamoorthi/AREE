@@ -17,6 +17,7 @@ import type {
   HealthResponse,
   PolicyResponse,
   PolicyUploadResponse,
+  ReadinessResponse,
   ReportMetaResponse,
   RiskResponse,
   StationDetail,
@@ -280,6 +281,31 @@ const enc = (station: string) => encodeURIComponent(station);
 export const api = {
   health: (signal?: AbortSignal) =>
     request<HealthResponse>("/api/health", { signal }),
+
+  /**
+   * Readiness.
+   *
+   * A 503 here is an ANSWER, not a failure — it is how the backend says "still
+   * warming up" — so the body is returned for both statuses and only a real
+   * transport error is allowed to throw. Treating the 503 as an exception would
+   * discard exactly the payload the caller needs to tell warming from broken,
+   * which is the whole reason this endpoint exists.
+   */
+  readiness: async (signal?: AbortSignal): Promise<ReadinessResponse> => {
+    try {
+      return await request<ReadinessResponse>("/api/ready", { signal });
+    } catch (err) {
+      if (
+        err instanceof ApiError &&
+        err.body !== null &&
+        typeof err.body === "object" &&
+        "state" in (err.body as object)
+      ) {
+        return err.body as unknown as ReadinessResponse;
+      }
+      throw err;
+    }
+  },
 
   systemStatus: (signal?: AbortSignal) =>
     request<SystemStatus>("/api/system/status", { signal }),

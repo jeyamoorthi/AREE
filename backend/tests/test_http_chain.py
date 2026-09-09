@@ -38,6 +38,31 @@ def test_engine_reports_direct_mode(http):
         f"expected the direct engine, got {body.get('mode')!r}")
 
 
+def test_readiness_is_a_different_question_from_liveness(http):
+    """/api/health must never 503; /api/ready must, until there is data.
+
+    The bug this guards is the one that made the demo look broken: load_engine()
+    returns True as soon as the sampling THREAD exists, so /api/health reported
+    engine_loaded=true at t+0.01 s while the station table stayed empty until
+    t+13 s. Anything reading health as readiness therefore saw a healthy service
+    with no data and could only render that as a failure.
+
+    The assertion is an invariant, not a fixed answer, so it holds whether or
+    not this machine can reach the upstream feeds: the status code and the
+    reported state must agree. A 200 that says "warming_up", or a 503 that says
+    "ready", is worse than either signal on its own.
+    """
+    status, health = http("GET", "/api/health")
+    assert status == 200, health
+    assert health.get("engine_loaded") is True, health
+
+    status, ready = http("GET", "/api/ready")
+    assert ready.get("state") in {"ready", "warming_up", "unavailable"}, ready
+    assert (status == 200) == (ready["state"] == "ready"), (status, ready)
+    assert ready["ready"] is (status == 200), (status, ready)
+    assert (ready["stations"] > 0) is (ready["state"] == "ready"), ready
+
+
 def test_openapi_is_served(http):
     status, body = http("GET", "/openapi.json")
     assert status == 200

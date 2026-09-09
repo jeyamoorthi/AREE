@@ -34,7 +34,9 @@ EXPECTED = {
     ("get", "/api/auth/config"): "config",
     ("post", "/api/policy/upload"): "upload_policy",
     ("get", "/api/health"): "health",
+    ("get", "/api/ready"): "ready",
     ("get", "/api/system/status"): "system_status",
+    ("get", "/api/system/capture"): "capture_status",
     ("get", "/api/ventilation/current"): "current",
     ("get", "/api/reports/{station}/pdf"): "report_pdf",
 }
