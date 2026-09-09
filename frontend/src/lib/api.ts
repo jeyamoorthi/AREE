@@ -17,6 +17,7 @@ import type {
   HealthResponse,
   PolicyResponse,
   PolicyUploadResponse,
+  CaptureStatus,
   ReadinessResponse,
   ReportMetaResponse,
   RiskResponse,
@@ -309,6 +310,10 @@ export const api = {
 
   systemStatus: (signal?: AbortSignal) =>
     request<SystemStatus>("/api/system/status", { signal }),
+
+  /** Observation-store continuity — why the outlook is unavailable, if it is. */
+  capture: (signal?: AbortSignal) =>
+    request<CaptureStatus>("/api/system/capture", { signal }),
 
   systemConfig: (signal?: AbortSignal) =>
     request<EngineConfig>("/api/system/config", { signal }),

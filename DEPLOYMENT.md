@@ -111,13 +111,30 @@ the log. Fix it before sharing the link.
 1. Vercel → **Add New** → **Project** → import the repo.
 2. **Root Directory: `frontend`**. Vercel detects Next.js; leave the build
    command alone.
-3. Add ONE environment variable:
+3. Add these environment variables:
 
-   | Name | Value |
-   |---|---|
-   | `AREE_API_ORIGIN` | `https://<your-backend>.onrender.com` |
+   | Name | Value | Required |
+   |---|---|---|
+   | `AREE_API_ORIGIN` | `https://<your-backend>.onrender.com` | yes |
+   | `NEXT_PUBLIC_CARTO_KEY` | your CARTO basemap key | no |
 
 4. Deploy.
+
+#### `NEXT_PUBLIC_CARTO_KEY`
+
+Without it the maps still render — CARTO serves the tiles watermarked, so a
+missing key costs appearance and nothing else. With it the watermark goes away.
+
+It is a **browser-side** key: it is compiled into the bundle and travels in the
+tile URL, so anyone using the site can read it. That is simply how tile auth
+works and is not a leak. What it is NOT is a repository secret — CARTO asks that
+it not be shared with everyone who clones the repo, so it is set here and in
+`frontend/.env.local` for local development, and never committed. See the comment
+at the top of `src/components/StationMap.tsx`.
+
+Tiles are cached hard by both the browser and CARTO's CDN, so after setting it
+**redeploy and then force-refresh** (Ctrl-F5); an old watermarked tile can
+otherwise linger for a while and look like the key did not work.
 
 ### 4.2 Do NOT set `NEXT_PUBLIC_API_URL`
 
