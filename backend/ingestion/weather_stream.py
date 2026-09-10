@@ -45,9 +45,13 @@ TIME SEMANTICS
 
 from __future__ import annotations
 
+import logging
+import time
 from datetime import datetime, timezone
 
 import requests
+
+log = logging.getLogger("aree.weather")
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive"
@@ -163,19 +167,79 @@ def _derive(rec: dict) -> dict:
     return rec
 
 
+# The most recent upstream failure, so a caller handed [] can say WHY.
+#
+# WHY THIS EXISTS
+#     _fetch returns [] for every failure - timeout, 429, DNS, TLS - and an empty
+#     list is indistinguishable from "the request worked, there is simply no
+#     weather". Downstream that became "no meteorology available after <hour>",
+#     which names the wrong subsystem: the store was not stale, the HTTP call
+#     failed. On a hosted instance nobody can attach a debugger, and the free
+#     Open-Meteo tier rate-limits by SOURCE IP - which a managed platform shares
+#     across tenants - so that message was the only available signal and it
+#     pointed away from the cause.
+#
+#     One module-level dict turns an undiagnosable production failure into a
+#     stated one. It is deliberately not an exception: a missing forecast must
+#     still degrade rather than take the API down.
+_LAST_ERROR: dict[str, object] = {"reason": None, "at": None, "url": None}
+
+
+def last_error() -> dict[str, object]:
+    """The most recent _fetch failure. `reason` is None if the last call succeeded."""
+    return dict(_LAST_ERROR)
+
+
+def _note_error(url: str, reason: str) -> None:
+    _LAST_ERROR.update({"reason": reason,
+                        "at": datetime.now(timezone.utc), "url": url})
+    log.warning("open-meteo: %s (%s)", reason, url)
+
+
+# Seconds to wait between retries. The previous code retried a 429 IMMEDIATELY,
+# three times, which against a rate limiter is three guaranteed failures inside a
+# few milliseconds followed by []. A 429 from a shared egress IP is usually
+# somebody else's traffic and clears on its own, so waiting IS the remedy.
+RETRY_BACKOFF_S = (1.0, 4.0)
+
+
+def _backoff(attempt: int) -> float:
+    return RETRY_BACKOFF_S[min(attempt, len(RETRY_BACKOFF_S) - 1)]
+
+
 def _fetch(url: str, params: dict, is_forecast: bool, retries: int = 3,
            variables: list[str] | None = None) -> list[dict]:
-    """One HTTP call with retry. Returns [] rather than raising."""
+    """One HTTP call with retry. Returns [] rather than raising, and records why."""
     for attempt in range(retries):
+        last = attempt == retries - 1
         try:
             r = requests.get(url, params=params, timeout=60)
             if r.status_code == 429:
+                if last:
+                    _note_error(url, f"rate limited (HTTP 429) after {retries} attempts")
+                    return []
+                # Honour Retry-After when the server sends one: it knows its own
+                # window better than any constant chosen here.
+                wait = _backoff(attempt)
+                try:
+                    wait = max(wait, float(r.headers.get("Retry-After") or 0))
+                except (TypeError, ValueError):
+                    pass
+                log.info("open-meteo: rate limited, retrying in %.0fs", wait)
+                time.sleep(wait)
                 continue
             r.raise_for_status()
-            return _rows_from_payload(r.json(), is_forecast, variables)
-        except Exception:                                   # noqa: BLE001
-            if attempt == retries - 1:
+            rows = _rows_from_payload(r.json(), is_forecast, variables)
+            if not rows:
+                _note_error(url, "upstream returned no hourly rows")
                 return []
+            _LAST_ERROR.update({"reason": None, "at": None, "url": None})
+            return rows
+        except Exception as exc:                            # noqa: BLE001
+            if last:
+                _note_error(url, f"{type(exc).__name__}: {exc}")
+                return []
+            time.sleep(_backoff(attempt))
     return []
 
 
@@ -189,7 +253,15 @@ def fetch_forecast(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
     data for a current-breach escalation while still allowing a predicted
     breach to open a preparatory case.
     """
-    days = max(1, min(16, (hours + 23) // 24))
+    # Open-Meteo counts forecast_days from TODAY 00:00 UTC, but the caller wants
+    # `hours` ahead of NOW. The hours already elapsed today come back in the
+    # payload and are then dropped by the filter below, so ceil(hours / 24) days
+    # delivered only `hours - elapsed` of future weather: a 72 h request issued at
+    # 08:00 UTC returned 64, and the PM2.5 forecast quietly served a 64-hour
+    # horizon against a problem statement that specifies 72. Counting the elapsed
+    # hours into the request is what makes the horizon asked for the horizon got.
+    elapsed = datetime.now(timezone.utc).hour
+    days = max(1, min(16, (elapsed + hours + 23) // 24))
     rows = _fetch(FORECAST_URL, {
         "latitude": lat, "longitude": lon,
         "hourly": ",".join(HOURLY_VARS),

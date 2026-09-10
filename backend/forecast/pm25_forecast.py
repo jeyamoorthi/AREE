@@ -429,8 +429,21 @@ def forecast(conn, as_of: datetime | None = None,
         series.append(point)
 
     if not series:
+        # Name the subsystem that actually failed. In live mode an empty `met` is
+        # far more often a failed upstream call than a thin store, and
+        # ws.last_error() is the only place that distinction survives - without it
+        # this message blamed the store for an HTTP failure and sent whoever read
+        # it looking in the wrong place. In replay the store IS the source, so the
+        # unqualified sentence is already correct and nothing is appended.
+        detail = ""
+        if mode == "live":
+            upstream = ws.last_error()
+            if upstream.get("reason"):
+                detail = (" - the upstream meteorology fetch failed: "
+                          f"{upstream['reason']}")
         return {"available": False, "as_of": as_of, "mode": mode,
-                "reason": f"no meteorology available after {as_of:%Y-%m-%d %H:%M}"}
+                "reason": (f"no meteorology available after "
+                           f"{as_of:%Y-%m-%d %H:%M}{detail}")}
 
     return {
         "available": True,
