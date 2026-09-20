@@ -19,21 +19,34 @@ services:
     dockerfilePath: ./Dockerfile
     dockerContext: .
     region: singapore          # closest to Delhi NCR of Render's regions
-    plan: starter              # a persistent disk requires a paid instance type
+    plan: free                 # see THE FREE TIER, below
     healthCheckPath: /api/health
 
-    # THE STORE.
+    # THE STORE, AND WHY THERE IS NO DISK HERE ANY MORE.
     #
-    # Mounted at /app/data, which AREE_DB_PATH points into. The entrypoint seeds
-    # it on first boot from the committed 1 MB fixture, so replay works
-    # immediately; live fills in as capture accumulates.
+    # A persistent disk requires a paid instance type. Without one the store is
+    # lost on every deploy and restart, and that used to be fatal: the live
+    # forecast needs observed PM2.5 at lags [0,1,3,6,12,24] h, the in-process
+    # capture needs ~24 h of uptime to accumulate them, and a free instance spins
+    # down after 15 minutes of inactivity - so it never got there and live
+    # answered 424 permanently while replay kept working.
     #
-    # WITHOUT A DISK the store is lost on every deploy and restart, and the live
-    # forecast can never accumulate the ~24 h of observations it needs.
-    disk:
-      name: aree-store
-      mountPath: /app/data
-      sizeGB: 2
+    # That dependency is gone. .github/workflows/capture.yml records the NCR
+    # network hourly on a schedule that cannot sleep, commits it under
+    # observations/, and docker-entrypoint.sh imports it at start. A container
+    # with no disk now boots with the same observation window as a long-running
+    # one, so the free tier is survivable.
+    #
+    # WHAT IS STILL LOST WITHOUT A DISK
+    #   Case decisions and escalations written at run time, and any policy
+    #   uploaded through the admin console. Those are regulatory records; if this
+    #   is ever more than a demonstration, pay for the disk and restore:
+    #
+    #     plan: starter
+    #     disk:
+    #       name: aree-store
+    #       mountPath: /app/data
+    #       sizeGB: 2
 
     envVars:
       - key: AREE_ENGINE_MODE
