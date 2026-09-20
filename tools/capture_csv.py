@@ -69,6 +69,25 @@ FIELDS = ("station_id", "timestamp", "pm25", "latitude", "longitude",
           "n_stations", "source")
 
 
+def _emit(key: str, value: str) -> None:
+    """Hand a value to the calling GitHub step, when there is one.
+
+    The commit message used to stamp `date -u`, which is the moment the RUNNER
+    woke up - not the hour the data describes. CPCB publishes 40-100 minutes
+    late, so those differ by one hour almost every run: a commit labelled 06:00Z
+    carrying 05:00Z readings. The label is what anyone reading git log later has
+    to trust, so it comes from the rows themselves.
+    """
+    path = os.getenv("GITHUB_OUTPUT")
+    if not path:
+        return
+    try:
+        with open(path, "a", encoding="utf-8") as fh:
+            fh.write(f"{key}={value}\n")
+    except OSError:                                          # noqa: BLE001
+        pass
+
+
 def _day_file(moment: datetime) -> Path:
     return OBS_DIR / f"{moment:%Y-%m-%d}.csv"
 
@@ -134,6 +153,8 @@ def cmd_export(args) -> int:
     rows = [r for r in rows if (r["station_id"], r["timestamp"]) not in have]
     if not rows:
         print(f"nothing new - {target.relative_to(_ROOT)} already has this hour")
+        _emit("captured", "false")
+        _emit("hour", "")
         return 0
 
     with target.open("a", encoding="utf-8", newline="") as fh:
@@ -143,6 +164,10 @@ def cmd_export(args) -> int:
         writer.writerows(rows)
 
     hours = sorted({r["timestamp"] for r in rows})
+    _emit("captured", "true")
+    # The newest hour actually written, which is what the commit should name.
+    _emit("hour", hours[-1])
+    _emit("rows", str(len(rows)))
     print(f"wrote {len(rows)} rows to {target.relative_to(_ROOT)}")
     print(f"  hours covered : {hours[0]} .. {hours[-1]}")
     print(f"  source        : {rows[0]['source']}")
