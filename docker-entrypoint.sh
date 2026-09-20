@@ -56,6 +56,30 @@ else
     echo "entrypoint: using the existing store at $DB_PATH ($(wc -c < "$DB_PATH") bytes)"
 fi
 
+# Load the observation record committed by the hourly GitHub Actions capture.
+#
+# WHY A FRESH CONTAINER NEEDS THIS
+#   The live forecast needs observed PM2.5 at lags [0,1,3,6,12,24] h. On a host
+#   with no persistent disk - Render's free tier, and any container that is
+#   redeployed - the store resets to the 1 MB fixture, and the in-process capture
+#   would need ~24 h of uptime to accumulate those lags again. Free instances
+#   spin down long before that, so live forecasting could never start: the exact
+#   failure this deployment kept hitting.
+#
+#   observations/ is committed hourly by .github/workflows/capture.yml, so it is
+#   already in the image at build time. Importing it here means a container that
+#   has existed for ten seconds has the same observation window as one that has
+#   run for a day.
+#
+#   Failure is non-fatal for the same reason nothing else here is: a store
+#   problem must never stop the API from starting and reporting what is wrong.
+if [ -d /app/observations ]; then
+    echo "entrypoint: importing committed observations"
+    python /app/tools/capture_csv.py import 2>&1 ||         echo "entrypoint: WARNING observation import failed - live may answer 424 until capture accumulates"
+else
+    echo "entrypoint: no committed observations to import"
+fi
+
 if [ -z "$AREE_JWT_SECRET" ]; then
     echo "entrypoint: WARNING AREE_JWT_SECRET is unset — tokens will not survive a restart."
 fi

@@ -59,7 +59,7 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/observations
+          git add observations
           # `git diff --cached --quiet` exits 1 when there IS something staged, so
           # this must be an if and not an `&&` chain: under `set -e` the chain would
           # abort the step on the very case we want to continue through.

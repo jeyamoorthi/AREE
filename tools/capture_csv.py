@@ -61,7 +61,12 @@ try:
 except ImportError:
     pass
 
-OBS_DIR = _ROOT / "data" / "observations"
+# NOT under data/. Every deployment mounts a volume at /app/data - render.yaml
+# declares a disk there and docker-compose a named volume - and a mount SHADOWS
+# whatever the image had at that path. Committed observations living there would
+# be invisible in exactly the deployment they exist to serve, and invisible
+# quietly: the store would simply come up empty and answer 424.
+OBS_DIR = _ROOT / "observations"
 
 # Same columns capture.snapshot() builds, in a fixed order so a hand-inspected
 # file and a parsed one agree.
