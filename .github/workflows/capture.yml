@@ -49,6 +49,7 @@ jobs:
         run: pip install --disable-pip-version-check requests python-dotenv
 
       - name: Capture
+        id: capture
         env:
           DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
           OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
@@ -66,7 +67,10 @@ jobs:
             echo "no new station-hours this run"
             exit 0
           fi
-          git commit -m "capture: NCR stations $(date -u +%Y-%m-%dT%H:00Z)"
+          # The hour the ROWS describe, reported by the export step. `date -u`
+          # would name the moment this runner woke up, which CPCB's 40-100 min
+          # publish lag puts an hour ahead of the data almost every run.
+          git commit -m "capture: NCR stations ${{ steps.capture.outputs.hour }}"
           # Another hour may have landed while this one was running.
           git pull --rebase --autostash origin main
           git push
