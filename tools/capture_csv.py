@@ -33,6 +33,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import sys
 import tempfile
@@ -231,16 +232,38 @@ def cmd_import(args) -> int:
     return 0
 
 
+def cmd_met(args) -> int:
+    """Mirror the live Open-Meteo forecast for the NCR point into the repository.
+
+    The deployed backend falls back to this when Open-Meteo rate-limits its own
+    IP - see weather_stream.MIRROR_URL. A failed fetch leaves the previous mirror
+    in place rather than replacing it with nothing.
+    """
+    from backend.ingestion import weather_stream as ws      # noqa: PLC0415
+
+    doc = ws.fetch_mirror_document()
+    if doc is None:
+        print("open-meteo unavailable - keeping the previous mirror")
+        return 0
+    OBS_DIR.mkdir(parents=True, exist_ok=True)
+    ws.MIRROR_FILE.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    hours = len(doc["payload"]["hourly"]["time"])
+    print(f"mirrored {hours} forecast hours to {ws.MIRROR_FILE.relative_to(_ROOT)}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("export", help="one live capture, appended to today's CSV")
     imp = sub.add_parser("import", help="load the committed CSVs into the store")
     imp.add_argument("--db", default=None, help="store path (default: AREE_DB_PATH)")
+    sub.add_parser("met", help="mirror the live NCR meteorology forecast")
 
     args = p.parse_args(argv)
     try:
-        return {"export": cmd_export, "import": cmd_import}[args.cmd](args)
+        return {"export": cmd_export, "import": cmd_import,
+                "met": cmd_met}[args.cmd](args)
     except Exception as exc:                                 # noqa: BLE001
         # A capture that fails must say why and fail loudly: a green job that
         # committed nothing is the failure mode this whole file exists to avoid.

@@ -112,8 +112,15 @@ export default function UnavailableNotice({
    * as an error — which is what a viewer saw, and it was not one. The backend
    * was repairing itself and did, two and a half minutes later.
    *
-   * So a store that is not continuous is a warm-up, not a failure. */
-  const restoring = capture?.continuous === false && capture?.running === true;
+   * So a store that is not continuous is a warm-up, not a failure.
+   *
+   * UNLESS THE FAILURE IS NOT ABOUT OBSERVATIONS AT ALL. A single hole is
+   * normal and the forecast steps around it, so a meteorology failure arriving
+   * while one hour is missing was rendered as "Restoring observation history" -
+   * blaming the store for an upstream weather outage it had nothing to do with. */
+  const aboutMeteorology = /meteorolog/i.test(detail);
+  const restoring =
+    !aboutMeteorology && capture?.continuous === false && capture?.running === true;
 
   if (warming || restoring) {
     const holes = capture?.holes ?? 0;

@@ -366,7 +366,7 @@ def forecast(conn, as_of: datetime | None = None,
                conn, grid,
                since=as_of - timedelta(hours=MAX_ANCHOR_BACKOFF_HOURS),
                until=as_of + timedelta(hours=horizon + 1)))
-    met_source = ("openmeteo:forecast" if mode == "live"
+    met_source = (ws.forecast_source(lat, lon) if mode == "live"
                   else f"store:{grid} (era5)")
 
     def _missing(anchor: datetime) -> list[int]:

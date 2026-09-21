@@ -45,9 +45,13 @@ TIME SEMANTICS
 
 from __future__ import annotations
 
+import json
 import logging
+import os
+import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import requests
 
@@ -202,6 +206,11 @@ def _note_error(url: str, reason: str) -> None:
 # somebody else's traffic and clears on its own, so waiting IS the remedy.
 RETRY_BACKOFF_S = (1.0, 4.0)
 
+# A Retry-After is honoured up to this and no further. The wait happens on a
+# request thread, and an upstream that asks for an hour would otherwise hold a
+# browser's request open for that hour.
+RETRY_WAIT_MAX_S = 10.0
+
 
 def _backoff(attempt: int) -> float:
     return RETRY_BACKOFF_S[min(attempt, len(RETRY_BACKOFF_S) - 1)]
@@ -225,6 +234,7 @@ def _fetch(url: str, params: dict, is_forecast: bool, retries: int = 3,
                     wait = max(wait, float(r.headers.get("Retry-After") or 0))
                 except (TypeError, ValueError):
                     pass
+                wait = min(wait, RETRY_WAIT_MAX_S)
                 log.info("open-meteo: rate limited, retrying in %.0fs", wait)
                 time.sleep(wait)
                 continue
@@ -243,6 +253,161 @@ def _fetch(url: str, params: dict, is_forecast: bool, retries: int = 3,
     return []
 
 
+# --- keeping the live forecast up when Open-Meteo will not answer ------------
+#
+# WHY THIS EXISTS
+#     Measured on the deployed instance: the live outlook answered "no meteorology
+#     available ... rate limited (HTTP 429) after 3 attempts" while replay worked.
+#     Open-Meteo's free tier limits by source IP, and a managed platform shares its
+#     egress IPs across tenants - so the limit can be spent by somebody else's
+#     traffic, and retrying from the same IP does not help. Every live outlook also
+#     used to fetch afresh, so this service spent that shared budget too.
+#
+# WHAT HAPPENS NOW, IN ORDER
+#     1. A fetch that succeeded is reused for FRESH_SECONDS. The upstream models
+#        update hourly at best, so refetching sooner buys nothing.
+#     2. When a refetch fails, the forecast falls back to the freshest copy that
+#        is still within STALE_MAX_HOURS:
+#          - the mirror the hourly GitHub Actions capture commits. It is fetched
+#            from GitHub's IPs, not this host's, so a limit spent here does not
+#            touch it. Read from the repository first (fresh within the hour even
+#            without a redeploy), then from the copy baked into the image.
+#          - this process's own last good fetch.
+#        A fallback is retried against upstream every FALLBACK_RECHECK_SECONDS.
+#     3. Nothing usable: [] as before, with last_error() saying why.
+#
+#     A fallback is a real Open-Meteo forecast from an earlier fetch, not an
+#     invented one, and forecast_source() says which fetch and when, so the
+#     provenance never reads as a fresh fetch when it was not one.
+FRESH_SECONDS = 1800
+FALLBACK_RECHECK_SECONDS = 600
+STALE_MAX_HOURS = 24
+
+# Days requested per fetch. Fixed rather than derived from the hour so one cached
+# payload serves every caller, and five so a fetch up to STALE_MAX_HOURS old still
+# covers 72 h ahead from any hour of the day. Open-Meteo counts days from 00:00
+# UTC TODAY; a 72 h request issued at 23:00 needs 95 h of payload.
+FORECAST_FETCH_DAYS = 5
+
+MIRROR_FILE = Path(__file__).resolve().parents[2] / "observations" / "met_forecast.json"
+MIRROR_URL = os.getenv(
+    "AREE_MET_MIRROR_URL",
+    "https://raw.githubusercontent.com/jeyamoorthi/AREE/main/observations/met_forecast.json")
+
+_forecasts: dict[tuple, dict] = {}
+_forecasts_lock = threading.Lock()
+# One refresh at a time: a burst of requests after the cache expires would
+# otherwise each spend a request against the rate limit that caused this.
+_refresh_lock = threading.Lock()
+
+
+def _key(lat: float, lon: float) -> tuple:
+    return (round(float(lat), 2), round(float(lon), 2))
+
+
+def _forecast_params(lat: float, lon: float) -> dict:
+    return {
+        "latitude": lat, "longitude": lon,
+        "hourly": ",".join(HOURLY_VARS),
+        "forecast_days": FORECAST_FETCH_DAYS,
+        "timezone": "UTC",
+        "wind_speed_unit": "ms",
+    }
+
+
+def _mirror_entry(doc: dict, key: tuple, where: str) -> dict | None:
+    """A cache entry from a mirror document, if it is for this point."""
+    if _key(doc.get("lat"), doc.get("lon")) != key:
+        return None
+    fetched = datetime.fromisoformat(doc["fetched_at"].replace("Z", "+00:00"))
+    rows = _rows_from_payload(doc["payload"], is_forecast=True)
+    for row in rows:
+        row["received_at"] = fetched    # when it was fetched, not when read
+    return {"rows": rows, "fetched_at": fetched, "origin": f"mirror ({where})"} if rows else None
+
+
+def _mirror_entries(key: tuple) -> list[dict]:
+    out = []
+    loaders = [("repository", lambda: requests.get(MIRROR_URL, timeout=10).json())
+               ] if MIRROR_URL.lower() not in ("", "off") else []
+    loaders.append(("image", lambda: json.loads(MIRROR_FILE.read_text(encoding="utf-8"))))
+    for where, load in loaders:
+        try:
+            entry = _mirror_entry(load(), key, where)
+        except Exception as exc:                            # noqa: BLE001
+            log.info("open-meteo mirror (%s) unavailable: %s", where, exc)
+            continue
+        if entry:
+            out.append(entry)
+    return out
+
+
+def _forecast_entry(lat: float, lon: float) -> dict | None:
+    """The forecast entry to serve for this point, refreshing it if due."""
+    key = _key(lat, lon)
+    now = datetime.now(timezone.utc)
+    with _forecasts_lock:
+        entry = _forecasts.get(key)
+    if entry and now < entry["recheck_at"]:
+        return entry
+
+    with _refresh_lock:
+        with _forecasts_lock:
+            entry = _forecasts.get(key)
+        # Whoever held the lock may have just refreshed this very point.
+        if entry and now < entry["recheck_at"]:
+            return entry
+
+        rows = _fetch(FORECAST_URL, _forecast_params(lat, lon), is_forecast=True)
+        if rows:
+            chosen = {"rows": rows, "fetched_at": now, "origin": "open-meteo",
+                      "fallback": False,
+                      "recheck_at": now + timedelta(seconds=FRESH_SECONDS)}
+        else:
+            candidates = ([entry] if entry else []) + _mirror_entries(key)
+            usable = [c for c in candidates
+                      if now - c["fetched_at"] <= timedelta(hours=STALE_MAX_HOURS)]
+            if not usable:
+                return None
+            best = max(usable, key=lambda c: c["fetched_at"])
+            chosen = {**best, "fallback": True,
+                      "recheck_at": now + timedelta(seconds=FALLBACK_RECHECK_SECONDS)}
+            log.warning("open-meteo: upstream unavailable (%s); serving the "
+                        "forecast fetched %s via %s", _LAST_ERROR.get("reason"),
+                        chosen["fetched_at"].strftime("%Y-%m-%d %H:%M UTC"),
+                        chosen["origin"])
+
+        with _forecasts_lock:
+            _forecasts[key] = chosen
+        return chosen
+
+
+def forecast_source(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON) -> str:
+    """Provenance for the forecast now being served for this point."""
+    with _forecasts_lock:
+        entry = _forecasts.get(_key(lat, lon))
+    if entry is None or not entry.get("fallback"):
+        return "openmeteo:forecast"
+    return (f"openmeteo:forecast fetched {entry['fetched_at']:%Y-%m-%d %H:%M} UTC "
+            f"via {entry['origin']}, upstream unavailable")
+
+
+def fetch_mirror_document(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON) -> dict | None:
+    """The raw payload the hourly capture commits as the mirror. None on failure."""
+    params = _forecast_params(lat, lon)
+    try:
+        r = requests.get(FORECAST_URL, params=params, timeout=60)
+        r.raise_for_status()
+        payload = r.json()
+    except Exception as exc:                                # noqa: BLE001
+        log.warning("open-meteo mirror fetch failed: %s", exc)
+        return None
+    if not (payload.get("hourly") or {}).get("time"):
+        return None
+    return {"fetched_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+            "lat": lat, "lon": lon, "params": params, "payload": payload}
+
+
 def fetch_forecast(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
                    hours: int = 72) -> list[dict]:
     """
@@ -252,26 +417,15 @@ def fetch_forecast(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
     returned with is_forecast=True so the decision layer can require observed
     data for a current-breach escalation while still allowing a predicted
     breach to open a preparatory case.
+
+    Served through the cache and fallbacks above; see forecast_source() for
+    which fetch the rows came from.
     """
-    # Open-Meteo counts forecast_days from TODAY 00:00 UTC, but the caller wants
-    # `hours` ahead of NOW. The hours already elapsed today come back in the
-    # payload and are then dropped by the filter below, so ceil(hours / 24) days
-    # delivered only `hours - elapsed` of future weather: a 72 h request issued at
-    # 08:00 UTC returned 64, and the PM2.5 forecast quietly served a 64-hour
-    # horizon against a problem statement that specifies 72. Counting the elapsed
-    # hours into the request is what makes the horizon asked for the horizon got.
-    elapsed = datetime.now(timezone.utc).hour
-    days = max(1, min(16, (elapsed + hours + 23) // 24))
-    rows = _fetch(FORECAST_URL, {
-        "latitude": lat, "longitude": lon,
-        "hourly": ",".join(HOURLY_VARS),
-        "forecast_days": days,
-        "timezone": "UTC",
-        "wind_speed_unit": "ms",
-    }, is_forecast=True)
-    now = datetime.now(timezone.utc)
-    return [r for r in rows if r["observed_at"] >= now.replace(minute=0, second=0,
-                                                               microsecond=0)][:hours]
+    entry = _forecast_entry(lat, lon)
+    if entry is None:
+        return []
+    now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    return [dict(r) for r in entry["rows"] if r["observed_at"] >= now][:hours]
 
 
 def fetch_recent(lat: float = DEFAULT_LAT, lon: float = DEFAULT_LON,
