@@ -46,6 +46,7 @@ WHY REPLAY EXISTS AT ALL
 from __future__ import annotations
 
 import logging
+import threading
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from statistics import fmean, median
@@ -271,6 +272,39 @@ def available_models(name: str) -> list[tuple[datetime, Path]]:
     return sorted(out)
 
 
+# Parsed boosters, keyed by (path, mtime_ns). Bounded by the number of model
+# files on disk, and a retrain changes the mtime, so a stale booster is never
+# served.
+#
+# WHY THIS IS A MEMORY FIX, NOT A SPEED ONE
+#     Parsing both files costs ~23 MB, and it used to happen on every forecast.
+#     Measured in the production image at 0.1 CPU / 512 MB (Render's free tier):
+#     24 concurrent uncached outlooks took the container from 146 MB to 421 MB
+#     and it did not come back down - 24 requests each holding their own copy of
+#     both models. Loaded once, concurrency no longer multiplies them.
+_boosters: dict[tuple[str, int], Any] = {}
+_boosters_lock = threading.Lock()
+
+# Serialises predict() on the shared boosters. A prediction is milliseconds, so
+# this costs nothing measurable, and it means thread-safety does not have to be
+# taken on trust from the native library.
+_predict_lock = threading.Lock()
+
+
+def _booster(path: Path):
+    import lightgbm as lgb
+
+    key = (str(path), path.stat().st_mtime_ns)
+    with _boosters_lock:
+        booster = _boosters.get(key)
+        if booster is None:
+            # Drop any older parse of the same file before adding the new one.
+            for old in [k for k in _boosters if k[0] == key[0]]:
+                del _boosters[old]
+            booster = _boosters[key] = lgb.Booster(model_file=str(path))
+        return booster
+
+
 def load_for(name: str, as_of: datetime):
     """
     The newest model that was not allowed to see anything after `as_of`.
@@ -278,8 +312,6 @@ def load_for(name: str, as_of: datetime):
     This is the leakage guard. A replay cannot load a later model because the
     selection never offers one.
     """
-    import lightgbm as lgb
-
     candidates = [(end, p) for end, p in available_models(name) if end <= as_of]
     if not candidates:
         raise RuntimeError(
@@ -287,7 +319,7 @@ def load_for(name: str, as_of: datetime):
             f"{as_of:%Y-%m-%d}. Run: python train_forecast.py "
             f"--train-end {as_of:%Y-%m-%d}")
     train_end, path = candidates[-1]
-    return lgb.Booster(model_file=str(path)), train_end
+    return _booster(path), train_end
 
 
 # --- the contract ----------------------------------------------------------
@@ -418,7 +450,11 @@ def forecast(conn, as_of: datetime | None = None,
             "feature_source": met_source,
         }
         for name, (booster, train_end) in boosters.items():
-            point[name] = round(max(0.0, float(booster.predict([features])[0])), 1)
+            # num_threads=1: one row needs no OpenMP team. See OMP_NUM_THREADS in
+            # the Dockerfile for what a team per request thread cost.
+            with _predict_lock:
+                raw = booster.predict([features], num_threads=1)[0]
+            point[name] = round(max(0.0, float(raw)), 1)
             point[f"{name}_model"] = f"{name}__{train_end:%Y%m%d}"
         m = met.get(valid) or {}
         point["ventilation_m2_s"] = (

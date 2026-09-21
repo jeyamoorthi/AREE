@@ -92,9 +92,25 @@ RUN mkdir -p /app/.tmp \
     && chown -R aree:aree /app/data /app/.tmp /app/backend/policies
 USER aree
 
+# MEMORY ON A 512 MB, 0.1 CPU INSTANCE (Render's free tier).
+#
+#   OMP_NUM_THREADS=1   LightGBM sizes its OpenMP team from the CPUs it can SEE,
+#                       not the CPU it is allotted - 16 on the host this was
+#                       measured on, against a 0.1 CPU quota. Every request thread
+#                       that predicted got its own team of 16, and a burst reached
+#                       238 threads. One thread per predict is all a tenth of a
+#                       CPU can run anyway.
+#
+#   MALLOC_ARENA_MAX=2  glibc gives each thread its own malloc arena and rarely
+#                       returns them to the OS, so memory freed after a burst
+#                       stayed resident (measured: 418 MB, not back to 146).
+#                       Two arenas trade a little allocator contention for memory
+#                       that is actually reused.
 ENV AREE_ENGINE_MODE=direct \
     AREE_DB_PATH=/app/data/aree.db \
-    PORT=8000
+    PORT=8000 \
+    OMP_NUM_THREADS=1 \
+    MALLOC_ARENA_MAX=2
 
 EXPOSE 8000
 

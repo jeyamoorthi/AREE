@@ -65,6 +65,19 @@ REPLAY_TTL_SECONDS = 600.0
 _ENABLED = os.environ.get("AREE_OUTLOOK_CACHE", "on").lower() not in {
     "0", "off", "false", "no"}
 
+# How many misses may run compute() at once. Everything beyond waits for a slot.
+#
+# WHY THIS IS BOUNDED
+#     Each compute() holds a forecast's worth of working memory. Unbounded, a
+#     burst of distinct keys (a page load, several tabs, a replay sweep) ran them
+#     all together: measured at 24 concurrent misses, 238 threads and a container
+#     that crossed Render's 512 MB limit and was restarted. On a 0.1 CPU instance
+#     running them in parallel does not finish them any sooner - the CPU is the
+#     bottleneck either way - so bounding them costs latency nothing and caps the
+#     peak.
+_COMPUTE_SLOTS = max(1, int(os.environ.get("AREE_OUTLOOK_COMPUTE_SLOTS", "2")))
+_compute_slots = threading.BoundedSemaphore(_COMPUTE_SLOTS)
+
 _lock = threading.Lock()
 _entries: "OrderedDict[tuple, tuple[float, Any]]" = OrderedDict()
 _hits = 0
@@ -130,28 +143,29 @@ def get_or_compute(key: tuple, ttl: float, producer: Callable[[], Any]) -> Any:
 
     The producer runs OUTSIDE the lock: it takes a second or so, and holding the
     lock across it would serialise every concurrent request behind the first one,
-    turning a cache into a queue. The cost is that a simultaneous miss on the
-    same key may compute twice; both produce the same value, so the duplicate is
-    wasted work and never a wrong answer.
+    turning a cache into a queue. It runs inside one of _COMPUTE_SLOTS instead,
+    which bounds how many run at once without serialising hits. The cost is that
+    a simultaneous miss on the same key may still compute twice; both produce the
+    same value, so the duplicate is wasted work and never a wrong answer.
     """
-    global _hits, _misses
+    global _misses
 
     if not _ENABLED:
-        return producer()
+        with _compute_slots:
+            return producer()
 
-    now = time.monotonic()
-    with _lock:
-        entry = _entries.get(key)
-        if entry is not None:
-            expires, value = entry
-            if expires > now:
-                _entries.move_to_end(key)
-                _hits += 1
-                return copy.deepcopy(value)
-            del _entries[key]
+    hit = _lookup(key)
+    if hit is not _MISS:
+        return hit
 
-    _misses += 1
-    value = producer()
+    with _compute_slots:
+        # Re-check: while this request waited for a slot, the one ahead of it
+        # may have just stored this very key.
+        hit = _lookup(key)
+        if hit is not _MISS:
+            return hit
+        _misses += 1
+        value = producer()
 
     with _lock:
         # Stored as a copy so the caller's later mutation of what it received
@@ -162,6 +176,27 @@ def get_or_compute(key: tuple, ttl: float, producer: Callable[[], Any]) -> Any:
             _entries.popitem(last=False)
 
     return value
+
+
+_MISS = object()
+
+
+def _lookup(key: tuple) -> Any:
+    """A deep copy of the live entry for `key`, or _MISS."""
+    global _hits
+
+    now = time.monotonic()
+    with _lock:
+        entry = _entries.get(key)
+        if entry is None:
+            return _MISS
+        expires, value = entry
+        if expires <= now:
+            del _entries[key]
+            return _MISS
+        _entries.move_to_end(key)
+        _hits += 1
+        return copy.deepcopy(value)
 
 
 def stats() -> dict[str, Any]:
