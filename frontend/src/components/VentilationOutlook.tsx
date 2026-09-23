@@ -50,6 +50,7 @@ import InterventionTimer, {
   useInterventionCountdown,
 } from "@/components/InterventionTimer";
 import { useOutlookData } from "@/components/providers/OutlookDataProvider";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 const C = {
   ink: "var(--aree-text)",
@@ -619,12 +620,7 @@ export default function VentilationOutlook() {
       )}
 
       {error && !loading && (
-        <div className="rounded-lg border p-4" style={{ background: "color-mix(in srgb, var(--aree-red) 8%, transparent)", borderColor: "color-mix(in srgb, var(--aree-red) 35%, transparent)" }}>
-          <p className="text-[12.5px] font-bold" style={{ color: "var(--aree-red)" }}>
-            Ventilation outlook unavailable
-          </p>
-          <p className="mt-1 text-[12px]">{error}</p>
-        </div>
+        <UnavailableNotice title="Ventilation outlook unavailable" detail={error} />
       )}
 
       {data && !loading && vp?.available && (

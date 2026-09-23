@@ -298,24 +298,66 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
 
     # E. Satellite Attribution
     els.extend(_sec_header("E. Satellite Transport Attribution", sty))
-    fire_count = s.get("fire_count", 0)
-    if fire_count > 0:
+    # THREE STATES, NOT TWO.
+    #
+    # This section used to branch on `fire_count > 0` alone, so a station with no
+    # fire count printed: "No upwind thermal anomalies detected. Local emission
+    # dominant." Both halves were fabrications whenever FIRMS had not been polled
+    # - and in direct mode it never is. The first asserts a satellite check that
+    # did not happen; the second is a causal attribution that nothing computed.
+    #
+    # On a signed escalation report that is the most damaging place in the system
+    # for an invented finding, because the document outlives the screen and is
+    # the artefact an officer forwards.
+    #
+    # "Not polled" and "polled, nothing found" are different facts and now print
+    # differently. `or 0` rather than a dict default because these keys EXIST with
+    # a None value - .get(k, 0) would still return None and then compare or format.
+    fire_count = s.get("fire_count")
+    firms_status = s.get("firms_status") or "unknown"
+    polled = firms_status == "ok" and fire_count is not None
+
+    def _or_na(key: str, suffix: str = "") -> str:
+        value = s.get(key)
+        return f"{value}{suffix}" if value is not None else "not computed"
+
+    if not polled:
+        els.append(Paragraph(
+            f"Satellite fire attribution was not computed for this report "
+            f"(FIRMS status: {firms_status}). No thermal-anomaly search was "
+            f"performed, so this section makes no finding either way - it is "
+            f"neither evidence of transport nor evidence of its absence.",
+            sty["body"]))
+        els.append(_kv_table([
+            ("FIRMS status", firms_status),
+            ("Fire hotspots", "not computed"),
+            ("Transport score", _or_na("transport_score", "/100")),
+            ("Attribution label", _or_na("transport_label")),
+        ]))
+    elif fire_count > 0:
         els.append(_kv_table([
             ("Fire Hotspots", str(fire_count)),
-            ("High Confidence Fires", str(s.get("high_conf_fires", 0))),
-            ("Transport Score", f'{s.get("transport_score", 0)}/100'),
-            ("Wind Speed", f'{s.get("wind_speed", "N/A")} m/s' if s.get("wind_speed") else "N/A"),
-            ("Wind Direction", f'{s.get("wind_direction", "N/A")}deg' if s.get("wind_direction") else "N/A"),
-            ("Attribution Label", s.get("transport_label", "N/A")),
-            ("Confidence", f'{s.get("confidence_score", 0)}%'),
+            ("High Confidence Fires", _or_na("high_conf_fires")),
+            ("Transport Score", _or_na("transport_score", "/100")),
+            ("Wind Speed", f'{s.get("wind_speed")} m/s' if s.get("wind_speed") else "N/A"),
+            ("Wind Direction", f'{s.get("wind_direction")}deg' if s.get("wind_direction") else "N/A"),
+            ("Attribution Label", _or_na("transport_label")),
+            ("Confidence", _or_na("confidence_score", "%")),
         ]))
     else:
+        # Genuinely searched and found nothing. The absence of upwind fires is a
+        # real result and is reported as one - but "local emission dominant" is a
+        # causal conclusion this pipeline does not draw, so it is not asserted.
         els.append(Paragraph(
-            "No upwind thermal anomalies detected. Local emission dominant.", sty["body"]))
+            "FIRMS was polled and returned no upwind thermal anomalies in the "
+            "search window. This rules out detected fire transport as a "
+            "contributor; it does not by itself attribute the episode to local "
+            "emission.", sty["body"]))
         els.append(_kv_table([
-            ("Transport Score", f'{s.get("transport_score", 0)}/100'),
-            ("Confidence", f'{s.get("confidence_score", 0)}%'),
-            ("FIRMS Dataset", s.get("firms_dataset", "N/A")),
+            ("FIRMS status", firms_status),
+            ("Fire hotspots", "0 (searched)"),
+            ("Transport Score", _or_na("transport_score", "/100")),
+            ("FIRMS Dataset", s.get("firms_dataset") or "N/A"),
         ]))
 
     # Pre-emptive advisory

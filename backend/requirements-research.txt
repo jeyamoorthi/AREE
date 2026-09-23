@@ -1,0 +1,26 @@
+# AREE — OPTIONAL: offline research, backfill and analysis.
+#
+# Nothing here is reachable from an HTTP route. These support the scripts that
+# BUILD the evidence base -- backfilling ERA5, importing research archives,
+# training models, scoring experiments -- rather than the service that serves it.
+#
+# Install with:
+#   pip install -r backend/requirements.txt -r backend/requirements-research.txt
+
+# --- verified: installed in the working environment ------------------------
+# backend/backfill/research_import.py imports pyarrow.parquet inside a function,
+# so it is needed only when importing a parquet research archive.
+pyarrow==25.0.1
+
+# --- UNVERIFIED: imported by research/ scripts but NOT installed -----------
+# These appear in `import` statements under research/ but are absent from the
+# working environment, so the scripts that use them have not been run there.
+#
+# They are deliberately left UNPINNED. A pin would be a guess presented as a
+# fact, and this audit has no evidence for which versions work. Pin them the
+# first time these scripts are actually run and the versions are known.
+pandas
+matplotlib
+xarray
+cdsapi
+python-docx

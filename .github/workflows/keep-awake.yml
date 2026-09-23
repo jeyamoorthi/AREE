@@ -1,0 +1,43 @@
+name: Keep awake
+
+# WHY THIS EXISTS
+#   Render's free tier spins a web service down after 15 minutes without traffic,
+#   and the next visitor then waits 30-60 s for the container to come back. A link
+#   shared with someone who is evaluating the project reads that pause as broken,
+#   and they are not wrong to: the first thing they see is a blank page.
+#
+#   A request every 10 minutes keeps the instance warm. This is the one job the
+#   free tier cannot do for itself, and a scheduled runner can.
+#
+# THE COST, STATED
+#   Keeping an instance awake around the clock spends roughly 730 of the 750 free
+#   instance-hours a month. That fits one service and leaves no room for a second.
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+# Nothing here touches the repository.
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping
+        env:
+          URL: ${{ vars.DEPLOY_URL }}
+        run: |
+          if [ -z "$URL" ]; then
+            echo "DEPLOY_URL is not set - nothing to ping yet."
+            echo "After deploying:  gh variable set DEPLOY_URL --body https://<service>.onrender.com"
+            exit 0
+          fi
+          code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 120 "$URL/api/health" || echo 000)
+          echo "$URL/api/health -> $code"
+          # A cold start can outrun the timeout and still be a successful wake, so
+          # this never fails the run: a red cross every ten minutes would train
+          # everyone to ignore the one that eventually matters.
+          [ "${code#2}" != "$code" ] && echo "warm" || echo "waking or unreachable"

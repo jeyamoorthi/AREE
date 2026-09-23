@@ -61,6 +61,7 @@ import EvidencePanel, { selectEvidence } from "@/components/EvidencePanel";
 import InterventionTimer, {
   useInterventionCountdown,
 } from "@/components/InterventionTimer";
+import UnavailableNotice from "@/components/UnavailableNotice";
 
 import {
   OUTLOOK_PRESETS,
@@ -439,32 +440,26 @@ export default function OutlookView() {
           It is demoted beneath a sentence that says what happened and a control that
           gets the reader somewhere useful. */}
       {error && !loading && (
-        <div
-          className="rounded-lg border p-4"
-          style={{
-            background: "color-mix(in srgb, var(--aree-red) 8%, transparent)",
-            borderColor: "color-mix(in srgb, var(--aree-red) 35%, transparent)",
-          }}
-          role="status"
-        >
-          <p className="text-[12.5px] font-bold" style={{ color: C.redInk }}>
-            {onReplayPreset
-              ? `No observations stored for ${presetLabel}`
-              : "The live outlook cannot be issued yet"}
-          </p>
+        onReplayPreset ? (
+          <div
+            className="rounded-lg border p-4"
+            style={{
+              background: "color-mix(in srgb, var(--aree-red) 8%, transparent)",
+              borderColor: "color-mix(in srgb, var(--aree-red) 35%, transparent)",
+            }}
+            role="status"
+          >
+            <p className="text-[12.5px] font-bold" style={{ color: C.redInk }}>
+              No observations stored for {presetLabel}
+            </p>
 
-          <p className="mt-1 max-w-[70ch] text-[12px] leading-snug" style={{ color: C.body }}>
-            {onReplayPreset
-              ? "A replay reconstructs a past moment from observations recorded at " +
-                "the time. This deployment has none for that date, so there is " +
-                "nothing to reconstruct — switching to Live shows the current airshed."
-              : "A forecast is issued from the last complete set of observations, " +
-                "and the store does not hold one yet. The hourly capture refills it " +
-                "automatically; this clears on its own once a full set has arrived."}
-          </p>
+            <p className="mt-1 max-w-[70ch] text-[12px] leading-snug" style={{ color: C.body }}>
+              A replay reconstructs a past moment from observations recorded at the
+              time. This deployment has none for that date, so there is nothing to
+              reconstruct — switching to Live shows the current airshed.
+            </p>
 
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {onReplayPreset ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setPreset(0)}
@@ -473,28 +468,21 @@ export default function OutlookView() {
               >
                 Show the live outlook
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={reload}
-                className="rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
-                style={{ background: C.paper, borderColor: C.line, color: C.body }}
-              >
-                Check again
-              </button>
-            )}
-            <span className="text-[11px]" style={{ color: C.dim }}>
-              The National Overview and Command Center are unaffected.
-            </span>
-          </div>
+              <span className="text-[11px]" style={{ color: C.dim }}>
+                The National Overview and Command Center are unaffected.
+              </span>
+            </div>
 
-          {/* The exact upstream sentence, kept for whoever has to act on it. */}
-          <p className="mt-3 border-t pt-2 font-mono text-[10.5px] leading-snug"
-             style={{ borderColor: "color-mix(in srgb, var(--aree-red) 25%, transparent)",
-                      color: C.dim }}>
-            {error}
-          </p>
-        </div>
+            {/* The exact upstream sentence, kept for whoever has to act on it. */}
+            <p className="mt-3 border-t pt-2 font-mono text-[10.5px] leading-snug"
+               style={{ borderColor: "color-mix(in srgb, var(--aree-red) 25%, transparent)",
+                        color: C.dim }}>
+              {error}
+            </p>
+          </div>
+        ) : (
+          <UnavailableNotice title="Outlook unavailable" detail={error} />
+        )
       )}
 
       {data && !loading && (

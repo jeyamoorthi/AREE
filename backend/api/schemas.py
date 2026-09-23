@@ -18,6 +18,30 @@ class HealthResponse(BaseModel):
     engine_error: Optional[str] = None
 
 
+class ReadinessResponse(BaseModel):
+    """Whether the engine has data to serve - a different question to liveness.
+
+    `engine_loaded` is NOT the answer. It goes true the moment the sampling
+    thread is spawned, which is roughly instant and says nothing about whether
+    a cycle has completed. `state` is the field a caller should branch on:
+
+        "ready"        the station table is populated and the API can be used
+        "warming_up"   the engine started; its first cycle has not landed yet
+        "unavailable"  the engine did not start at all
+
+    The distinction exists so a UI can say "warming up" instead of "failed",
+    which are the same screen today and should never have been.
+    """
+
+    ready: bool
+    state: str
+    detail: str
+    engine_loaded: bool
+    mode: Optional[str] = None
+    stations: int = 0
+    engine_error: Optional[str] = None
+
+
 class ApiError(BaseModel):
     error: str
     detail: str
@@ -42,6 +66,39 @@ class EngineConfig(BaseModel):
     vulnerability_multipliers: Dict[str, float]
     cpcb_bands: List[Dict[str, Any]]
     grap_stages: List[Dict[str, Any]]
+
+
+class CaptureStatus(BaseModel):
+    """The observation store's continuity, and the thread that maintains it.
+
+    WHY THIS IS AN ENDPOINT AND NOT A LOG LINE
+        The forecast answers 424 when the store cannot supply its lag set, and
+        until now the only way to find out WHY was to read the server log. On a
+        deployed instance that is the one thing you cannot do quickly, so
+        "the outlook is broken" and "the outlook is fine, the store lost four
+        hours last night" looked identical from outside.
+
+        `continuous` is the field that answers it in one GET. `holes` and
+        `oldest_hole` say how much and how far back, which is what decides
+        whether waiting will fix it (it will not - see missing_hours).
+    """
+
+    # The capture thread
+    enabled: bool
+    running: bool
+    cycles: int = 0
+    last_snapshot_at: Optional[str] = None
+    last_written: Optional[int] = None
+    last_error: Optional[str] = None
+    bootstrapped: bool = False
+
+    # The store it maintains
+    newest_hour: Optional[str] = None
+    trailing_gap_hours: Optional[float] = None
+    holes: int = 0
+    oldest_hole: Optional[str] = None
+    continuous: bool = False
+    observation_window_hours: int = 0
 
 
 class SystemStatus(BaseModel):
@@ -259,8 +316,11 @@ class RiskResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     station: str
-    eri_score: int = 0
-    eri_category: str = "LOW READINESS"
+    # Optional because direct mode does not compute ERI. A non-optional int with
+    # a 0 default does not merely permit a fabricated value, it REQUIRES one - the
+    # route had no way to say "not computed" while satisfying this schema.
+    eri_score: Optional[int] = None
+    eri_category: Optional[str] = None
     eri_factors: List[str] = Field(default_factory=list)
     confidence_score: Optional[int] = None
     transport_score: Optional[int] = None

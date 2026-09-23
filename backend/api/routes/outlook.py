@@ -45,6 +45,7 @@ from fastapi import APIRouter, HTTPException, Query
 from ...backfill import db, model_lgbm
 from ...forecast import pm25_forecast as fc
 from ...streaming import case_store as cs
+from .. import cache
 from ...streaming import predictive_engine as pe
 from . import intelligence as intel
 
@@ -266,6 +267,46 @@ def compute(conn, as_of: Optional[datetime], *, lat: float = fc.ws.DEFAULT_LAT,
     }
 
 
+def compute_cached(conn, as_of: Optional[datetime], *,
+                   lat: float = fc.ws.DEFAULT_LAT,
+                   lon: float = fc.ws.DEFAULT_LON,
+                   grid: str = model_lgbm.DEFAULT_GRID,
+                   hours: int = fc.HORIZON) -> dict[str, Any]:
+    """
+    `compute()` behind the read-through cache.
+
+    WHY THE CACHE IS NOT KEYED ON THE URL
+        Two requests for /api/aree/outlook with no `at` are the SAME url and are
+        not the same question: one may be asked before the hourly capture lands
+        and one after. Keying on the url would pin the live outlook to whatever
+        the store held the first time anyone asked. So the key carries the
+        request parameters AND a version of the inputs - the observation store
+        and the model files - and any change to either produces a different key.
+
+    WHY LIVE AND REPLAY GET DIFFERENT LIFETIMES
+        A replay of 2 Nov 2024 is a statement about a fixed past, and the only
+        thing that can legitimately change it is a backfill or a retrain, both of
+        which move a version token. It can be held longer. A live outlook tracks
+        the present and is held for a minute, so that even a token this layer
+        cannot see costs at most that.
+
+    `as_of=None` is kept distinct from an explicit timestamp in the key. They are
+    different requests: one means "now", the other means one specific hour, and
+    collapsing them would let a replay answer a live question.
+    """
+    key = (
+        "outlook",
+        as_of.isoformat() if as_of is not None else None,
+        lat, lon, grid, hours,
+        cache.data_version(conn),
+        cache.model_version(fc.MODEL_DIR),
+    )
+    ttl = cache.REPLAY_TTL_SECONDS if as_of is not None else cache.LIVE_TTL_SECONDS
+    return cache.get_or_compute(
+        key, ttl,
+        lambda: compute(conn, as_of, lat=lat, lon=lon, grid=grid, hours=hours))
+
+
 @router.get("/aree/outlook",
             summary="The complete AREE outlook: forecast, cause, risk, decision")
 def outlook(at: Optional[str] = Query(
@@ -284,7 +325,8 @@ def outlook(at: Optional[str] = Query(
     as_of = _parse_at(at)
     conn = db.connect()
 
-    core = compute(conn, as_of, lat=lat, lon=lon, grid=grid, hours=hours)
+    core = compute_cached(conn, as_of, lat=lat, lon=lon, grid=grid,
+                          hours=hours)
     forecast = core["forecast"]
     resolved = core["as_of"]
     series = forecast["series"]

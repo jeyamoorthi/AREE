@@ -13,14 +13,14 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from . import capture_scheduler, engine, ws
 from .routes import ROUTERS
-from .schemas import HealthResponse
+from .schemas import HealthResponse, ReadinessResponse
 
 API_VERSION = "2.2.0"
 API_PREFIX = "/api"
@@ -41,9 +41,12 @@ def _start_engine_background() -> None:
             if st.get("mode") == "streaming":
                 log.info("AREE engine loaded. Pathway streaming pipeline is running.")
             else:
-                log.info("AREE engine loaded in DIRECT mode: interval sampling, no "
-                         "event-time windowing, no policy retrieval. Reason: %s",
-                         st.get("pathway_error") or "direct mode selected")
+                log.info("AREE engine loaded in DIRECT mode (production path): "
+                         "interval sampling, no event-time windowing, no policy "
+                         "retrieval, no FIRMS poll. Selected: %s",
+                         st.get("engine_selection")
+                         or ("fell back after streaming failed: "
+                             + str(st.get("pathway_error"))))
         else:
             st = engine.status()
             log.error("AREE engine failed to load: %s: %s",
@@ -179,6 +182,72 @@ def health() -> HealthResponse:
         service="AREE API",
         version=API_VERSION,
         engine_loaded=bool(st["loaded"]),
+        engine_error=st.get("error"),
+    )
+
+
+@api.get(f"{API_PREFIX}/ready", response_model=ReadinessResponse, tags=["system"],
+         summary="Readiness probe - 503 until the engine has live station data")
+def ready(response: Response) -> ReadinessResponse:
+    """Is there anything to serve yet?
+
+    WHY THIS IS SEPARATE FROM /api/health, AND WHY IT HAD TO BE
+        `load_engine()` returns True as soon as the direct engine's sampling
+        THREAD exists - measured at t+0.012 s on a cold boot - and /api/health
+        has reported engine_loaded=true from that instant. But the first cycle
+        needs a CAQM roster, ~73 per-station reads and, until this phase, a
+        data.gov.in pull: the station table was empty until t+27 s.
+
+        So for twenty-seven seconds the service announced itself healthy while
+        every data route answered with nothing. The frontend could not tell
+        that apart from a broken backend and rendered a failure state, which is
+        the single most misleading thing a warming-up system can do.
+
+        Liveness and readiness are now two questions with two answers:
+
+            /api/health   the process is up and can serve replay. Never 503s.
+            /api/ready    the live engine has produced state. 503 until it has.
+
+    WHY render.yaml STILL POINTS ITS healthCheckPath AT /api/health
+        Deliberately, and it should stay that way. Render restarts a container
+        that fails its health check, and readiness here depends on THIRD-PARTY
+        feeds - CAQM and data.gov.in. If an upstream outage made this endpoint
+        503, Render would restart-loop a backend that is working perfectly and
+        still serving every replay endpoint, turning someone else's outage into
+        our own. Readiness is for the UI to read, not for the orchestrator to
+        act on.
+    """
+    st = engine.status()
+
+    stations = 0
+    if st.get("loaded"):
+        try:
+            stations = len(engine.latest_state())
+        except Exception:                                   # noqa: BLE001
+            # Readiness must never raise. Not being able to count is itself an
+            # answer, and the answer is "not ready".
+            stations = 0
+
+    if stations > 0:
+        state, detail = "ready", f"{stations} stations reporting."
+    elif st.get("loaded"):
+        state, detail = ("warming_up",
+                         "The engine is running and its first sampling cycle "
+                         "has not completed. Replay endpoints are unaffected.")
+    else:
+        state, detail = ("unavailable",
+                         st.get("error") or "The engine is not running.")
+
+    if state != "ready":
+        response.status_code = 503
+
+    return ReadinessResponse(
+        ready=state == "ready",
+        state=state,
+        detail=detail,
+        engine_loaded=bool(st.get("loaded")),
+        mode=st.get("mode"),
+        stations=stations,
         engine_error=st.get("error"),
     )
 

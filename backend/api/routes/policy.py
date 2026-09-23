@@ -6,9 +6,10 @@ watches in streaming mode — indexing stays entirely in the Python RAG layer.
 
 import os
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 
 from .. import engine
+from .. import auth
 from ..deps import require_engine
 from ..schemas import (
     PolicyFile, PolicyParseError, PolicyResponse, PolicyUploadResponse,
@@ -44,7 +45,24 @@ def policy() -> PolicyResponse:
 
 @router.post("/policy/upload", response_model=PolicyUploadResponse, status_code=201,
              summary="Upload a policy document into the live RAG index")
-async def upload_policy(file: UploadFile = File(...)) -> PolicyUploadResponse:
+async def upload_policy(
+        file: UploadFile = File(...),
+        principal: auth.Principal = Depends(auth.requires("policy:write")),
+) -> PolicyUploadResponse:
+    """
+    Accept a policy document into the corpus.
+
+    REQUIRES THE `policy:write` CAPABILITY, WHICH `authority` DOES NOT HOLD.
+        The policy corpus is the ground truth an advisory is generated against, so
+        writing to it is a change to the evidence base rather than a decision taken
+        on it. An administrator curates that corpus; an authority decides against
+        it. Neither role can do the other's job, which is why this endpoint and the
+        case decision endpoint require different capabilities rather than merely
+        "being logged in".
+
+    The upload was previously unauthenticated: anyone who could reach the endpoint
+    could introduce a document that later advisories would be grounded on.
+    """
     require_engine()
     c = engine.config()
 

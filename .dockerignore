@@ -19,3 +19,18 @@ backup_pre_migration/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+
+# The store. 148 MB, gitignored, and rebuilt/seeded at run time onto a volume —
+# baking it in would make the image slow to ship and stale the moment it built.
+data/
+!backend/tests/fixtures/
+
+# Scratch: this holds throwaway virtualenvs, logs and rendered DOM dumps and can
+# be hundreds of MB. It has no business in a build context.
+.tmp/
+.pipcache/
+
+# Test/CI artefacts the image does not need at run time. backend/tests IS kept:
+# the entrypoint seeds the store from backend/tests/fixtures/aree_test.db.
+.github/
+.pytest_cache/

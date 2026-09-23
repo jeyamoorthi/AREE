@@ -16,8 +16,6 @@ WHAT IS REAL HERE AND WHAT IS NOT
     Real, reusing the same code the Pathway path uses:
       * GRAP stage + hysteresis        streaming/state_machine.py, unmodified
       * persistence tracking           same module, same thresholds
-      * causal attribution / transport streaming/risk_engine.py
-      * satellite fire intelligence    ingestion/firms_stream.py
       * short-term projection          same linear fit as app.py
       * ground observations            live CPCB/DPCC network via OpenAQ
 
@@ -27,6 +25,25 @@ WHAT IS REAL HERE AND WHAT IS NOT
       * Pathway's sliding-window aggregates. This mode samples on an interval
         instead of computing event-time windows, so late or out-of-order data
         is not reconciled. That difference is stated in the status payload.
+      * satellite fire intelligence - ingestion/firms_stream.py is imported by
+        app.py alone. This module does not poll NASA FIRMS.
+      * causal attribution / transport - streaming/risk_engine.py, likewise
+        imported only by app.py. Nothing here classifies a pollution cause.
+
+    THIS DOCSTRING USED TO CLAIM THE LAST TWO AS REAL, AND THEY NEVER WERE.
+        It listed risk_engine.py and firms_stream.py under "reusing the same code
+        the Pathway path uses". This module imports neither, and never did. The
+        station payload was filled with defaults instead - fire_count 0,
+        transport_score 0, pollution_cause "unclassified", firms_status
+        "not_polled" - and a zero is not a missing value. It is a measurement,
+        and the dashboard read it as one: with no FIRMS poll ever made, the
+        satellite card rendered GREEN, which says "we looked and there are no
+        fires" rather than "we did not look".
+
+        In a product about disaster escalation, an unmeasured quantity that
+        displays as an all-clear is the worst possible default. Those fields are
+        now None. firms_status stays, because "not_polled" is the true statement
+        and the UI keys its unavailable state off it.
 
     Every state carries mode="direct" so nothing downstream, and nobody
     reading the UI, can mistake this for the streaming engine.
@@ -262,25 +279,37 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         "vulnerability_max": prev.get("vulnerability_max"),
         "preemptive_advisory": [],
 
-        # Fire / transport intelligence is filled by the poller when available.
-        "fire_count": station.get("fire_count", 0),
-        "high_conf_fires": station.get("high_conf_fires", 0),
-        "transport_score": station.get("transport_score", 0),
-        "transport_label": station.get("transport_label", "unknown"),
-        "pollution_cause": station.get("pollution_cause", "unclassified"),
-        "cause_confidence": station.get("cause_confidence", 0),
+        # FIRE / TRANSPORT INTELLIGENCE - NOT COMPUTED IN THIS MODE.
+        #
+        # These were defaults dressed as measurements. `0` fires is a finding;
+        # "no data" is not, and only one of them is true here. The station dict
+        # is still consulted so that a poller which DOES populate these (the
+        # Pathway path, or a future direct-mode FIRMS poll) needs no change to
+        # this block - but the fallback is None, not zero.
+        #
+        # firms_status is the exception and is deliberately kept: "not_polled"
+        # is an accurate statement about what happened, and it is the flag the
+        # UI keys its unavailable state off.
+        "fire_count": station.get("fire_count"),
+        "high_conf_fires": station.get("high_conf_fires"),
+        "transport_score": station.get("transport_score"),
+        "transport_label": station.get("transport_label"),
+        "pollution_cause": station.get("pollution_cause"),
+        "cause_confidence": station.get("cause_confidence"),
+        # An empty list is not a claim - it says "no factors supplied", which is
+        # exactly right. Left as [] so consumers can iterate without a guard.
         "cause_factors": [],
         "firms_status": station.get("firms_status", "not_polled"),
         "firms_error": None,
         "firms_dataset": None,
         "firms_sync": None,
         "fire_bbox": None,
-        "aligned_fires": 0,
-        "transport_probability": 0.0,
+        "aligned_fires": station.get("aligned_fires"),
+        "transport_probability": station.get("transport_probability"),
         "fire_centroid": None,
-        "plume_distance_km": 0.0,
-        "wind_alignment_deg": 0.0,
-        "wind_label": "unknown",
+        "plume_distance_km": station.get("plume_distance_km"),
+        "wind_alignment_deg": station.get("wind_alignment_deg"),
+        "wind_label": station.get("wind_label"),
 
         # No event-time windows in this mode; stated rather than fabricated.
         "avg_aqi_5min": None, "avg_aqi_15min": None,
@@ -355,8 +384,71 @@ def _attach_pollutants(stations: list[dict]) -> int:
     return matched
 
 
+def _enrich_published_pollutants(stations: list[dict]) -> int:
+    """Patch concentrations onto states that are ALREADY being served.
+
+    WHY THIS RUNS AFTER THE PUBLISH AND NOT BEFORE IT
+        _attach_pollutants() reads data.gov.in, which is by a wide margin the
+        slowest thing in a cycle - four state pulls, measured at 6.3, 7.9, 9.0
+        and 10.7 s. It used to sit in front of the loop that writes
+        latest_state, so NOTHING was served until it returned: measured on a
+        cold boot, /api/stations answered its first station at t+27 s, and the
+        last ten of those seconds bought only pollutant concentrations.
+
+        Those concentrations are enrichment, not the table. The AQI, the CPCB
+        band, the GRAP stage and the persistence count all come from CAQM and
+        are complete without them - which _attach_pollutants already says in
+        its own docstring, and already treats as non-fatal. So the table is
+        published as soon as it exists, and the concentrations are patched in
+        when they arrive a few seconds later.
+
+    WHY THE STATE IS PATCHED AND NOT REBUILT
+        _build_state() appends to aqi_history and calls engine.process(), which
+        advances the persistence counter and the hysteresis confirmation.
+        Running it a second time for one observation would count that
+        observation twice and could fire an escalation a window early - a
+        correctness failure in the one path this system exists to get right.
+        So only the pollutant fields are written here.
+
+        They are written onto a COPY which then replaces the entry in a single
+        assignment. latest_state is read by request threads without a lock, and
+        dict item assignment is atomic under the GIL, so a reader sees either
+        the un-enriched state or the enriched one, never a half-written mix.
+    """
+    if not _attach_pollutants(stations):
+        return 0
+
+    patched = 0
+    for st in stations:
+        current = latest_state.get(st["station"])
+        # A station whose enrichment found nothing keeps its published state
+        # untouched: pollutant_source is set only when a match supplied at
+        # least one value, so it is the flag for "this row was enriched".
+        if current is None or st.get("pollutant_source") is None:
+            continue
+        updated = dict(current)
+        for _, raw_key in _POLLUTANT_KEYS:
+            if st.get(raw_key) is not None:
+                updated[raw_key] = st[raw_key]
+        updated["pollutants_available"] = st.get("pollutants_available", 0)
+        updated["pollutant_source"] = st.get("pollutant_source")
+        updated["pollutant_age_minutes"] = st.get("pollutant_age_minutes")
+        if st.get("dominant_pollutant"):
+            updated["dominant_pollutant"] = st["dominant_pollutant"]
+        latest_state[st["station"]] = updated
+        patched += 1
+
+    log.info("pollutants: %d station states patched after publish", patched)
+    return patched
+
+
 def _poll_once() -> int:
-    """One sampling cycle across the NCR network. Returns stations updated."""
+    """One sampling cycle across the NCR network. Returns stations updated.
+
+    ORDER MATTERS, AND IT IS: fetch -> publish -> enrich. The station table is
+    made servable at the earliest instant it is correct; anything that only
+    makes it richer happens afterwards. See _enrich_published_pollutants.
+    """
     from ingestion import ncr_observations as obs
     from streaming.state_machine import StreamingStateEngine
 
@@ -381,8 +473,6 @@ def _poll_once() -> int:
                         composite.get("reason"))
             return 0
         stations = composite.get("stations", [])
-
-    _attach_pollutants(stations)
 
     engine = _engines_for_cycle()
     now = datetime.now(timezone.utc)
@@ -432,6 +522,10 @@ def _poll_once() -> int:
     carbon_state["total_gco2"] = round(
         carbon_state["decision_count"] * CARBON_COST_PER_DECISION, 4)
     carbon_state["per_decision_gco2"] = CARBON_COST_PER_DECISION
+
+    # Everything above this line is already being served. This is the slow,
+    # optional half of the cycle, and it runs last on purpose.
+    _enrich_published_pollutants(stations)
 
     return len(stations)
 

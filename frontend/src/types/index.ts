@@ -8,6 +8,49 @@ export interface HealthResponse {
   engine_error: string | null;
 }
 
+/**
+ * Whether the backend has live data to serve — a different question to whether
+ * it is alive.
+ *
+ * `engine_loaded` is NOT the answer and never was: it goes true the instant the
+ * sampling thread is spawned, roughly at boot, and says nothing about whether a
+ * cycle has completed. Branch on `state`.
+ */
+/**
+ * The observation store's continuity, and the thread that maintains it.
+ *
+ * `continuous` is NOT the same question as `trailing_gap_hours`. A store one
+ * hour behind can still be missing an hour from yesterday, and the forecast
+ * needs exact lag hours — so a small gap and a usable history are independent
+ * facts. Branch on `continuous`.
+ */
+export interface CaptureStatus {
+  enabled: boolean;
+  running: boolean;
+  cycles: number;
+  last_snapshot_at: string | null;
+  last_written: number | null;
+  last_error: string | null;
+  bootstrapped: boolean;
+  newest_hour: string | null;
+  trailing_gap_hours: number | null;
+  holes: number;
+  oldest_hole: string | null;
+  continuous: boolean;
+  observation_window_hours: number;
+}
+
+export interface ReadinessResponse {
+  ready: boolean;
+  /** "ready" | "warming_up" | "unavailable" */
+  state: string;
+  detail: string;
+  engine_loaded: boolean;
+  mode: string | null;
+  stations: number;
+  engine_error: string | null;
+}
+
 export interface ApiErrorBody {
   error: string;
   detail: string;

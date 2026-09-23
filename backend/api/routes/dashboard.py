@@ -17,7 +17,12 @@ router = APIRouter(tags=["dashboard"])
 
 def _rank(active: Dict[str, Dict[str, Any]], getter: Callable[[Dict[str, Any]], Any],
           limit: int = 5) -> List[RankedEntry]:
-    ranked = sorted(active.items(), key=lambda kv: getter(kv[1]) or 0, reverse=True)[:limit]
+    # Only stations that actually HAVE the metric are ranked. Sorting `None or 0`
+    # produced a full "top 5" table in a mode where nothing computes ERI at all -
+    # an ordering of absent values, presented with rank numbers beside it. An
+    # empty ranking is the honest output when the metric does not exist.
+    scored = [(name, vals) for name, vals in active.items() if getter(vals) is not None]
+    ranked = sorted(scored, key=lambda kv: getter(kv[1]), reverse=True)[:limit]
     return [
         RankedEntry(
             rank=i + 1,
@@ -73,7 +78,7 @@ def dashboard() -> DashboardResponse:
         RankingGroup(key="aqi", label="Highest AQI",
                      entries=_rank(active, lambda v: v.get("aqi", 0), 3)),
         RankingGroup(key="eri", label="Highest ERI",
-                     entries=_rank(active, lambda v: v.get("eri_score", 0), 3)),
+                     entries=_rank(active, lambda v: v.get("eri_score"), 3)),
         RankingGroup(key="rate", label="Fastest Rising",
                      entries=_rank(active, _forecast_field("rate_per_min"), 3)),
         RankingGroup(key="exposure", label="Highest Exposure",
@@ -88,7 +93,7 @@ def dashboard() -> DashboardResponse:
         normal=modes.get("NORMAL", 0),
         map_points=map_points,
         top_aqi=_rank(active, lambda v: v.get("aqi", 0), 5),
-        top_eri=_rank(active, lambda v: v.get("eri_score", 0), 5),
+        top_eri=_rank(active, lambda v: v.get("eri_score"), 5),
         rankings=rankings,
         carbon=to_jsonable(engine.carbon_state()),
         escalations_recorded=len(engine.escalation_log()),

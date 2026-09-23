@@ -1,42 +1,121 @@
-# AREE backend image — Pathway engine + FastAPI API layer.
-# Pathway ships Linux/macOS wheels only, so the engine always runs in a
-# container (or WSL) rather than natively on Windows.
+# AREE backend — FastAPI over the direct engine.
+#
+# WHAT CHANGED AND WHY
+#   This image used to install PyTorch explicitly and pull poppler/OCR system
+#   libraries, because requirements.txt declared the Pathway + sentence-
+#   transformers + unstructured stack. None of that is on the served path: the
+#   direct engine is the production engine (see backend/api/engine.py), and the
+#   runtime dependency set was reduced to the ten packages it actually imports.
+#
+#   Installing torch here now costs roughly 800 MB for code nothing imports.
+#   It is gone. So are build-essential, git and poppler-utils, which existed for
+#   the OCR/document stack.
+#
+#   To run the Pathway engine instead, build with
+#   --build-arg INSTALL_STREAMING=1 and set AREE_ENGINE_MODE=streaming. Those
+#   pins are UNVERIFIED (backend/requirements-streaming.txt says so); expect
+#   dependency-resolution work.
 
-FROM python:3.11-slim
+FROM python:3.13-slim AS base
 
-# Prevent interactive prompts
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Install system dependencies (required for pdf2image + unstructured)
-RUN apt-get update && apt-get install -y \
-    poppler-utils \
-    build-essential \
-    git \
-    curl \
+# SYSTEM PACKAGES — both are load-bearing, neither is a convenience.
+#
+#   libgomp1  LightGBM links against the OpenMP runtime and dlopens
+#             libgomp.so.1 at import. python:3.13-slim does not ship it, so
+#             WITHOUT THIS every forecast fails at request time with
+#             "OSError: libgomp.so.1: cannot open shared object file" while
+#             /api/health still answers 200 — an image that looks healthy and
+#             cannot forecast.
+#
+#             The previous image got it by accident: build-essential pulled it
+#             in transitively. Dropping build-essential (it was there for the
+#             OCR/torch stack that no longer exists) removed it, and the failure
+#             only surfaced when the container was actually asked for a
+#             forecast. It is declared explicitly now.
+#
+#   curl      the HEALTHCHECK below uses it.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libgomp1 curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy only requirements first (better Docker caching).
-# Requirements moved to backend/ during the Next.js migration.
-COPY backend/requirements.txt .
+# Dependencies first, so a source change does not reinstall them.
+COPY backend/requirements.txt backend/requirements-streaming.txt ./backend/
+ARG INSTALL_STREAMING=0
+RUN pip install --upgrade pip \
+    && pip install -r backend/requirements.txt \
+    && if [ "$INSTALL_STREAMING" = "1" ]; then \
+         echo "installing the UNVERIFIED streaming stack" && \
+         pip install -r backend/requirements-streaming.txt ; \
+       fi
 
-# Upgrade pip
-RUN pip install --no-cache-dir --upgrade pip
-
-# Install PyTorch CPU version first to prevent heavy CUDA dependency downloads
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu
-
-# Install remaining Python dependencies
-RUN pip install --no-cache-dir --default-timeout=1000 --retries 10 -r requirements.txt
-
-# Copy remaining project files
 COPY . .
+RUN chmod +x /app/docker-entrypoint.sh
 
-# Expose port (Cloud Run injects $PORT)
-EXPOSE 8080
+# THE STORE.
+#
+# data/aree.db is 148 MB and gitignored, so it is neither in the repository nor
+# in this image. The container mounts a volume at /app/data and the entrypoint
+# seeds it, on first run only, from the committed 1 MB test fixture — which
+# carries exactly the three replay moments the demo uses.
+#
+# That means a fresh deployment can replay 02 Nov 2024 immediately, and the live
+# view fills in as the hourly capture accumulates observations. Baking 148 MB
+# into the image would make it slow to ship and stale the moment it was built.
+RUN mkdir -p /app/data
 
-# Serve the FastAPI layer, which imports and runs the Pathway engine in-process.
-CMD ["sh", "-c", "uvicorn backend.api.main:api --host 0.0.0.0 --port ${PORT:-8080}"]
+# Run as a non-root user.
+#
+# EVERY path the process writes to has to be listed here, and the list is longer
+# than it looks:
+#
+#   /app/data              the store
+#   /app/backend/policies  policy uploads
+#   /app/.tmp              capture.py runs `_TMP.mkdir()` AT IMPORT TIME and then
+#                          points tempfile at it. Miss this one and the hourly
+#                          capture thread dies with
+#                          "PermissionError: [Errno 13] ... '/app/.tmp'" while
+#                          /api/health keeps answering 200 — so the container
+#                          looks healthy while live forecasting silently never
+#                          accumulates the observations it needs.
+#
+#                          Found by running the image and reading its log, not by
+#                          reading the Dockerfile.
+RUN mkdir -p /app/.tmp \
+    && useradd --create-home --uid 10001 aree \
+    && chown -R aree:aree /app/data /app/.tmp /app/backend/policies
+USER aree
+
+# MEMORY ON A 512 MB, 0.1 CPU INSTANCE (Render's free tier).
+#
+#   OMP_NUM_THREADS=1   LightGBM sizes its OpenMP team from the CPUs it can SEE,
+#                       not the CPU it is allotted - 16 on the host this was
+#                       measured on, against a 0.1 CPU quota. Every request thread
+#                       that predicted got its own team of 16, and a burst reached
+#                       238 threads. One thread per predict is all a tenth of a
+#                       CPU can run anyway.
+#
+#   MALLOC_ARENA_MAX=2  glibc gives each thread its own malloc arena and rarely
+#                       returns them to the OS, so memory freed after a burst
+#                       stayed resident (measured: 418 MB, not back to 146).
+#                       Two arenas trade a little allocator contention for memory
+#                       that is actually reused.
+ENV AREE_ENGINE_MODE=direct \
+    AREE_DB_PATH=/app/data/aree.db \
+    PORT=8000 \
+    OMP_NUM_THREADS=1 \
+    MALLOC_ARENA_MAX=2
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 \
+    CMD curl -fsS "http://127.0.0.1:${PORT}/api/health" || exit 1
+
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
+CMD ["sh", "-c", "uvicorn backend.api.main:api --host 0.0.0.0 --port ${PORT}"]

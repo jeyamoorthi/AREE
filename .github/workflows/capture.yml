@@ -1,0 +1,85 @@
+name: NCR capture
+
+# WHY THE CAPTURE RUNS HERE AND NOT ONLY ON A SERVER
+#   The live forecast needs observed PM2.5 at lags [0, 1, 3, 6, 12, 24] h before
+#   its anchor, and it may step that anchor back at most 6 h. So a gap of six
+#   consecutive hours disqualifies every candidate and /api/aree/outlook answers
+#   424 until someone repairs the store.
+#
+#   That series stays unbroken only while some process is awake every hour. Every
+#   machine this project has used has stopped: a laptop that sleeps, a free Render
+#   instance that spins down after 15 minutes. Both left exactly that gap.
+#
+#   A scheduled runner has no such failure mode, and the repository is the one
+#   piece of storage that outlives the runner. The store itself cannot live here -
+#   it is 186 MB and gitignored - so the capture is committed as CSV instead, and
+#   `tools/capture_csv.py import` replays it into any store on any host.
+
+on:
+  schedule:
+    # Ten past the hour. CPCB publishes with 40-100 minutes of delay, so this
+    # samples the hour that has just been published rather than racing it - the
+    # same offset capture_scheduler.OFFSET_SECONDS uses for the in-process loop.
+    - cron: "10 * * * *"
+  workflow_dispatch:
+
+# Two runs appending to the same daily file would race on the push and the loser
+# would be rejected, losing that hour rather than merging it.
+concurrency:
+  group: ncr-capture
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Only what the capture path imports. The full requirements file pulls
+      # LightGBM, numpy and pandas for a job that does none of that work.
+      - name: Install
+        run: pip install --disable-pip-version-check requests python-dotenv
+
+      - name: Capture
+        id: capture
+        env:
+          DATA_GOV_API_KEY: ${{ secrets.DATA_GOV_API_KEY }}
+          OPENAQ_API_KEY: ${{ secrets.OPENAQ_API_KEY }}
+        run: python tools/capture_csv.py export
+
+      # The deployed backend's fallback when Open-Meteo rate-limits the shared IP
+      # it calls from. Runs even when the station capture found nothing new, and
+      # never fails the job: a missed hour leaves the previous mirror in place.
+      - name: Mirror meteorology
+        if: ${{ !cancelled() }}
+        continue-on-error: true
+        run: python tools/capture_csv.py met
+
+      - name: Commit
+        if: ${{ !cancelled() }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add observations
+          # `git diff --cached --quiet` exits 1 when there IS something staged, so
+          # this must be an if and not an `&&` chain: under `set -e` the chain would
+          # abort the step on the very case we want to continue through.
+          if git diff --cached --quiet; then
+            echo "no new station-hours this run"
+            exit 0
+          fi
+          # The hour the ROWS describe, reported by the export step. `date -u`
+          # would name the moment this runner woke up, which CPCB's 40-100 min
+          # publish lag puts an hour ahead of the data almost every run.
+          git commit -m "capture: NCR stations ${{ steps.capture.outputs.hour || 'no new hour' }}"
+          # Another hour may have landed while this one was running.
+          git pull --rebase --autostash origin main
+          git push

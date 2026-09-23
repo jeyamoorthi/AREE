@@ -1,14 +1,25 @@
-"""Bridge between the FastAPI layer and the existing AREE engine.
+"""Bridge between the FastAPI layer and whichever AREE engine is running.
 
-Importing ``app`` starts the Pathway pipeline, the FIRMS poller, the carbon
-tracker and the RAG DocumentStore in this process. The API then reads the very
-same in-memory state dicts the engine publishes (``latest_state``,
-``carbon_state``, ``escalation_log``, ``_rag_state``) — no duplicated logic and
-no mock data.
+TWO ENGINES, ONE OF WHICH IS THE PRODUCTION PATH
+    direct     fallback_engine.py. Interval sampling of the live CPCB/DPCC
+               network, the same GRAP state machine, the same reporting. THIS IS
+               THE DEFAULT AND THE PRODUCTION PATH: it is what the test suites,
+               the runtime gate and every benchmark in this project measure.
 
-Pathway ships Linux/macOS wheels only, so on a host where the engine cannot be
-imported we record the failure and every data route answers 503 with a
-structured error instead of inventing values.
+    streaming  app.py. The Pathway event-time pipeline, plus the capabilities
+               wired only into it - policy RAG retrieval, the FIRMS poller and
+               causal attribution. Opt in with AREE_ENGINE_MODE=streaming.
+               Requires the packages in backend/requirements-streaming.txt, which
+               are Linux/macOS-only and have not been verified in any working
+               environment.
+
+Whichever loads, the API reads the very same in-memory state dicts it publishes
+(``latest_state``, ``carbon_state``, ``escalation_log``) — no duplicated logic
+and no mock data. The mode is reported in every status payload so nothing
+downstream can mistake one for the other.
+
+If the selected engine cannot start at all, data routes answer 503 with a
+structured error rather than inventing values.
 """
 
 import os
@@ -51,6 +62,30 @@ def load_engine() -> bool:
     """Import the engine once. Returns True when the engine is live.
 
     Safe to call repeatedly; the heavy import happens at most once.
+
+    THE DIRECT ENGINE IS THE PRODUCTION PATH, AND THAT IS NOW THE DEFAULT.
+        This used to attempt `import app` - the Pathway pipeline - first, and reach
+        direct mode only by catching the failure. Two things were wrong with that.
+
+        Practically, the attempt never succeeded: Pathway publishes Linux/macOS
+        wheels only and is not installed in any verified environment, so every
+        start paid for a heavyweight import that was always going to raise, and
+        the engine actually serving traffic was chosen by an exception handler.
+
+        Structurally, it made the repository lie about its own architecture. A
+        reader of this function would conclude that streaming is the system and
+        direct is the safety net, when the reverse is what runs, what is tested,
+        and what every gate in this project has been measured against.
+
+        So the default is now DIRECT, and streaming is opt-in via
+        AREE_ENGINE_MODE=streaming. Nothing about the Pathway path is removed: ask
+        for it and it loads, and if it fails it still falls back to direct with
+        the reason reported, exactly as before. What changed is which one the
+        system claims to be.
+
+    AREE_ENGINE_MODE:
+        unset | "direct"        the direct engine  (default, production)
+        "streaming" | "pathway" the Pathway pipeline, falling back to direct
     """
     global _engine, _config
 
@@ -59,10 +94,8 @@ def load_engine() -> bool:
             return True
         _status["loading"] = True
 
-    # Local Docker runs can select the responsive direct engine explicitly.
-    # This avoids blocking API startup on Pathway's heavyweight import while
-    # retaining the full streaming path as the default elsewhere.
-    if os.getenv("AREE_ENGINE_MODE", "").lower() == "direct":
+    mode = os.getenv("AREE_ENGINE_MODE", "").strip().lower()
+    if mode not in ("streaming", "pathway"):
         try:
             import config as _cfg
             from fallback_engine import start as _fb_start
@@ -76,9 +109,21 @@ def load_engine() -> bool:
         with _lock:
             _engine = _fb
             _config = _cfg
-            _status.update(loaded=bool(ok), loading=False, mode="direct",
-                           degraded=True, error=None if ok else "direct engine started with no data",
-                           error_type=None, pathway_error="direct mode selected")
+            _status.update(
+                loaded=bool(ok), loading=False, mode="direct",
+                # `degraded` stays True and is NOT being quietly flipped. Direct
+                # mode really does provide less than the streaming design: no
+                # event-time windowing, no policy retrieval, no FIRMS poll. Those
+                # gaps are reported field by field elsewhere, and turning this off
+                # because direct is now the default would be increasing a claim
+                # without gaining a capability - the exact move Phase 4 removed.
+                degraded=True,
+                error=None if ok else "direct engine started with no data",
+                error_type=None,
+                # Not an error any more. Nothing was attempted and nothing failed:
+                # this is the configured production engine.
+                pathway_error=None,
+                engine_selection="direct engine (default; production path)")
         return bool(ok)
 
     try:
@@ -138,8 +183,8 @@ def _require():
     if not _status["loaded"]:
         raise EngineUnavailable(
             _status["error"]
-            or "AREE engine is not running. Start the API in an environment "
-               "where the Pathway pipeline can be imported (Linux/macOS/Docker/WSL).",
+            or "AREE engine is not running. The direct engine is the default and "
+               "needs no extra packages; check the startup log for why it failed.",
             _status["error_type"],
         )
     return _engine
