@@ -112,32 +112,54 @@ function useSyncTabToUrl(tab: OutlookTab, setTab: (tab: OutlookTab) => void): vo
 }
 
 export function OutlookDataProvider({ children }: { children: ReactNode }) {
-  const [preset, setPreset] = useState(0);
+  const [preset, setPresetState] = useState(0);
   const [tab, setTab] = useState<OutlookTab>("summary");
   const [data, setData] = useState<OutlookResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  // Bumped by reload() to re-run the fetch effect for the same preset.
+  const [generation, setGeneration] = useState(0);
 
-  const load = useCallback(async (at?: string) => {
+  /* The loading state is entered where the change is made, not inside the effect
+     that reacts to it: setting state synchronously in an effect body costs an
+     extra render on every preset switch. */
+  const setPreset = useCallback((index: number) => {
+    setPresetState(index);
     setLoading(true);
     setError(null);
-    try {
-      setData(await api.outlook(at));
-    } catch (err) {
-      setData(null);
-      setError(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
   }, []);
 
-  useEffect(() => {
-    void load(OUTLOOK_PRESETS[preset].at);
-  }, [preset, load]);
-
   const reload = useCallback(() => {
-    void load(OUTLOOK_PRESETS[preset].at);
-  }, [load, preset]);
+    setLoading(true);
+    setError(null);
+    setGeneration((g) => g + 1);
+  }, []);
+
+  /* `cancelled` also stops a slow response for a preset the reader has already
+     left from overwriting the one they switched to. */
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .outlook(OUTLOOK_PRESETS[preset].at)
+      .then(
+        (next) => {
+          if (cancelled) return;
+          setData(next);
+          setError(null);
+        },
+        (err) => {
+          if (cancelled) return;
+          setData(null);
+          setError(errorMessage(err));
+        },
+      )
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [preset, generation]);
 
   useSyncPresetToUrl(OUTLOOK_PRESETS, preset, setPreset);
   useSyncTabToUrl(tab, setTab);
@@ -149,7 +171,7 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<OutlookDataState>(
     () => ({ data, loading, error, preset, setPreset, reload, tab, setTab }),
-    [data, loading, error, preset, reload, tab],
+    [data, loading, error, preset, setPreset, reload, tab],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

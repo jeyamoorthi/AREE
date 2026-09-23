@@ -196,28 +196,27 @@ function Donut({
   const R = 42;
   const stroke = 17;
   const circ = 2 * Math.PI * R;
-  let offset = 0;
+  // Each segment starts where the previous ones end.
+  const lengths = bands.map((b) => (b.hours / total) * circ);
+  const starts = lengths.map((_, i) =>
+    lengths.slice(0, i).reduce((a, n) => a + n, 0),
+  );
 
   return (
     <div className="flex items-center gap-4">
       <svg viewBox="0 0 110 110" className="h-[110px] w-[110px] shrink-0">
         <g transform="translate(55,55) rotate(-90)">
-          {bands.map((b) => {
-            const len = (b.hours / total) * circ;
-            const el = (
-              <circle
-                key={b.label}
-                r={R}
-                fill="none"
-                stroke={b.colour}
-                strokeWidth={stroke}
-                strokeDasharray={`${len} ${circ - len}`}
-                strokeDashoffset={-offset}
-              />
-            );
-            offset += len;
-            return el;
-          })}
+          {bands.map((b, i) => (
+            <circle
+              key={b.label}
+              r={R}
+              fill="none"
+              stroke={b.colour}
+              strokeWidth={stroke}
+              strokeDasharray={`${lengths[i]} ${circ - lengths[i]}`}
+              strokeDashoffset={-starts[i]}
+            />
+          ))}
         </g>
       </svg>
       <div className="min-w-0 flex-1 space-y-1">
