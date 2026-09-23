@@ -55,7 +55,7 @@ export default function ForecastCard({
         )
       }
     >
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(200px,1fr)]">
+      <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,2fr)_minmax(200px,1fr)]">
         <div className="rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 shadow-[var(--aree-shadow-sm)]">
           <AQITrendChart forecast={forecast} highThreshold={highThreshold} />
         </div>

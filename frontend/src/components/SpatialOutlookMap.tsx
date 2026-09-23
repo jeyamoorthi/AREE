@@ -34,6 +34,7 @@ import "leaflet/dist/leaflet.css";
 import { CircleMarker, MapContainer, Popup, TileLayer, Tooltip } from "react-leaflet";
 import type { LatLngBoundsExpression } from "leaflet";
 
+import MapResizeSync from "@/components/MapResizeSync";
 import { bandColour, symbolRadius } from "@/lib/cpcb";
 
 export interface SpatialStation {
@@ -88,15 +89,21 @@ function ageLabel(hours: number | undefined): string | null {
   return `${(minutes / 60).toFixed(1)} h`;
 }
 
+/* Proportional to the viewport rather than fixed, for the reason given on
+   StationMap: the NCR box is roughly square, so a map that is 300px tall on a
+   360px-wide phone is the only thing on the screen. */
+const DEFAULT_HEIGHT = "clamp(220px, 38vh, 300px)";
+
 export default function SpatialOutlookMap({
   stations,
-  height = 260,
+  height = DEFAULT_HEIGHT,
   labelCount = 4,
   observedAt,
   ageHours,
 }: {
   stations: SpatialStation[];
-  height?: number;
+  /** A number is treated as pixels; a string is passed to CSS untouched. */
+  height?: number | string;
   labelCount?: number;
   /** The hour every reading on this map describes. */
   observedAt?: string;
@@ -152,6 +159,7 @@ export default function SpatialOutlookMap({
       attributionControl
       zoomControl={false}
     >
+      <MapResizeSync />
       <TileLayer
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
         url={BASEMAP_URL}
@@ -170,7 +178,7 @@ export default function SpatialOutlookMap({
               center={[s.latitude as number, s.longitude as number]}
               radius={symbolRadius(s.pm25)}
               pathOptions={{
-                color: "#ffffff",
+                color: "var(--aree-map-halo)",
                 weight: 1.4,
                 // Freshness cue: a dashed outline, never a different fill. A stale
                 // reading of 300 is still 300.
@@ -228,10 +236,10 @@ function Row({
         marginBottom: 2,
       }}
     >
-      <span style={{ color: "#64748b" }}>{label}</span>
+      <span style={{ color: "var(--aree-muted)" }}>{label}</span>
       <span
         style={{
-          color: colour ?? "#17231c",
+          color: colour ?? "var(--aree-text)",
           fontWeight: bold ? 700 : 500,
           textAlign: "right",
         }}

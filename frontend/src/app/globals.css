@@ -6,6 +6,11 @@
    Inspired by government intelligence dashboards & high-end environmental systems.
    ========================================================================== */
 :root {
+  /* Tells the browser which way its own furniture — form controls, the default
+     scrollbar, spellcheck underlines — should be painted. Without it a dark page
+     still gets light native widgets. */
+  color-scheme: light;
+
   /* ── Surfaces — Warm Sand & Crisp White Paper ── */
   --aree-bg: #f5f4ed;
   --aree-bg-soft: #edebe2;
@@ -34,6 +39,14 @@
   --aree-teal: #0d9488;
   --aree-cyan: #0284c7;
   --aree-blue: #2563eb;
+  /* Replay. Deliberately outside the semantic ramp below: replay is not a severity,
+     it is a statement about WHICH MOMENT the page describes. */
+  --aree-violet: #4338ca;
+
+  /* Foreground for a surface filled with one of the colours above — a solid badge,
+     a filled pill. It is not "white": in dark mode those fills are light and the
+     text on them has to be dark, which is the whole reason this is a token. */
+  --aree-on-solid: #ffffff;
 
   /* ── Semantic Ramp — CPCB Bands & Freshness ── */
   --aree-green: #16a34a;
@@ -59,6 +72,109 @@
   --aree-sidebar-width: 230px;
   --aree-sidebar-collapsed: 68px;
   --aree-commandbar-height: 70px;
+
+  /* ── Map ── Leaflet paints its own furniture and cannot read Tailwind. ── */
+  --aree-map-bg: #e5e3df;
+  --aree-map-label: #1a1a17;
+  --aree-map-halo: #ffffff;
+  --aree-map-tile-filter: none;
+
+  /* ── Text selection ── */
+  --aree-selection-bg: rgba(20, 56, 40, 0.15);
+  --aree-selection-fg: #143828;
+
+  /* ── Focus ring ──
+     Its own token rather than a reuse of --aree-accent, because a focus indicator
+     is the one colour in the system with a hard contrast floor: WCAG asks for 3:1
+     against what it sits on. The accent green (#22c55e) is about 2:1 on the white
+     cards it would most often be drawn against, so on the light theme the ring is
+     the deep forest instead. In dark mode the accent IS the high-contrast choice
+     and the token resolves to it there. One token, no component branching. */
+  --aree-focus: var(--aree-forest);
+}
+
+/* ==========================================================================
+   DARK THEME
+   Applied by ThemeProvider as data-theme="dark" on <html>, and by the inline
+   script in layout.tsx before first paint so the page never flashes light.
+
+   It overrides VALUES ONLY. Every token declared above is redeclared here and
+   nothing else is: no component may branch on the theme, because the moment one
+   does there are two definitions of what "a card" looks like and they drift.
+   The ramp is mapped from the dark variable set already proven in AREE_Demo.html
+   (--ink / --body / --muted / --dim / --line / --paper / --wash / --bg).
+   ========================================================================== */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* ── Surfaces — warm near-black, not blue-black. The light theme is warm sand
+       and the dark theme has to read as the same product at night. ── */
+  --aree-bg: #100f0c;
+  --aree-bg-soft: #16140f;
+  --aree-surface-1: #1b1915;
+  --aree-surface-2: #201d18;
+  --aree-surface-3: #26231c;
+  --aree-surface-4: #2f2b23;
+  --aree-card: #1b1915;
+  --aree-card-raised: #221f19;
+  --aree-border: #2e2a24;
+  --aree-border-strong: #443e35;
+
+  /* ── Text ramp — the light ramp inverted, keeping the same five steps ── */
+  --aree-text: #f0ece3;
+  --aree-body: #cdc7bb;
+  --aree-muted: #9a9287;
+  --aree-dim: #7a736a;
+  --aree-faint: #625c54;
+
+  /* ── Brand. Forest stays a FILL that carries white text (the active nav item),
+       so it lightens only enough to separate from the surface behind it. ── */
+  --aree-forest: #2f7d5a;
+  --aree-forest-hover: #38946a;
+  --aree-accent: #34d399;
+  --aree-accent-soft: rgba(52, 211, 153, 0.14);
+  --aree-accent-glow: rgba(52, 211, 153, 0.28);
+  --aree-teal: #2dd4bf;
+  --aree-cyan: #38bdf8;
+  --aree-blue: #60a5fa;
+
+  /* ── Semantic ramp. Severity has to keep reading as severity: on a dark ground
+       "worse" cannot mean "darker", so the ramp climbs in INTENSITY instead —
+       crimson is the hottest value here, not the deepest one. ── */
+  --aree-green: #45c96a;
+  --aree-lime: #a3d160;
+  --aree-yellow: #e3c14e;
+  --aree-amber: #eaa23e;
+  --aree-orange: #f08a4b;
+  --aree-red: #f2695e;
+  --aree-crimson: #ff4d4d;
+
+  --aree-violet: #a5b4fc;
+
+  /* The fills above are light, so text printed ON one of them is dark. */
+  --aree-on-solid: #14120e;
+
+  /* ── Shadows. A 4%-black shadow is invisible on #100f0c; elevation in the dark
+       theme comes from a genuinely darker drop plus the lighter surface itself. ── */
+  --aree-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --aree-shadow-md: 0 1px 3px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.45);
+  --aree-shadow-lg: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 10px 24px -4px rgba(0, 0, 0, 0.55);
+
+  /* ── Map. The basemap is a raster served light by Carto and there is no dark
+       key, so the TILE PANE alone is inverted. Markers, labels and popups live in
+       other panes and keep their true colours — a station reading Severe must not
+       be recoloured by a display setting. ── */
+  --aree-map-bg: #14130f;
+  --aree-map-label: #f0ece3;
+  --aree-map-halo: #100f0c;
+  --aree-map-tile-filter: invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.9);
+
+  --aree-selection-bg: rgba(52, 211, 153, 0.24);
+  --aree-selection-fg: #f0ece3;
+
+  /* On a near-black ground the accent is the high-contrast option; the forest
+     green the light theme uses would nearly vanish. */
+  --aree-focus: var(--aree-accent);
 }
 
 @theme inline {
@@ -89,6 +205,8 @@
   --color-aree-teal: var(--aree-teal);
   --color-aree-cyan: var(--aree-cyan);
   --color-aree-blue: var(--aree-blue);
+  --color-aree-violet: var(--aree-violet);
+  --color-aree-on-solid: var(--aree-on-solid);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, monospace;
 }
@@ -104,15 +222,46 @@ body {
   font-family: var(--font-sans);
   font-feature-settings: "cv02", "cv03", "cv04";
   min-height: 100vh;
+  /* `dvh` follows a mobile browser's collapsing address bar, so the footer sits at
+     the bottom of what is actually visible rather than under the chrome. The `vh`
+     line above stays as the fallback. */
+  min-height: 100dvh;
+  /* A station name, a model id or a policy citation with no spaces in it used to set
+     the minimum width of whatever card held it, and on a 360px screen that card then
+     set the width of the page — one long token and the whole document scrolled
+     sideways. Breaking inside the word is the lesser evil, and it only ever applies
+     to a word that would not have fitted anyway. */
+  overflow-wrap: break-word;
 }
 
 ::selection {
-  background: rgba(20, 56, 40, 0.15);
-  color: var(--aree-forest);
+  background: var(--aree-selection-bg);
+  color: var(--aree-selection-fg);
 }
 
-:where(a, button, select, input, summary, [tabindex]):focus-visible {
-  outline: 2px solid var(--aree-forest);
+/* :where() keeps this at zero specificity, so any element that defines its own
+   focus treatment — StationSelector's accent border, the palette's focus-within
+   ring — still wins without an !important anywhere. */
+:where(
+  a[href],
+  area[href],
+  button,
+  select,
+  input,
+  textarea,
+  summary,
+  details,
+  [tabindex],
+  [contenteditable="true"],
+  [role="button"],
+  [role="option"],
+  [role="tab"],
+  [role="link"],
+  [role="menuitem"],
+  [role="checkbox"],
+  [role="switch"]
+):focus-visible {
+  outline: 2px solid var(--aree-focus);
   outline-offset: 2px;
   border-radius: var(--aree-radius-sm);
 }
@@ -206,6 +355,7 @@ body {
 .aree-layout {
   display: flex;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .aree-sidebar {
@@ -246,8 +396,16 @@ body {
 @media (max-width: 1023px) {
   .aree-sidebar {
     transform: translateX(-100%);
-    width: var(--aree-sidebar-width);
+    /* On a 360px phone the desktop rail is 64% of the screen. A drawer that leaves
+       no page visible behind it reads as a navigation PAGE rather than as a panel
+       over the one you were on, and there is then nothing to tap to dismiss it. */
+    width: min(var(--aree-sidebar-width), 78vw);
     transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  /* Belt and braces for the rule above: `.aree-sidebar.collapsed` is two classes and
+     would otherwise win on specificity, since a media query adds none. */
+  .aree-sidebar.collapsed {
+    width: min(var(--aree-sidebar-width), 78vw);
   }
   .aree-sidebar.mobile-open {
     transform: translateX(0);
@@ -266,16 +424,81 @@ body {
   z-index: 39;
 }
 
+/* NOTHING IN THE PAGE BODY SETS THE WIDTH OF THE PAGE.
+
+   `<main>` is a flex column, so its children stretch to it — but a child whose
+   min-content is wider than the column drags the column open instead, and the
+   document then scrolls sideways on every page that child appears on. Each page
+   root is given a zero floor and capped at the column it was handed, which turns
+   "the page is too wide" back into "this one card scrolls inside itself", where it
+   belongs and where the card can deal with it. */
+#main-content > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
 /* ── Map Overrides for Light/Terrain Look ── */
+
+/* THE MAP STAYS INSIDE ITS CARD.
+
+   Leaflet assigns its own internal layers absolute z-indexes — panes at 400-700,
+   the zoom control and attribution at 800-1000 — and ships `.leaflet-container`
+   as `position: relative` with `z-index: auto`, which creates NO stacking
+   context. Those numbers therefore competed with the application's own layers
+   and beat all of them: as soon as a page scrolled, the tiles, the markers and
+   the +/- control painted straight over the sticky command bar (z-30), the
+   critical alert (z-20) and the sidebar (z-40), and the map appeared to float
+   loose above the page.
+
+   `isolation: isolate` with an explicit z-index makes the container a stacking
+   context of its own, so every one of Leaflet's internal layers is resolved
+   against the map and against nothing else. z-index 0 keeps the map itself flat
+   in the page flow, exactly where the card puts it.
+
+   Anything that must sit ON TOP of a map — the AQI legend on the national
+   overview — is a SIBLING of the container, not a descendant, so it is unaffected
+   by this and still stacks above. */
 .leaflet-container {
-  background: #e5e3df !important;
+  background: var(--aree-map-bg) !important;
   font-family: var(--font-sans);
   border-radius: var(--aree-radius-md);
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
+  /* Belt and braces on the same rule: Leaflet already clips, but a map whose
+     tiles are mid-transform during a resize must not widen the page. */
+  overflow: hidden;
+}
+
+/* Touch panning.
+
+   With drag and pinch-zoom both enabled, Leaflet sets `touch-action: none` and takes
+   EVERY touch gesture on the map. On a desktop that is right — the page is scrolled
+   with a wheel. On a phone it means a finger that lands anywhere on a full-width map
+   drags the map instead of scrolling, and the reader is stuck at the map with no way
+   past it.
+
+   `pan-y` gives vertical panning back to the document and keeps everything else for
+   the map: horizontal drag and pinch-zoom still reach Leaflet, because a gesture the
+   browser has not reserved is one the application may handle. The cost is one-finger
+   vertical panning of the map itself, which is the gesture worth trading — both maps
+   here are locked to the NCR bounding box, so there is very little to pan to. */
+@media (hover: none) and (pointer: coarse) {
+  /* Leaflet sets `touch-action: none` itself, on `.leaflet-container
+     .leaflet-touch-drag.leaflet-touch-zoom` — three classes, so the override has to
+     match that specificity and `!important` covers the case where Leaflet's
+     stylesheet is loaded after this one (the map is a dynamic chunk, so the order is
+     not ours to guarantee). */
+  .leaflet-container,
+  .leaflet-container.leaflet-touch-drag,
+  .leaflet-container.leaflet-touch-drag.leaflet-touch-zoom {
+    touch-action: pan-y !important;
+  }
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #ffffff;
+  background: var(--aree-surface-1);
   color: var(--aree-text);
   border: 1px solid var(--aree-border);
   box-shadow: var(--aree-shadow-md);
@@ -286,13 +509,13 @@ body {
 }
 
 .leaflet-control-attribution {
-  background: rgba(255, 255, 255, 0.85) !important;
+  background: color-mix(in srgb, var(--aree-surface-1) 85%, transparent) !important;
   color: var(--aree-dim) !important;
   font-size: 10px !important;
 }
 
 .leaflet-bar a {
-  background: #ffffff !important;
+  background: var(--aree-surface-1) !important;
   color: var(--aree-text) !important;
   border-color: var(--aree-border) !important;
 }
@@ -309,12 +532,211 @@ body {
   border: none;
   box-shadow: none;
   padding: 0;
-  color: #1a1a17;
+  color: var(--aree-map-label);
   font-size: 10px;
   font-weight: 700;
   text-shadow:
-    0 0 3px #fff, 0 0 3px #fff, 0 0 3px #fff;
+    0 0 3px var(--aree-map-halo), 0 0 3px var(--aree-map-halo),
+    0 0 3px var(--aree-map-halo);
 }
 .leaflet-tooltip.aree-map-label::before {
   display: none;
+}
+
+/* Only the raster tiles — see --aree-map-tile-filter for why this is scoped to the
+   tile pane and not to .leaflet-container. */
+.leaflet-tile-pane {
+  filter: var(--aree-map-tile-filter);
+}
+
+/* ==========================================================================
+   PRINT
+   Any page in AREE is printable, and "printable" here means the brief an officer
+   files — not a screenshot of an application. Everything below is a subtraction
+   from the screen design rather than a second design: the chrome goes, the ink
+   goes to black on white, and the content keeps its own structure.
+
+   THE TOKENS ARE REDEFINED, NOT OVERRIDDEN PER COMPONENT
+     Every surface in this application already reads its colour from an --aree-*
+     token, which means the whole print palette is nine declarations here instead
+     of a !important beside every card. It also means the dark theme prints
+     correctly without knowing that it is being printed.
+   ========================================================================== */
+@media print {
+  /* Both selectors, because the operator may be printing from either theme and a
+     printed page has no theme. */
+  :root,
+  [data-theme="dark"] {
+    color-scheme: light;
+
+    --aree-bg: #ffffff;
+    --aree-bg-soft: #ffffff;
+    --aree-surface-1: #ffffff;
+    --aree-surface-2: #ffffff;
+    --aree-surface-3: #ffffff;
+    --aree-surface-4: #ffffff;
+    --aree-card: #ffffff;
+    --aree-card-raised: #ffffff;
+    --aree-border: #b8b8b8;
+    --aree-border-strong: #8a8a8a;
+
+    /* Black body text, and a grey ramp that still separates a label from a value
+       when the page comes out of a monochrome laser printer. */
+    --aree-text: #000000;
+    --aree-body: #1a1a1a;
+    --aree-muted: #3d3d3d;
+    --aree-dim: #555555;
+    --aree-faint: #6e6e6e;
+
+    /* Severity keeps its hue — a GRAP stage is not decoration — but darkens, since
+       a mid-tone that reads on a lit screen prints as pale wash. */
+    --aree-forest: #0d2a1c;
+    --aree-accent: #0f7a3d;
+    --aree-green: #0f7a3d;
+    --aree-lime: #4a6b12;
+    --aree-yellow: #8a6206;
+    --aree-amber: #94500a;
+    --aree-orange: #a83c08;
+    --aree-red: #9b1c1c;
+    --aree-crimson: #6b1010;
+    --aree-teal: #0a5f57;
+    --aree-cyan: #0a5580;
+    --aree-blue: #1a3fa0;
+    --aree-violet: #2f2599;
+    --aree-on-solid: #ffffff;
+
+    --aree-shadow-sm: none;
+    --aree-shadow-md: none;
+    --aree-shadow-lg: none;
+
+    --aree-map-bg: #ffffff;
+    --aree-map-label: #000000;
+    --aree-map-halo: #ffffff;
+    /* The dark theme inverts the basemap. On paper that would print a black
+       rectangle, so the transform is dropped along with the theme. */
+    --aree-map-tile-filter: none;
+
+    --aree-selection-bg: transparent;
+    --aree-selection-fg: #000000;
+    --aree-focus: transparent;
+  }
+
+  html,
+  body {
+    background: #ffffff !important;
+  }
+
+  /* Elevation and motion are screen affordances. Neither survives a printer, and
+     a shadow renders as a grey smear. */
+  *,
+  *::before,
+  *::after {
+    box-shadow: none !important;
+    text-shadow: none !important;
+    animation: none !important;
+    transition: none !important;
+    backdrop-filter: none !important;
+  }
+
+  /* ── Chrome that does not belong on paper ──
+     Navigation, search, the theme switch and every other control: a printed page
+     has nothing to click. `button` covers the sidebar collapse toggle, the theme
+     switcher, the palette trigger, the Select/Retry/Download actions and the
+     outlook preset tabs in one rule; anything that must survive can opt back in
+     with .aree-print-keep. */
+  .aree-sidebar,
+  .aree-sidebar-overlay,
+  header[aria-label="Command bar"],
+  nav[aria-label="Breadcrumb"],
+  button,
+  kbd,
+  .aree-print-hide {
+    display: none !important;
+  }
+
+  .aree-print-keep {
+    display: revert !important;
+  }
+
+  /* Sticky is a viewport concept. Left alone, the replay banner, the critical
+     alert and the freshness ribbon either pin themselves to the first sheet or
+     overlap the content beneath them. */
+  .aree-main > * {
+    position: static !important;
+  }
+
+  /* ── Full-bleed content ── */
+  .aree-layout {
+    display: block !important;
+    min-height: 0 !important;
+  }
+
+  .aree-main,
+  .aree-main.sidebar-collapsed {
+    margin-left: 0 !important;
+    display: block !important;
+  }
+
+  #main-content {
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  /* ── The running header ──
+     `content` is composed from custom properties so the same rule serves every
+     page: usePrintSubject writes the station (or leaves it empty), and AppShell
+     stamps the print time on beforeprint. Both default to an empty string, so a
+     page that sets neither still prints a correct header rather than "undefined". */
+  #main-content::before {
+    content: "AREE · Autonomous Regulatory Escalation Engine"
+      var(--aree-print-subject, "") var(--aree-print-time, "");
+    display: block;
+    margin-bottom: 10mm;
+    padding-bottom: 2mm;
+    border-bottom: 1.5pt solid #000000;
+    font-family: var(--font-sans);
+    font-size: 8.5pt;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #000000;
+  }
+
+  /* ── Keep a unit of meaning on one sheet ──
+     A card split across a page break is how a stale-data warning ends up on the
+     page after the reading it qualifies. */
+  section,
+  article,
+  figure,
+  table,
+  li,
+  .recharts-wrapper,
+  .recharts-responsive-container,
+  .aree-print-block {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  h1,
+  h2,
+  h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  /* A map is a raster: let it shrink to the text column rather than clip. */
+  .leaflet-container {
+    max-width: 100% !important;
+    break-inside: avoid;
+  }
+
+  a[href] {
+    text-decoration: none;
+    color: inherit;
+  }
+
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
 }

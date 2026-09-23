@@ -24,6 +24,11 @@ import { useStations, useSystemStatus } from "@/components/providers/LiveDataPro
 import { EmptyState, ErrorState, SkeletonMap } from "@/components/ui/States";
 import type { MapStation } from "@/components/StationMap";
 
+/* One value for the map, its skeleton and the box that holds them, so the three
+   cannot drift apart and make the page jump as the map loads. See StationMap for
+   why this is a clamp and not a pixel count. */
+const MAP_HEIGHT = "clamp(280px, 46vh, 440px)";
+
 export default function HomePage() {
   const [focus, setFocus] = useState<string | null>(null);
 
@@ -60,30 +65,30 @@ export default function HomePage() {
       {stationsState.error && !stations ? (
         <ErrorState error={stationsState.error} onRetry={stationsState.refresh} />
       ) : (
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(340px,1.15fr)]">
+        <div className="grid gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.85fr)_minmax(340px,1.15fr)]">
           {/* Left Panel: National Environmental Map */}
-          <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h2 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
+          <div className="bg-aree-card border border-aree-border rounded-xl p-3 sm:p-5 shadow-xs flex flex-col justify-between">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="min-w-0">
+                <h2 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
                   DELHI NCR MONITORING NETWORK
                 </h2>
-                <p className="text-[11px] text-[#788796] mt-0.5">
+                <p className="text-[11px] text-aree-dim mt-0.5">
                   Observed air quality and regulatory status across the NCR airshed
                 </p>
               </div>
               <button
                 type="button"
-                className="p-1.5 rounded-lg border border-[#e4e0d4] bg-[#faf9f4] hover:bg-[#f0eee4] text-[#64748b] transition-colors"
+                className="shrink-0 p-1.5 rounded-lg border border-aree-border bg-aree-surface-2 hover:bg-aree-border text-aree-muted transition-colors"
                 title="Layers"
               >
                 <Layers className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="relative rounded-lg overflow-hidden flex-1 min-h-[380px]">
+            <div className="relative isolate rounded-lg overflow-hidden flex-1 min-h-[280px]">
               {stationsState.initialLoading ? (
-                <SkeletonMap height={400} />
+                <SkeletonMap height={MAP_HEIGHT} />
               ) : mapStations.length === 0 ? (
                 <EmptyState>
                   No station coordinates available yet. Markers appear as nodes come online.
@@ -92,7 +97,7 @@ export default function HomePage() {
                 <StationMapLoader
                   stations={mapStations}
                   selected={focus}
-                  height={400}
+                  height={MAP_HEIGHT}
                   onSelect={setFocus}
                 />
               )}
@@ -102,18 +107,22 @@ export default function HomePage() {
                   the markers on the map were coloured by AQI, so the key described
                   something the map was not doing. Colour and border are now separated
                   and each is named. */}
-              <div className="absolute bottom-3 left-3 z-[1000] bg-white/95 backdrop-blur-xs border border-[#e4e0d4] px-3 py-2 rounded-lg shadow-sm text-[10.5px] text-[#17231c]">
-                <div className="flex items-center gap-3">
-                  <span className="font-bold uppercase tracking-wide text-[9px] text-[#788796] w-[52px]">
+              {/* Sits ON the map, so it is constrained to the map's width and wraps
+                  rather than pushing the card sideways. On a phone the two rows
+                  become several; the alternative — a legend that overflows its own
+                  map — is what the reader would have to scroll horizontally to read. */}
+              <div className="absolute bottom-3 left-3 right-3 z-[1000] max-w-fit bg-aree-card/95 backdrop-blur-xs border border-aree-border px-3 py-2 rounded-lg shadow-sm text-[10px] sm:text-[10.5px] text-aree-text">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-bold uppercase tracking-wide text-[9px] text-aree-dim w-[52px]">
                     AQI
                   </span>
                   {[
-                    ["0–50", "#16a34a"],
-                    ["51–100", "#65a30d"],
-                    ["101–200", "#d97706"],
-                    ["201–300", "#ea580c"],
-                    ["301–400", "#dc2626"],
-                    ["401+", "#991b1b"],
+                    ["0–50", "var(--aree-green)"],
+                    ["51–100", "var(--aree-lime)"],
+                    ["101–200", "var(--aree-amber)"],
+                    ["201–300", "var(--aree-orange)"],
+                    ["301–400", "var(--aree-red)"],
+                    ["401+", "var(--aree-crimson)"],
                   ].map(([range, colour]) => (
                     <span key={range} className="flex items-center gap-1">
                       <span
@@ -124,20 +133,20 @@ export default function HomePage() {
                     </span>
                   ))}
                 </div>
-                <div className="mt-1.5 flex items-center gap-3 border-t border-[#f0eee4] pt-1.5">
-                  <span className="font-bold uppercase tracking-wide text-[9px] text-[#788796] w-[52px]">
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-aree-border pt-1.5">
+                  <span className="font-bold uppercase tracking-wide text-[9px] text-aree-dim w-[52px]">
                     Data
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full border-2 border-solid border-[#64748b]" />
+                    <span className="h-2.5 w-2.5 rounded-full border-2 border-solid border-aree-muted" />
                     Current
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-[#64748b]" />
+                    <span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-aree-muted" />
                     Aging / stale
                   </span>
                   <span className="flex items-center gap-1">
-                    <span className="h-2.5 w-2.5 rounded-full border-2 border-dotted border-[#64748b]" />
+                    <span className="h-2.5 w-2.5 rounded-full border-2 border-dotted border-aree-muted" />
                     No reading
                   </span>
                 </div>
@@ -155,7 +164,7 @@ export default function HomePage() {
       )}
 
       {/* ── ROW 2: AQI Distribution + Top 5 Stations + Data Health Overview ── */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-4 grid-cols-[minmax(0,1fr)] md:grid-cols-2 lg:grid-cols-3">
         <AQIDistributionDonut facts={facts} />
         <Top5StationsCard facts={facts} />
         <DataHealthOverviewCard status={status} />

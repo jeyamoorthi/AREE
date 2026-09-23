@@ -101,7 +101,7 @@ export default function PersistenceCard({
       </div>
 
       <Panel title="Persistence" accent={progressColor} padding="p-5" className="mt-4">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <div className="rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 shadow-[var(--aree-shadow-sm)]">
             <div className="flex items-baseline justify-between gap-3">
               <span className="aree-eyebrow text-[11px]">Toward escalation threshold</span>
@@ -153,7 +153,7 @@ export default function PersistenceCard({
       </Panel>
 
       <Disclosure summary="Advanced engine data" className="mt-4">
-        <div className="grid gap-x-8 sm:grid-cols-2">
+        <div className="grid gap-x-8 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
           <KeyValue label="Consecutive windows" value={consecutive} />
           <KeyValue label="Remaining windows" value={remaining} />
           <KeyValue

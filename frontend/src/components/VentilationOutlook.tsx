@@ -21,7 +21,7 @@
    computes a threshold, a status or a statistic.
    ========================================================================== */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Area,
   CartesianGrid,
@@ -46,30 +46,23 @@ import {
   Wind,
 } from "lucide-react";
 
-import { usePublishOutlookMode } from "@/components/providers/OutlookModeProvider";
-import { useSyncPresetToUrl } from "@/hooks/useSyncPresetToUrl";
-import { api, errorMessage } from "@/lib/api";
-import type { OutlookResponse } from "@/types";
-
-const PRESETS: { label: string; at?: string }[] = [
-  { label: "Live (anchored)" },
-  { label: "02 Nov 2024 · 06:00", at: "2024-11-02T06:00:00Z" },
-  { label: "14 Nov 2024 · 00:00", at: "2024-11-14T00:00:00Z" },
-  { label: "16 Nov 2024 · 00:00", at: "2024-11-16T00:00:00Z" },
-];
+import InterventionTimer, {
+  useInterventionCountdown,
+} from "@/components/InterventionTimer";
+import { useOutlookData } from "@/components/providers/OutlookDataProvider";
 
 const C = {
-  ink: "#1a1a17",
-  body: "#44403a",
-  muted: "#7d776c",
-  dim: "#a8a196",
-  line: "#e8e3d7",
-  paper: "#ffffff",
-  wash: "#faf8f2",
-  red: "#c0392b",
-  amber: "#e07a3f",
-  green: "#3f7a4e",
-  blue: "#3b82c4",
+  ink: "var(--aree-text)",
+  body: "var(--aree-body)",
+  muted: "var(--aree-muted)",
+  dim: "var(--aree-dim)",
+  line: "var(--aree-border)",
+  paper: "var(--aree-surface-1)",
+  wash: "var(--aree-surface-2)",
+  red: "var(--aree-red)",
+  amber: "var(--aree-orange)",
+  green: "var(--aree-green)",
+  blue: "var(--aree-blue)",
 };
 
 function ist(iso: string, withDate = true): string {
@@ -86,6 +79,46 @@ function ist(iso: string, withDate = true): string {
     timeZone: "Asia/Kolkata",
   });
   return `${day} ${t}`;
+}
+
+/* ── chart geometry, in ONE place ──────────────────────────────────────────
+   The timeline above the VC chart has to line up with it, and "lines up" is not a
+   matter of taste: Recharts puts its plot area at `yAxisWidth + margin.left` from the
+   container's left edge and `margin.right` from its right. Both numbers used to live
+   inline on the <ComposedChart>. Copying them into the timeline would mean two places
+   to change and one silent misalignment the first time either moved, so the chart and
+   the timeline now read the same constants.                                          */
+/* `top` carries the on-chart annotation labels ("Onset", "Recovery"), which are drawn
+   above the plot area. Only `left` and `right` feed the timeline's insets, so this can
+   grow without moving the Change #6 bar. */
+const VC_CHART_MARGIN = { top: 20, right: 10, bottom: 0, left: -16 } as const;
+const VC_Y_AXIS_WIDTH = 44;
+const PLOT_INSET_LEFT = VC_Y_AXIS_WIDTH + VC_CHART_MARGIN.left;
+const PLOT_INSET_RIGHT = VC_CHART_MARGIN.right;
+
+/**
+ * The forecast point covering an instant, as an INDEX into `forecast.series`.
+ *
+ * Every x position on this screen — the Change #6 timeline's segments and onset
+ * marker, and the chart's reference lines and shaded band — has to resolve to the same
+ * column, so they all resolve through this one function. Two `findIndex` calls with
+ * the same predicate would agree today and are exactly the kind of thing that stops
+ * agreeing later.
+ *
+ * Compared as epoch numbers, not as strings: a difference in ISO formatting between
+ * two fields of the payload must not silently mis-place a marker. An instant falling
+ * in a gap (the series skips an hour when a feature row is missing) snaps forward to
+ * the next real point; one past the end pins to the last. Null in, null out.
+ */
+function seriesIndexAt(
+  series: readonly { valid_at: string }[],
+  iso: string | null | undefined,
+): number | null {
+  if (!iso || series.length === 0) return null;
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return null;
+  const found = series.findIndex((point) => Date.parse(point.valid_at) >= t);
+  return found < 0 ? series.length - 1 : found;
 }
 
 function Eyebrow({ children }: { children: React.ReactNode }) {
@@ -130,7 +163,7 @@ function Row({
   return (
     <div
       className="flex items-baseline justify-between border-b py-2 last:border-0"
-      style={{ borderColor: "#f2efe6" }}
+      style={{ borderColor: "var(--aree-surface-3)" }}
     >
       <span className="text-[11.5px]" style={{ color: C.body }}>
         {label}
@@ -206,30 +239,161 @@ function Donut({
   );
 }
 
+/* ── the collapse timeline ─────────────────────────────────────────────────
+   WHAT IT DRAWS, AND WHY IT STARTS AT "NOW" RATHER THAN EARLIER
+     The forecast series is built with `range(1, horizon + 1)` — it begins one hour
+     AFTER as_of and runs forward 72 h. There is no observed ventilation history in
+     this payload at all: `ventilation_profile` is computed from that same forward
+     series, so even its "24 h" figures describe the next day, not the last one.
+
+     So an OBSERVED BAND cannot be drawn without inventing one. What is genuinely
+     observed is a single instant — the measured coefficient at as_of — and that is
+     what the neutral anchor to the left of the bar shows. The bar itself covers the
+     forecast horizon and nothing else. A grey band stretching left would be a period
+     this API has never described.
+
+   POSITIONS ARE INDICES, NOT TIMES
+     The chart below uses a CATEGORY x-axis keyed on the formatted label, so its
+     points are evenly spaced by index regardless of their timestamps — and the
+     series can skip an hour when a feature row is missing. Positioning the timeline
+     by elapsed time would therefore drift from the chart by exactly those gaps. Both
+     are indexed off the same array.                                                  */
+type SegmentKind = "approaching" | "collapse" | "recovery" | "steady";
+
+interface TimelineSegment {
+  kind: SegmentKind;
+  label: string;
+  from: number;
+  to: number;
+  colour: string;
+  /** Rendered as text beside the swatch — the state never rests on colour alone. */
+  detail: string | null;
+}
+
+interface CollapseTimeline {
+  segments: TimelineSegment[];
+  /** Percent across the plot area, or null when no collapse is forecast. */
+  onsetPct: number | null;
+  onsetLabel: string | null;
+  startLabel: string;
+  endLabel: string;
+  /** The one genuinely OBSERVED quantity: the measured coefficient at as_of. */
+  observed: { value: string | null; at: string } | null;
+}
+
+function TimelineBar({ model }: { model: CollapseTimeline }) {
+  return (
+    <div className="mt-2">
+      {/* OBSERVED — an instant, not a band, and labelled as one.
+          The forecast series begins an hour after as_of, so there is no observed
+          period inside this chart's domain to shade. What IS observed is the
+          measured coefficient at as_of, and it is stated here in neutral tone
+          rather than implied by a grey rectangle over time nobody forecast. */}
+      {model.observed ? (
+        <p className="flex flex-wrap items-center gap-1.5 text-[9.5px]" style={{ color: C.muted }}>
+          <span
+            className="h-2 w-2 shrink-0 rounded-full"
+            style={{ background: C.dim }}
+            aria-hidden
+          />
+          <span className="font-semibold" style={{ color: C.body }}>
+            Observed
+          </span>
+          <span>
+            {model.observed.value ? `${model.observed.value} m²/s at ` : "at "}
+            {model.observed.at} IST · forecast begins from here
+          </span>
+        </p>
+      ) : null}
+
+      {/* The onset marker needs headroom above the bar for its label. */}
+      <div
+        className="relative"
+        style={{ paddingLeft: PLOT_INSET_LEFT, paddingRight: PLOT_INSET_RIGHT }}
+      >
+        <div className="relative h-[34px]">
+          {model.onsetPct !== null ? (
+            <>
+              {/* Exact position — this is the line that must sit above the same
+                  x as the chart's collapse edge. */}
+              <span
+                className="absolute top-[14px] bottom-0 w-0 border-l-2 border-dashed"
+                style={{ left: `${model.onsetPct}%`, borderColor: C.red }}
+                aria-hidden
+              />
+              {/* The LABEL is clamped away from both edges so it cannot push the
+                  page wider on a narrow screen; the line above stays exact. */}
+              <span
+                className="absolute top-0 whitespace-nowrap text-[9.5px] font-bold uppercase tracking-wide"
+                style={{
+                  left: `clamp(0%, ${model.onsetPct}%, 100%)`,
+                  transform: `translateX(-${Math.min(Math.max(model.onsetPct, 6), 94)}%)`,
+                  color: C.red,
+                }}
+              >
+                ↓ Onset {model.onsetLabel}
+              </span>
+            </>
+          ) : null}
+
+          {/* The bar itself. */}
+          <div
+            className="absolute inset-x-0 top-[18px] flex h-[10px] overflow-hidden rounded-sm"
+            style={{ background: C.line }}
+          >
+            {model.segments.map((seg) => (
+              <span
+                key={seg.kind + seg.from}
+                style={{ width: `${seg.to - seg.from}%`, background: seg.colour }}
+                title={seg.label}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Ends of the horizon, under the plot area they belong to. */}
+      <div
+        className="mt-1 flex justify-between text-[9.5px]"
+        style={{
+          color: C.dim,
+          paddingLeft: PLOT_INSET_LEFT,
+          paddingRight: PLOT_INSET_RIGHT,
+        }}
+      >
+        <span>{model.startLabel}</span>
+        <span>{model.endLabel}</span>
+      </div>
+
+      {/* Every state named in words, and wrapping rather than crowding on mobile.
+          This is the accessible reading of the bar, not a decorative key. */}
+      <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+        {model.segments.map((seg) => (
+          <li
+            key={`legend-${seg.kind}-${seg.from}`}
+            className="flex items-center gap-1.5 text-[9.5px]"
+            style={{ color: C.muted }}
+          >
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ background: seg.colour }}
+              aria-hidden
+            />
+            <span className="font-semibold" style={{ color: C.body }}>
+              {seg.label}
+            </span>
+            {seg.detail ? <span>{seg.detail}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default function VentilationOutlook() {
-  const [preset, setPreset] = useState(0);
-  const [data, setData] = useState<OutlookResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async (at?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await api.outlook(at));
-    } catch (err) {
-      setData(null);
-      setError(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(PRESETS[preset].at);
-  }, [preset, load]);
-
-  useSyncPresetToUrl(PRESETS, preset, setPreset);
+  /* Reads the workspace's payload — the same object the Summary tab renders. See
+     OutlookDataProvider for why this view no longer fetches for itself. */
+  const { data, loading, error, setTab } = useOutlookData();
 
   const chart = useMemo(
     () =>
@@ -239,9 +403,6 @@ export default function VentilationOutlook() {
       })),
     [data],
   );
-
-  // Tell the shell which moment this page is describing (see OutlookModeProvider).
-  usePublishOutlookMode(data?.mode, data?.as_of);
 
   const vf = data?.atmosphere.ventilation_forecast;
   const vp = data?.atmosphere.ventilation_profile;
@@ -260,6 +421,10 @@ export default function VentilationOutlook() {
   // said "Ventilation is above the operating point". Three statements, one of them
   // right. Copy that contradicts the number beside it is worse than no copy.
   const collapsed = windowH !== null && windowH <= 0;
+
+  /* The window as a clock. Same deadline the executive page counts down, so the
+     two screens cannot disagree about how long is left. */
+  const countdown = useInterventionCountdown(data?.as_of, windowH, data?.mode);
   const ventNow = vp?.components?.ventilation_m2_s ?? null;
   const belowNow =
     ventNow !== null && threshold !== null ? ventNow <= threshold : null;
@@ -270,43 +435,181 @@ export default function VentilationOutlook() {
     data?.provenance.feature_source?.startsWith("store:"),
   );
 
-  const band = useMemo(() => {
-    if (!data) return null;
-    const s = data.timeline.find((m) => m.kind === "collapse");
-    const e = data.timeline.find((m) => m.kind === "recovery");
-    if (!s) return null;
-    return { from: ist(s.at), to: e ? ist(e.at) : chart[chart.length - 1]?.label };
+  /* ── annotation layer ──────────────────────────────────────────────────
+     ONE MAPPING FROM AN INSTANT TO AN X POSITION, FOR EVERYTHING ON THIS CHART.
+
+     The x-axis is a CATEGORY axis keyed on the formatted label, so Recharts places a
+     ReferenceLine only if its `x` matches a category string EXACTLY. A near-miss is
+     not an error — the mark silently collapses against the left edge, which is the
+     failure OutlookView documents having already been bitten by once ("Building the
+     band bounds with ist() produced the comma form, which matches no category").
+
+     Formatting an event's own timestamp is therefore not good enough. The instant is
+     resolved to an INDEX in `forecast.series` first, and the label is then read out of
+     the chart array at that index — so an annotation is, by construction, the same
+     column the chart drew. That also covers the case Change #6 had to handle: the
+     series can skip an hour when a feature row is missing, and an event falling in
+     that gap snaps forward to the next real point instead of landing nowhere.
+
+     Nothing here classifies or predicts. Every timestamp comes from the payload. */
+  const annotations = useMemo(() => {
+    const series = data?.forecast.series ?? [];
+    if (!data || series.length === 0 || chart.length !== series.length) {
+      return { band: null, marks: [] as { key: string; x: string; label: string; colour: string }[] };
+    }
+
+    /** The chart category covering an instant, or null if it cannot be placed. */
+    const labelAt = (iso: string | null | undefined): string | null => {
+      const index = seriesIndexAt(series, iso);
+      return index === null ? null : (chart[index]?.label ?? null);
+    };
+
+    /* Collapse onset is the backend's find_collapse result — the same field Change #6
+       reads for the timeline above, so the marker and the bar point at one value. The
+       timeline mark is used as a fallback only because the backend derives it from
+       exactly that onset. */
+    const onsetIso =
+      data.atmosphere.ventilation_forecast.collapse?.onset ??
+      data.timeline.find((m) => m.kind === "collapse")?.at ??
+      null;
+    const recoveryIso = data.timeline.find((m) => m.kind === "recovery")?.at ?? null;
+
+    const onsetX = labelAt(onsetIso);
+    const recoveryX = labelAt(recoveryIso);
+
+    const marks: { key: string; x: string; label: string; colour: string }[] = [];
+    // No onset in the payload -> no line. Never a mark at index 0 standing in for one.
+    if (onsetX) marks.push({ key: "onset", x: onsetX, label: "Onset", colour: C.red });
+    /* Recovery is dropped when it would sit on the same column as onset: two labels in
+       one place is less readable than one, and the shaded band already shows the span. */
+    if (recoveryX && recoveryX !== onsetX) {
+      marks.push({ key: "recovery", x: recoveryX, label: "Recovery", colour: C.green });
+    }
+
+    const band = onsetX
+      ? { from: onsetX, to: recoveryX ?? chart[chart.length - 1]?.label }
+      : null;
+
+    return { band, marks };
   }, [data, chart]);
+
+  const band = annotations.band;
+
+  /* The collapse timeline, from the same payload the chart draws. No request, no
+     second time base: positions are indices into `forecast.series`, which is exactly
+     what the category axis below plots. */
+  const collapseTimeline = useMemo<CollapseTimeline | null>(() => {
+    const series = data?.forecast.series ?? [];
+    if (series.length < 2) return null;
+
+    const last = series.length - 1;
+    const pctOfIndex = (i: number) => (i / last) * 100;
+
+    /* Shared with the chart's reference lines below — see seriesIndexAt. */
+    const indexAt = (iso: string): number | null => seriesIndexAt(series, iso);
+
+    const startLabel = `${ist(series[0].valid_at)} IST`;
+    const endLabel = `${ist(series[last].valid_at)} IST`;
+
+    /* Read from the profile the page already renders as "Ventilation (now)", so the
+       anchor and that card cannot disagree. Null stays null. */
+    const observedValue =
+      data?.atmosphere.ventilation_profile.components?.ventilation_m2_s ?? null;
+    const observed = data
+      ? {
+          value: observedValue !== null ? observedValue.toFixed(0) : null,
+          at: ist(data.as_of),
+        }
+      : null;
+
+    const collapse = data?.atmosphere.ventilation_forecast.collapse ?? null;
+    const onsetIndex = collapse?.onset ? indexAt(collapse.onset) : null;
+
+    /* NO COLLAPSE IS A RESULT, NOT AN ABSENCE.
+       The backend forecast ran and found no sustained run below the operating point.
+       That is worth stating plainly in one steady segment — not by drawing a bar with
+       invented amber and red on it. */
+    if (collapse === null || onsetIndex === null) {
+      return {
+        segments: [
+          {
+            kind: "steady",
+            label: "No collapse forecast",
+            from: 0,
+            to: 100,
+            colour: C.green,
+            detail: "Ventilation stays above the operating point across the horizon",
+          },
+        ],
+        onsetPct: null,
+        onsetLabel: null,
+        startLabel,
+        endLabel,
+        observed,
+      };
+    }
+
+    const onsetPct = pctOfIndex(onsetIndex);
+
+    /* Recovery exists only when the engine emitted the mark — it requires a SUSTAINED
+       run back above the threshold, so a single midday spike does not count. When
+       there is none, the collapse simply runs to the end of the horizon and no green
+       is drawn. Inventing a recovery would be inventing the end of an episode. */
+    const recoveryMark = data?.timeline.find((m) => m.kind === "recovery") ?? null;
+    const recoveryIndex = recoveryMark ? indexAt(recoveryMark.at) : null;
+    const recoveryPct =
+      recoveryIndex !== null && recoveryIndex > onsetIndex
+        ? pctOfIndex(recoveryIndex)
+        : null;
+
+    const segments: TimelineSegment[] = [];
+
+    /* Approaching: the run-up from the start of the horizon to onset. Zero-width when
+       the collapse has already begun at the first forecast hour, and dropped rather
+       than drawn as a sliver. */
+    if (onsetPct > 0) {
+      segments.push({
+        kind: "approaching",
+        label: "Approaching",
+        from: 0,
+        to: onsetPct,
+        colour: C.amber,
+        detail: `until ${ist(collapse.onset)} IST`,
+      });
+    }
+
+    segments.push({
+      kind: "collapse",
+      label: "Predicted collapse",
+      from: onsetPct,
+      to: recoveryPct ?? 100,
+      colour: C.red,
+      detail: `${collapse.sustained_hours_below_threshold} h below · min ${collapse.min_ventilation_m2_s.toFixed(0)} m²/s`,
+    });
+
+    if (recoveryPct !== null && recoveryMark) {
+      segments.push({
+        kind: "recovery",
+        label: "Recovery",
+        from: recoveryPct,
+        to: 100,
+        colour: C.green,
+        detail: `from ${ist(recoveryMark.at)} IST`,
+      });
+    }
+
+    return {
+      segments,
+      onsetPct,
+      onsetLabel: `${ist(collapse.onset)} IST`,
+      startLabel,
+      endLabel,
+      observed,
+    };
+  }, [data]);
 
   return (
     <div className="space-y-3" style={{ color: C.body }}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[19px] font-bold tracking-tight" style={{ color: C.ink }}>
-            Ventilation Outlook
-          </h1>
-          <p className="mt-0.5 text-[11.5px]" style={{ color: C.muted }}>
-            Dispersion capacity and intervention window for Delhi NCR.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map((p, i) => (
-            <button
-              key={p.label}
-              onClick={() => setPreset(i)}
-              className="rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
-              style={
-                preset === i
-                  ? { background: "#14532d", borderColor: "#14532d", color: "#fff" }
-                  : { background: C.paper, borderColor: C.line, color: C.body }
-              }
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {loading && (
         <Card>
           <p className="py-10 text-center text-[12.5px]" style={{ color: C.muted }}>
@@ -316,8 +619,8 @@ export default function VentilationOutlook() {
       )}
 
       {error && !loading && (
-        <div className="rounded-lg border p-4" style={{ background: "#fdf2f0", borderColor: "#f0d5cd" }}>
-          <p className="text-[12.5px] font-bold" style={{ color: "#b91c1c" }}>
+        <div className="rounded-lg border p-4" style={{ background: "color-mix(in srgb, var(--aree-red) 8%, transparent)", borderColor: "color-mix(in srgb, var(--aree-red) 35%, transparent)" }}>
+          <p className="text-[12.5px] font-bold" style={{ color: "var(--aree-red)" }}>
             Ventilation outlook unavailable
           </p>
           <p className="mt-1 text-[12px]">{error}</p>
@@ -328,7 +631,7 @@ export default function VentilationOutlook() {
         <>
           {/* ── status strip ── */}
           <div
-            className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 lg:grid-cols-6"
+            className="grid gap-4 rounded-lg border p-4 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-6"
             style={{ background: C.wash, borderColor: C.line }}
           >
             <div className="lg:border-r lg:pr-4" style={{ borderColor: C.line }}>
@@ -352,8 +655,27 @@ export default function VentilationOutlook() {
                     ? "Below the operating point — dispersion capacity is poor now"
                     : "Above the operating point — dispersion capacity is adequate now"}
               </p>
-              <p className="mt-1 text-[10.5px] font-semibold" style={{ color: C.body }}>
-                {windowH !== null ? `${windowH.toFixed(1)} h intervention window remaining` : "No collapse forecast"}
+              <p
+                className="mt-1 flex flex-wrap items-baseline gap-1.5 text-[10.5px] font-semibold"
+                style={{ color: C.body }}
+              >
+                {countdown.available ? (
+                  <>
+                    <InterventionTimer
+                      asOf={data.as_of}
+                      windowHours={windowH}
+                      mode={data.mode}
+                      size="sm"
+                      showUnit={false}
+                    />
+                    <span style={{ color: C.muted }}>
+                      intervention window remaining
+                      {countdown.frozen ? " at this replayed moment" : ""}
+                    </span>
+                  </>
+                ) : (
+                  "No collapse forecast"
+                )}
               </p>
             </div>
 
@@ -390,7 +712,7 @@ export default function VentilationOutlook() {
           </div>
 
           {/* ── the two inputs, stated plainly ── */}
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="grid gap-3 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
             <Card>
               <div className="flex items-start justify-between gap-3">
                 <span className="flex items-center gap-1.5">
@@ -399,7 +721,7 @@ export default function VentilationOutlook() {
                 </span>
                 <span
                   className="rounded px-2 py-0.5 text-[9.5px] font-bold"
-                  style={{ background: "#eef4fb", color: "#1e5b96" }}
+                  style={{ background: "color-mix(in srgb, var(--aree-blue) 10%, transparent)", color: "var(--aree-blue)" }}
                 >
                   {data.provenance.feature_source}
                 </span>
@@ -446,8 +768,8 @@ export default function VentilationOutlook() {
                   className="rounded px-2 py-0.5 text-[9.5px] font-bold"
                   style={
                     data.observation.target === "network"
-                      ? { background: "#eff6f0", color: "#2f6b3f" }
-                      : { background: "#f6efd9", color: "#8a6d1f" }
+                      ? { background: "color-mix(in srgb, var(--aree-green) 10%, transparent)", color: "var(--aree-green)" }
+                      : { background: "color-mix(in srgb, var(--aree-yellow) 14%, transparent)", color: "var(--aree-yellow)" }
                   }
                 >
                   {data.observation.source}
@@ -487,7 +809,7 @@ export default function VentilationOutlook() {
           </div>
 
           {/* ── chart · components · distribution ── */}
-          <div className="grid gap-3 xl:grid-cols-[1.7fr_1fr]">
+          <div className="grid gap-3 grid-cols-[minmax(0,1fr)] xl:grid-cols-[1.7fr_1fr]">
             <Card>
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="flex items-center gap-1.5">
@@ -498,7 +820,7 @@ export default function VentilationOutlook() {
                 </span>
                 <span
                   className="rounded px-2 py-0.5 text-[9.5px] font-bold"
-                  style={{ background: "#eef4fb", color: "#1e5b96" }}
+                  style={{ background: "color-mix(in srgb, var(--aree-blue) 10%, transparent)", color: "var(--aree-blue)" }}
                 >
                   {data.atmosphere.ventilation.hours_below_threshold} H BELOW THRESHOLD
                 </span>
@@ -513,44 +835,83 @@ export default function VentilationOutlook() {
                   Operating point ({threshold?.toFixed(1)} m²/s)
                 </span>
                 <span className="text-[10px]" style={{ color: C.muted }}>
-                  <span className="mr-1 inline-block h-2 w-3 rounded-sm align-middle" style={{ background: "#f7dcd6" }} />
+                  <span className="mr-1 inline-block h-2 w-3 rounded-sm align-middle" style={{ background: "color-mix(in srgb, var(--aree-red) 25%, transparent)" }} />
                   Collapse zone
                 </span>
               </div>
 
+              {/* ── the collapse timeline, directly above the chart it describes ──
+                  Same horizontal domain, same insets, same index basis. */}
+              {collapseTimeline ? (
+                <TimelineBar model={collapseTimeline} />
+              ) : (
+                <p className="mt-2 text-[10.5px]" style={{ color: C.dim }}>
+                  Collapse forecast unavailable — no ventilation series for this moment.
+                </p>
+              )}
+
               <div className="mt-2 h-[240px]">
                 <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={chart} margin={{ top: 8, right: 10, bottom: 0, left: -16 }}>
-                    <CartesianGrid stroke="#f2efe6" vertical={false} />
+                  <ComposedChart data={chart} margin={{ ...VC_CHART_MARGIN }}>
+                    <CartesianGrid stroke="var(--aree-surface-3)" vertical={false} />
                     <XAxis
                       dataKey="label"
                       tick={{ fontSize: 9, fill: C.dim }}
-                      interval={Math.max(3, Math.floor(chart.length / 8))}
+                      /* Ticks thinned by available width rather than by a fixed
+                         count — see the same axis on the Atmospheric tab. */
+                      interval="preserveStartEnd"
+                      minTickGap={44}
                       tickLine={false}
                       axisLine={{ stroke: C.line }}
                     />
-                    <YAxis tick={{ fontSize: 9, fill: C.dim }} tickLine={false} axisLine={false} width={44} />
+                    <YAxis
+                      tick={{ fontSize: 9, fill: C.dim }}
+                      tickLine={false}
+                      axisLine={false}
+                      width={VC_Y_AXIS_WIDTH}
+                    />
                     <Tooltip
                       contentStyle={{ fontSize: 11, borderRadius: 6, border: `1px solid ${C.line}` }}
                       formatter={(v) => [`${v} m²/s`, "Ventilation"]}
                     />
                     {threshold !== null && (
-                      <ReferenceArea y1={0} y2={threshold} fill="#f7dcd6" fillOpacity={0.45} />
+                      <ReferenceArea y1={0} y2={threshold} fill="color-mix(in srgb, var(--aree-red) 25%, transparent)" fillOpacity={0.45} />
                     )}
                     {band && (
-                      <ReferenceArea x1={band.from} x2={band.to} fill="#e9b7a6" fillOpacity={0.2} />
+                      <ReferenceArea x1={band.from} x2={band.to} fill="color-mix(in srgb, var(--aree-red) 35%, transparent)" fillOpacity={0.2} />
                     )}
                     <Area
                       dataKey="ventilation"
                       stroke={C.blue}
                       strokeWidth={1.6}
-                      fill="#dbeafe"
+                      fill="color-mix(in srgb, var(--aree-blue) 22%, transparent)"
                       fillOpacity={0.5}
                       dot={false}
                     />
                     {threshold !== null && (
                       <ReferenceLine y={threshold} stroke={C.red} strokeDasharray="5 3" />
                     )}
+
+                    {/* Operational events, at the exact columns resolved above. Each
+                        carries its name as SVG text, so the marker is not colour alone.
+                        The full instant stays on the Change #6 timeline directly above,
+                        which keeps these labels short enough not to crowd a narrow
+                        chart. Reference lines are decorative geometry and do not sit in
+                        the tooltip's hit path. */}
+                    {annotations.marks.map((mark) => (
+                      <ReferenceLine
+                        key={mark.key}
+                        x={mark.x}
+                        stroke={mark.colour}
+                        strokeDasharray="3 3"
+                        label={{
+                          value: mark.label,
+                          position: "top",
+                          fontSize: 9.5,
+                          fill: mark.colour,
+                        }}
+                      />
+                    ))}
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
@@ -603,7 +964,7 @@ export default function VentilationOutlook() {
           </div>
 
           {/* ── events · decision basis · interpretation ── */}
-          <div className="grid gap-3 xl:grid-cols-[1.5fr_1fr_0.9fr]">
+          <div className="grid gap-3 grid-cols-[minmax(0,1fr)] xl:grid-cols-[1.5fr_1fr_0.9fr]">
             <Card>
               <span className="flex items-center gap-1.5">
                 <Info className="h-3.5 w-3.5" style={{ color: C.muted }} />
@@ -627,14 +988,16 @@ export default function VentilationOutlook() {
                         <div key={m.kind + m.at} className="flex w-[19%] flex-col items-start">
                           <span
                             className="h-3 w-3 rounded-full border-2"
-                            style={{ background: tone, borderColor: "#fff" }}
+                            style={{ background: tone, borderColor: "var(--aree-surface-1)" }}
                           />
                           <p className="mt-1.5 text-[10.5px] font-bold" style={{ color: C.ink }}>
                             {m.kind === "now" ? "Now" : ist(m.at)}
                           </p>
                           <p className="text-[9.5px] font-semibold" style={{ color: C.muted }}>
                             {m.kind === "now"
-                              ? `${windowH?.toFixed(1) ?? "—"} h remaining`
+                              ? countdown.available
+                                ? `${countdown.elapsed ? "elapsed" : countdown.hhmm} remaining`
+                                : "no window"
                               : `${m.hours_from_now > 0 ? "+" : ""}${m.hours_from_now.toFixed(0)} h`}
                           </p>
                           <p className="mt-1 text-[9.5px] leading-snug" style={{ color: C.body }}>
@@ -739,14 +1102,15 @@ export default function VentilationOutlook() {
               <p className="mt-2 text-[11px] leading-relaxed" style={{ color: C.muted }}>
                 {data.mechanism.consequence}.
               </p>
-              <a
-                href="/outlook"
-                className="mt-3 flex items-center justify-between rounded-md border px-3 py-2 text-[11px] font-semibold transition"
+              <button
+                type="button"
+                onClick={() => setTab("summary")}
+                className="mt-3 flex w-full items-center justify-between rounded-md border px-3 py-2 text-[11px] font-semibold transition"
                 style={{ borderColor: C.line, color: C.body }}
               >
                 What this means for air quality
                 <ChevronRight className="h-3.5 w-3.5" />
-              </a>
+              </button>
             </Card>
           </div>
 

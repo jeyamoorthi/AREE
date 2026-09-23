@@ -88,7 +88,35 @@ LEGACY_STATION = "Delhi NCR composite (research)"
 #
 # Bounded, because stepping back indefinitely would silently serve a forecast
 # anchored to yesterday and present it as current.
-MAX_ANCHOR_BACKOFF_HOURS = 6
+#
+# WHY 24 AND NOT 6
+#     Six hours covers the publication delay this constant was written for, and
+#     nothing else. It does not cover the case that actually takes the screen down:
+#     the process having been off. Every hour AREE is not running is an hour missing
+#     from the store forever - the hourly capture can only ever write the hour it is
+#     in, and the one backfill source (OpenAQ) is itself days behind for the NCR, so
+#     those holes cannot be repaired after the fact.
+#
+#     Measured on 2026-09-08, after the machine had slept overnight:
+#
+#         anchorable hours in the store   48
+#         freshest                        -12 h  (09-07 15:00Z, 77 stations)
+#         MAX_ANCHOR_BACKOFF_HOURS        6
+#         GET /api/aree/outlook           424  missing at lag(s) [0, 3, 6] h
+#
+#     Forty-eight usable anchors, a full network sweep twelve hours back, and the
+#     hero screen showed a red box - because of this number and nothing else. A
+#     forecast issued from a twelve-hour-old observation is a normal operational
+#     product as long as it SAYS SO, and this one does: `anchored` carries the hour
+#     used, the hour requested and how far back it reached, and the provenance note
+#     spells it out in words.
+#
+#     Twenty-four is where the honesty runs out rather than an arbitrary widening.
+#     The horizon is 65 h, so a day-old anchor still leaves most of the forecast
+#     ahead of the reader. Past that the majority of what is drawn has already
+#     happened, and "no live forecast" is the more truthful answer than a chart
+#     of yesterday.
+MAX_ANCHOR_BACKOFF_HOURS = 24
 
 # Stations an hour needs before its target counts as a network estimate rather than a
 # few scattered sensors. Mirrors target.MIN_VALID_STATIONS, which is the bar the
@@ -241,6 +269,71 @@ def load_for(name: str, as_of: datetime):
     return lgb.Booster(model_file=str(path)), train_end
 
 
+# --- what the store is missing ---------------------------------------------
+
+def missing_lags(observations: dict, anchor: datetime) -> list[int]:
+    """The PM2.5 lags `anchor` needs and `observations` does not have.
+
+    One definition, used both by forecast() below and by the capture scheduler that
+    repairs the store. Two definitions of "is this hour usable" would eventually
+    disagree, and the disagreement would present as a screen that says the data is
+    fine beside a forecast that says it is not.
+    """
+    return [h for h in model_lgbm.PM_LAGS
+            if (anchor - timedelta(hours=h)) not in observations]
+
+
+def live_anchor_gap(conn, now: datetime | None = None) -> dict[str, Any]:
+    """Can a live forecast be anchored right now, and if not, which hours are absent?
+
+    WHY THIS EXISTS SEPARATELY FROM forecast()
+        The capture scheduler's job is to keep the store in a state this function can
+        answer "yes" to. Until now it judged that by RECENCY - "how many hours since
+        the newest row?" - and recency is not the question. The forecast does not need
+        a recent hour; it needs SIX PARTICULAR HOURS, at 0, 1, 3, 6, 12 and 24 back
+        from an anchor. A store holding the current hour and nothing else is perfectly
+        recent and completely unusable.
+
+        That mismatch is not hypothetical. Measured on 2026-09-07, after the
+        containers had been down most of the day:
+
+            store hours   ... 05:00  06:00  ------  08:00  ------  15:00
+            recency       1 h behind  ->  "no backfill needed"
+            forecast      424  observed PM2.5 missing at lag(s) [0, 3, 6] h
+
+        Every anchor in the backoff window was missing a lag, and the one mechanism
+        that could have refilled those hours had already concluded there was nothing
+        to do. Asking the real question here, and letting the scheduler act on it,
+        is what closes that gap.
+
+    Returns the anchor that WOULD be used (None when there is none), the hours a
+    repair would have to supply, and the lags missing at the freshest candidate -
+    which is what the error message on screen is built from.
+    """
+    now = (now or datetime.now(timezone.utc)).replace(
+        minute=0, second=0, microsecond=0)
+    observations = observation_series(conn)
+
+    wanted: set[datetime] = set()
+    anchor: datetime | None = None
+    for back in range(MAX_ANCHOR_BACKOFF_HOURS + 1):
+        candidate = now - timedelta(hours=back)
+        gaps = missing_lags(observations, candidate)
+        if not gaps:
+            anchor = candidate
+            break
+        wanted.update(candidate - timedelta(hours=h) for h in gaps)
+
+    return {
+        "anchor": anchor,
+        # Empty exactly when an anchor was found, so a caller can treat this as the
+        # single "is a repair needed" signal without a second test.
+        "missing_hours": [] if anchor else sorted(wanted),
+        "missing_lags_at_now": missing_lags(observations, now),
+        "observed_hours": len(observations),
+    }
+
+
 # --- the contract ----------------------------------------------------------
 
 def forecast(conn, as_of: datetime | None = None,
@@ -267,8 +360,7 @@ def forecast(conn, as_of: datetime | None = None,
                   else f"store:{grid} (era5)")
 
     def _missing(anchor: datetime) -> list[int]:
-        return [h for h in model_lgbm.PM_LAGS
-                if (anchor - timedelta(hours=h)) not in observations]
+        return missing_lags(observations, anchor)
 
     # In LIVE mode, step back to an hour that actually has a complete set of lags.
     # An explicitly supplied `at` is never moved - a replay must reconstruct the
@@ -377,9 +469,16 @@ def forecast(conn, as_of: datetime | None = None,
         # of lags. Reported rather than hidden, because "issued now, based on
         # observations to 06:00" is a materially different statement from
         # "issued now, based on observations to now".
+        # Present only when a live forecast had to step back. `stale` is the flag a
+        # screen should warn on: the anchor is not merely late (every anchor is late,
+        # by the publication delay) but older than the window this system calls live,
+        # which means the reader is looking at a forecast whose opening hours have
+        # already elapsed.
         "anchored": ({"requested": anchored_from, "used": as_of,
                       "hours_back": round((anchored_from - as_of)
                                           .total_seconds() / 3600),
+                      "stale": (anchored_from - as_of).total_seconds()
+                      > LIVE_WINDOW_HOURS * 3600,
                       "reason": anchor_reason}
                      if anchored_from else None),
         "provenance": {

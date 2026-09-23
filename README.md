@@ -1,4 +1,7 @@
-<h1 align="center">🌬️ AREE</h1>
+<p align="center">
+  <img src="frontend/public/aree-mark.png" alt="AREE" width="150"/>
+</p>
+<h1 align="center">AREE</h1>
 <h3 align="center">Autonomous Regulatory Escalation Engine</h3>
 <p align="center"><i>Delhi NCR · SIH PS 26082 — Air Pollution–Weather Coupled Forecasting · Team Devengers</i></p>
 

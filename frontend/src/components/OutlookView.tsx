@@ -27,7 +27,7 @@
    "Low" while an episode was under way.
    ========================================================================== */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   Area,
   CartesianGrid,
@@ -57,19 +57,17 @@ import {
 
 import SpatialOutlookMapLoader from "@/components/SpatialOutlookMapLoader";
 import CaseAuthorisation from "@/components/CaseAuthorisation";
+import EvidencePanel, { selectEvidence } from "@/components/EvidencePanel";
+import InterventionTimer, {
+  useInterventionCountdown,
+} from "@/components/InterventionTimer";
 
-import { usePublishOutlookMode } from "@/components/providers/OutlookModeProvider";
-import { useSyncPresetToUrl } from "@/hooks/useSyncPresetToUrl";
-import { api, errorMessage } from "@/lib/api";
+import {
+  OUTLOOK_PRESETS,
+  useOutlookData,
+} from "@/components/providers/OutlookDataProvider";
 import { CPCB_PM25_BANDS } from "@/lib/cpcb";
-import type { MechanismLink, OutlookResponse } from "@/types";
-
-const PRESETS: { label: string; at?: string }[] = [
-  { label: "Live" },
-  { label: "02 Nov 2024 · 06:00", at: "2024-11-02T06:00:00Z" },
-  { label: "14 Nov 2024 · 00:00", at: "2024-11-14T00:00:00Z" },
-  { label: "16 Nov 2024 · 00:00", at: "2024-11-16T00:00:00Z" },
-];
+import type { MechanismLink } from "@/types";
 
 /* Indian operators read IST. UTC stays in the payload and in provenance so the
    record is unambiguous; the screen speaks local time. */
@@ -94,25 +92,25 @@ function utc(iso: string): string {
 }
 
 const C = {
-  ink: "#1a1a17",
-  body: "#44403a",
-  muted: "#7d776c",
-  dim: "#a8a196",
-  line: "#e8e3d7",
-  paper: "#ffffff",
-  wash: "#faf8f2",
-  amber: "#f0e6c8",
-  amberBg: "#fdf8ec",
-  amberInk: "#8a6d1f",
-  green: "#d9e7d9",
-  greenBg: "#f3f8f2",
-  greenInk: "#2f6b3f",
-  red: "#c2410c",
-  redInk: "#b91c1c",
-  orange: "#ea8c4f",
-  orangeInk: "#b3511c",
-  orangeBg: "#fdf4ec",
-  violet: "#4338ca",
+  ink: "var(--aree-text)",
+  body: "var(--aree-body)",
+  muted: "var(--aree-muted)",
+  dim: "var(--aree-dim)",
+  line: "var(--aree-border)",
+  paper: "var(--aree-surface-1)",
+  wash: "var(--aree-surface-2)",
+  amber: "color-mix(in srgb, var(--aree-yellow) 35%, transparent)",
+  amberBg: "color-mix(in srgb, var(--aree-yellow) 8%, transparent)",
+  amberInk: "var(--aree-yellow)",
+  green: "color-mix(in srgb, var(--aree-green) 30%, transparent)",
+  greenBg: "color-mix(in srgb, var(--aree-green) 8%, transparent)",
+  greenInk: "var(--aree-green)",
+  red: "var(--aree-orange)",
+  redInk: "var(--aree-red)",
+  orange: "var(--aree-orange)",
+  orangeInk: "var(--aree-orange)",
+  orangeBg: "color-mix(in srgb, var(--aree-orange) 8%, transparent)",
+  violet: "var(--aree-violet)",
 };
 
 /* ── the four states, in one place ────────────────────────────────────────
@@ -129,10 +127,10 @@ const STATUS_STYLE: Record<
   string,
   { ink: string; bg: string; border: string; dot: string }
 > = {
-  critical: { ink: C.redInk, bg: "#fdf2f0", border: "#f0d5cd", dot: "#b91c1c" },
-  elevated: { ink: C.orangeInk, bg: C.orangeBg, border: "#f3ddc6", dot: "#ea580c" },
-  warning: { ink: C.amberInk, bg: C.amberBg, border: C.amber, dot: "#ca8a04" },
-  calm: { ink: C.greenInk, bg: C.greenBg, border: C.green, dot: "#16a34a" },
+  critical: { ink: C.redInk, bg: "color-mix(in srgb, var(--aree-red) 8%, transparent)", border: "color-mix(in srgb, var(--aree-red) 35%, transparent)", dot: "var(--aree-red)" },
+  elevated: { ink: C.orangeInk, bg: C.orangeBg, border: "color-mix(in srgb, var(--aree-orange) 35%, transparent)", dot: "var(--aree-orange)" },
+  warning: { ink: C.amberInk, bg: C.amberBg, border: C.amber, dot: "var(--aree-yellow)" },
+  calm: { ink: C.greenInk, bg: C.greenBg, border: C.green, dot: "var(--aree-green)" },
 };
 
 function styleFor(tone: string | undefined) {
@@ -218,7 +216,8 @@ function Stat({
   sub,
 }: {
   label: string;
-  value: string;
+  /** A node, not just a string: the intervention window is a live countdown. */
+  value: React.ReactNode;
   unit?: string;
   tone?: string;
   caption?: string;
@@ -295,33 +294,19 @@ function MechanismCell({ link, tone }: { link: MechanismLink; tone: string }) {
 /* ── page ─────────────────────────────────────────────────────────────── */
 
 export default function OutlookView() {
-  const [preset, setPreset] = useState(0);
-  const [data, setData] = useState<OutlookResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  /* The payload, the moment, the address bar and the page-mode announcement all
+     belong to the workspace now — see OutlookDataProvider. This view renders; the
+     Diagnostics tab renders the SAME object, so the two cannot describe different
+     hours. `setTab` is here only for the cross-view link at the foot of section 03,
+     which used to be a navigation to another route. */
+  const { data, loading, error, preset, setPreset, reload, setTab } =
+    useOutlookData();
 
-  const load = useCallback(async (at?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      setData(await api.outlook(at));
-    } catch (err) {
-      setData(null);
-      setError(errorMessage(err));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    void load(PRESETS[preset].at);
-  }, [preset, load]);
-
-  useSyncPresetToUrl(PRESETS, preset, setPreset);
-
-  // Tell the shell which moment this page is describing, so the header and sidebar stop
-  // showing a green LIVE pill above a reconstruction of November 2024.
-  usePublishOutlookMode(data?.mode, data?.as_of);
+  /* Preset 0 is Live; anything else is a reconstruction of a fixed past moment. The
+     two fail for unrelated reasons and need unrelated advice, so the error state
+     below branches on this rather than printing one sentence for both. */
+  const onReplayPreset = preset > 0;
+  const presetLabel = OUTLOOK_PRESETS[preset]?.label ?? "that moment";
 
   const chart = useMemo(
     () =>
@@ -390,6 +375,15 @@ export default function OutlookView() {
   const windowHours =
     data?.atmosphere.ventilation_forecast.intervention_window_hours ?? null;
 
+  /* The same countdown the Stat renders, so the caption beside it can never
+     describe a different state than the clock above it. */
+  const countdown = useInterventionCountdown(data?.as_of, windowHours, data?.mode);
+
+  /* ONE selection, from the payload already on screen. The page renders it and
+     hands the same object to the authorisation panel, so there is no second
+     request and no way for the two to describe different moments. */
+  const evidence = useMemo(() => (data ? selectEvidence(data) : null), [data]);
+
   const rec = data?.decision.recommendation;
   const tone = data?.risk.status_tone ?? "calm";
   const S = styleFor(tone);
@@ -419,37 +413,6 @@ export default function OutlookView() {
 
   return (
     <div className="space-y-3" style={{ color: C.body }}>
-      {/* header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[19px] font-bold tracking-tight" style={{ color: C.ink }}>
-            Atmospheric Outlook
-          </h1>
-          <p className="mt-0.5 text-[11.5px]" style={{ color: C.muted }}>
-            What the atmosphere is doing now, what it will do next, and what that
-            means for air quality.
-            <br />
-            Every value is computed by the AREE backend.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {PRESETS.map((p, i) => (
-            <button
-              key={p.label}
-              onClick={() => setPreset(i)}
-              className="rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
-              style={
-                preset === i
-                  ? { background: C.ink, borderColor: C.ink, color: "#fff" }
-                  : { background: C.paper, borderColor: C.line, color: C.body }
-              }
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {loading && (
         <Card>
           <p className="py-8 text-center text-[12.5px]" style={{ color: C.muted }}>
@@ -458,15 +421,77 @@ export default function OutlookView() {
         </Card>
       )}
 
+      {/* NOT AVAILABLE IS A STATE, NOT A DEAD END.
+
+          This was the raw backend sentence in a red box and nothing else:
+
+              Outlook unavailable
+              observed PM2.5 missing at lag(s) [0, 1, 3, 6, 12, 24] h before
+              2024-11-02 06:00 UTC
+
+          Every word of that is true and none of it is usable. It does not say what a
+          lag is, whether the fault is the reader's, whether it will clear on its own,
+          or what to press instead — and on a REPLAY preset it is not even a fault:
+          this deployment simply has no observations for November 2024, so that
+          button can never work and the reader has no way to know that.
+
+          The reason is kept, because an operator filing a bug needs the exact string.
+          It is demoted beneath a sentence that says what happened and a control that
+          gets the reader somewhere useful. */}
       {error && !loading && (
         <div
           className="rounded-lg border p-4"
-          style={{ background: "#fdf2f0", borderColor: "#f0d5cd" }}
+          style={{
+            background: "color-mix(in srgb, var(--aree-red) 8%, transparent)",
+            borderColor: "color-mix(in srgb, var(--aree-red) 35%, transparent)",
+          }}
+          role="status"
         >
           <p className="text-[12.5px] font-bold" style={{ color: C.redInk }}>
-            Outlook unavailable
+            {onReplayPreset
+              ? `No observations stored for ${presetLabel}`
+              : "The live outlook cannot be issued yet"}
           </p>
-          <p className="mt-1 text-[12px]" style={{ color: C.body }}>
+
+          <p className="mt-1 max-w-[70ch] text-[12px] leading-snug" style={{ color: C.body }}>
+            {onReplayPreset
+              ? "A replay reconstructs a past moment from observations recorded at " +
+                "the time. This deployment has none for that date, so there is " +
+                "nothing to reconstruct — switching to Live shows the current airshed."
+              : "A forecast is issued from the last complete set of observations, " +
+                "and the store does not hold one yet. The hourly capture refills it " +
+                "automatically; this clears on its own once a full set has arrived."}
+          </p>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {onReplayPreset ? (
+              <button
+                type="button"
+                onClick={() => setPreset(0)}
+                className="rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
+                style={{ background: C.ink, borderColor: C.ink, color: "var(--aree-bg)" }}
+              >
+                Show the live outlook
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={reload}
+                className="rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
+                style={{ background: C.paper, borderColor: C.line, color: C.body }}
+              >
+                Check again
+              </button>
+            )}
+            <span className="text-[11px]" style={{ color: C.dim }}>
+              The National Overview and Command Center are unaffected.
+            </span>
+          </div>
+
+          {/* The exact upstream sentence, kept for whoever has to act on it. */}
+          <p className="mt-3 border-t pt-2 font-mono text-[10.5px] leading-snug"
+             style={{ borderColor: "color-mix(in srgb, var(--aree-red) 25%, transparent)",
+                      color: C.dim }}>
             {error}
           </p>
         </div>
@@ -621,11 +646,11 @@ export default function OutlookView() {
             hint="Observed now, and where it is worst"
           />
 
-          <div className="grid gap-3 lg:grid-cols-[0.72fr_1.35fr_1fr]">
+          <div className="grid gap-3 grid-cols-[minmax(0,1fr)] lg:grid-cols-[0.72fr_1.35fr_1fr]">
             <Card>
               <Eyebrow>Observed PM2.5</Eyebrow>
               <p
-                className="mt-2 text-[34px] font-bold leading-none tabular-nums"
+                className="mt-2 text-[28px] sm:text-[34px] font-bold leading-none tabular-nums"
                 style={{ color: C.ink }}
               >
                 {data.observation.value.toFixed(0)}
@@ -777,7 +802,7 @@ export default function OutlookView() {
                       <li
                         key={s.station}
                         className="flex items-center justify-between border-b py-1.5 last:border-0"
-                        style={{ borderColor: "#f2efe6" }}
+                        style={{ borderColor: "var(--aree-surface-3)" }}
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           <span
@@ -795,7 +820,7 @@ export default function OutlookView() {
                         </span>
                         <span
                           className="text-[12px] font-bold tabular-nums"
-                          style={{ color: s.pm25 > 100 ? "#c0392b" : C.body }}
+                          style={{ color: s.pm25 > 100 ? "var(--aree-red)" : C.body }}
                         >
                           {s.pm25.toFixed(0)}
                         </span>
@@ -877,7 +902,7 @@ export default function OutlookView() {
                 <span className="text-[10px]" style={{ color: C.muted }}>
                   <span
                     className="mr-1 inline-block h-2 w-3 rounded-sm align-middle"
-                    style={{ background: "#f8d2b4" }}
+                    style={{ background: "color-mix(in srgb, var(--aree-orange) 35%, transparent)" }}
                   />
                   Upper-tail risk (q90) — not a prediction
                 </span>
@@ -892,7 +917,7 @@ export default function OutlookView() {
                   <span className="text-[10px]" style={{ color: C.muted }}>
                     <span
                       className="mr-1 inline-block h-2 w-3 rounded-sm align-middle"
-                      style={{ background: "#f3c9b0" }}
+                      style={{ background: "color-mix(in srgb, var(--aree-orange) 45%, transparent)" }}
                     />
                     High accumulation window
                   </span>
@@ -909,11 +934,21 @@ export default function OutlookView() {
                   data={chart}
                   margin={{ top: 10, right: 12, bottom: 0, left: -14 }}
                 >
-                  <CartesianGrid stroke="#f2efe6" vertical={false} />
+                  <CartesianGrid stroke="var(--aree-surface-3)" vertical={false} />
+                  {/* TICKS ARE DROPPED BY WIDTH, NOT BY COUNT.
+                      A fixed interval of length/8 puts eight "08 Sept 06:30 IST"
+                      labels on the axis whatever the axis is: on a desktop that is
+                      right, on a 340px phone it is eight labels overprinting each
+                      other into a grey smear. `minTickGap` lets Recharts keep only
+                      the labels that fit, so the same axis thins itself to three or
+                      four on a phone and keeps all eight on a monitor —
+                      `preserveStartEnd` guarantees the first and last hour survive,
+                      which are the two the reader needs to date the series. */}
                   <XAxis
                     dataKey="short"
                     tick={{ fontSize: 9, fill: C.dim }}
-                    interval={Math.max(3, Math.floor(chart.length / 8))}
+                    interval="preserveStartEnd"
+                    minTickGap={44}
                     tickLine={false}
                     axisLine={{ stroke: C.line }}
                   />
@@ -935,7 +970,7 @@ export default function OutlookView() {
                     <ReferenceArea
                       x1={band.from}
                       x2={band.to}
-                      fill="#f3c9b0"
+                      fill="color-mix(in srgb, var(--aree-orange) 45%, transparent)"
                       fillOpacity={0.25}
                     />
                   )}
@@ -943,7 +978,7 @@ export default function OutlookView() {
                     dataKey="upper"
                     name="Upper-tail risk (q90)"
                     stroke={C.orange}
-                    fill="#fbe4d0"
+                    fill="color-mix(in srgb, var(--aree-orange) 25%, transparent)"
                     fillOpacity={0.85}
                     strokeWidth={1.2}
                     isAnimationActive={false}
@@ -1020,7 +1055,7 @@ export default function OutlookView() {
           />
 
           <Card>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid gap-4 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-5">
               {data.mechanism.links.map((l) => (
                 <MechanismCell key={l.label} link={l} tone={tone} />
               ))}
@@ -1061,10 +1096,15 @@ export default function OutlookView() {
               className="mt-3 border-t pt-2 text-[11.5px] leading-relaxed"
               style={{ borderColor: C.line, color: C.body }}
             >
-              {data.mechanism.consequence}. Full dispersion diagnostic on the{" "}
-              <a href="/ventilation" style={{ color: C.violet }}>
-                Ventilation Outlook
-              </a>
+              {data.mechanism.consequence}. Full dispersion diagnostic under{" "}
+              <button
+                type="button"
+                onClick={() => setTab("diagnostics")}
+                className="underline"
+                style={{ color: C.violet }}
+              >
+                Diagnostics
+              </button>
               .
             </p>
           </Card>
@@ -1076,8 +1116,11 @@ export default function OutlookView() {
             hint="Forecast milestones, and how long is left to act"
           />
 
-          <div className="grid gap-3 xl:grid-cols-[1fr_1.6fr]">
-            <div className="grid grid-cols-2 gap-3 self-start">
+          <div className="grid gap-3 grid-cols-[minmax(0,1fr)] xl:grid-cols-[1fr_1.6fr]">
+            {/* One up on a phone. These two carry the longest values on the page —
+                a timestamp and a live countdown — and side by side they need 574px,
+                which is where the Outlook's horizontal scroll came from. */}
+            <div className="grid min-w-0 grid-cols-1 gap-3 self-start sm:grid-cols-2">
               <Stat
                 label="Severe expected"
                 value={crossingLabel ? ist(data.risk.first_crossing!, false) : "None"}
@@ -1093,25 +1136,32 @@ export default function OutlookView() {
                     : `Upper tail stays below ${data.risk.threshold_ugm3.toFixed(0)} µg/m³`
                 }
               />
+              {/* A COUNTDOWN, NOT A MEASUREMENT.
+                  This printed "6.5 h" — true at the instant the payload was built and
+                  quietly wrong every minute after, with nothing on screen to say so.
+                  It now ticks against the same deadline (as_of + window), and freezes
+                  in replay because there "now" is as_of. */}
               <Stat
                 label="Intervention window"
                 value={
-                  windowHours !== null
-                    ? windowHours.toFixed(windowHours < 10 ? 1 : 0)
-                    : "None"
+                  <InterventionTimer
+                    asOf={data.as_of}
+                    windowHours={windowHours}
+                    mode={data.mode}
+                  />
                 }
-                unit={windowHours !== null ? "h" : undefined}
-                tone={windowHours !== null && windowHours <= 0 ? C.redInk : C.ink}
                 caption={
-                  windowHours === null
-                    ? "No ventilation collapse forecast"
-                    : windowHours <= 0
+                  countdown.available
+                    ? countdown.elapsed
                       ? "Collapse has begun"
-                      : "Before the atmosphere stops clearing"
+                      : "Remaining before the atmosphere stops clearing"
+                    : "No ventilation collapse forecast"
                 }
                 sub={
                   collapseInfo
-                    ? `Collapse ${ist(collapseInfo.onset)} · ${collapseInfo.sustained_hours_below_threshold} h sustained`
+                    ? `Collapse ${ist(collapseInfo.onset)} · ${collapseInfo.sustained_hours_below_threshold} h sustained${
+                        countdown.frozen ? " · as published at this replayed moment" : ""
+                      }`
                     : "Ventilation stays above the operating threshold"
                 }
               />
@@ -1121,15 +1171,29 @@ export default function OutlookView() {
               <Eyebrow>Forecast milestones</Eyebrow>
               <div className="mt-2 overflow-x-auto">
                 <table className="w-full min-w-[540px]">
+                  <caption className="sr-only">
+                    Forecast milestones, in chronological order: when each change in
+                    the atmospheric state is expected and what it means for air
+                    quality.
+                  </caption>
                   <thead>
                     <tr style={{ color: C.dim }}>
-                      <th className="pb-1.5 text-left text-[9.5px] font-semibold uppercase tracking-wide">
+                      <th
+                        scope="col"
+                        className="pb-1.5 text-left text-[9.5px] font-semibold uppercase tracking-wide"
+                      >
                         When
                       </th>
-                      <th className="pb-1.5 text-left text-[9.5px] font-semibold uppercase tracking-wide">
+                      <th
+                        scope="col"
+                        className="pb-1.5 text-left text-[9.5px] font-semibold uppercase tracking-wide"
+                      >
                         Atmospheric state
                       </th>
-                      <th className="pb-1.5 text-left text-[9.5px] font-semibold uppercase tracking-wide">
+                      <th
+                        scope="col"
+                        className="pb-1.5 text-left text-[9.5px] font-semibold uppercase tracking-wide"
+                      >
                         Consequence
                       </th>
                     </tr>
@@ -1138,17 +1202,17 @@ export default function OutlookView() {
                     {data.timeline.map((m) => {
                       const dot =
                         m.kind === "now"
-                          ? "#7fa86b"
+                          ? "var(--aree-green)"
                           : m.kind === "collapse"
-                            ? "#e07a3f"
+                            ? "var(--aree-orange)"
                             : m.kind === "recovery"
-                              ? "#7fa86b"
-                              : "#c0392b";
+                              ? "var(--aree-green)"
+                              : "var(--aree-red)";
                       return (
                         <tr
                           key={m.kind + m.at}
                           className="border-t"
-                          style={{ borderColor: "#f2efe6" }}
+                          style={{ borderColor: "var(--aree-surface-3)" }}
                         >
                           <td
                             className="whitespace-nowrap py-1.5 pr-3 text-[11.5px] font-semibold"
@@ -1196,7 +1260,7 @@ export default function OutlookView() {
               className="rounded-lg border p-4"
               style={{ background: S.bg, borderColor: S.border }}
             >
-              <div className="grid gap-4 lg:grid-cols-[1.3fr_2fr]">
+              <div className="grid gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[1.3fr_2fr]">
                 <div className="flex gap-3">
                   <ShieldCheck
                     className="mt-0.5 h-4 w-4 shrink-0"
@@ -1223,7 +1287,7 @@ export default function OutlookView() {
                   </div>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 grid-cols-[minmax(0,1fr)] sm:grid-cols-3">
                   {[
                     [Eye, "Monitor", rec.next_step],
                     [
@@ -1259,9 +1323,15 @@ export default function OutlookView() {
                 </div>
               </div>
 
+              {evidence ? (
+                <div className="mt-3 border-t pt-3" style={{ borderColor: S.border }}>
+                  <EvidencePanel evidence={evidence} />
+                </div>
+              ) : null}
+
               {data.decision.recommended_measures.length > 0 && (
                 <ul
-                  className="mt-3 grid gap-1.5 border-t pt-3 sm:grid-cols-2"
+                  className="mt-3 grid gap-1.5 border-t pt-3 grid-cols-[minmax(0,1fr)] sm:grid-cols-2"
                   style={{ borderColor: S.border }}
                 >
                   {data.decision.recommended_measures.map((m) => (
@@ -1282,13 +1352,17 @@ export default function OutlookView() {
 
               {/* The decision itself. Everything above is a recommendation; this is
                   where a person accepts or refuses it, and the outcome is persisted. */}
-              <CaseAuthorisation
-                decision={data.decision}
-                risk={data.risk}
-                asOf={data.as_of}
-                tone={S}
-                onDecided={() => void load(PRESETS[preset].at)}
-              />
+              {evidence ? (
+                <CaseAuthorisation
+                  decision={data.decision}
+                  risk={data.risk}
+                  asOf={data.as_of}
+                  mode={data.mode}
+                  evidence={evidence}
+                  tone={S}
+                  onDecided={reload}
+                />
+              ) : null}
 
               {data.decision.reasons.length > 0 && (
                 <div className="mt-3 border-t pt-3" style={{ borderColor: S.border }}>

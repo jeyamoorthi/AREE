@@ -68,7 +68,7 @@ export function DecisionTraceCard({ advisory }: { advisory: AdvisoryResponse }) 
   return (
     <Panel title="Decision trace" padding="p-5" accent="var(--aree-border-strong)">
       <div className="rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 shadow-[var(--aree-shadow-sm)]">
-        <div className="grid gap-x-8 sm:grid-cols-2">
+        <div className="grid gap-x-8 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
           <KeyValue label="Input AQI" value={String(trace.input_aqi ?? "—")} />
           <KeyValue label="Threshold" value={String(trace.threshold ?? "—")} />
           <KeyValue label="Persistence" value={orDash(trace.persistence)} />
@@ -104,7 +104,7 @@ export function PolicyRetrievalCard({ advisory }: { advisory: AdvisoryResponse }
       padding="p-5"
     >
       <div className="rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-4 shadow-[var(--aree-shadow-sm)]">
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Index type"
             value={orDash(advisory.rag_index_type, "Not available")}

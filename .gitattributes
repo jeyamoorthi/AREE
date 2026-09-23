@@ -1,0 +1,13 @@
+# LightGBM model files are parsed byte-for-byte by the native library on Linux.
+#
+# With core.autocrlf=true (the Windows default) git rewrites these to CRLF on
+# checkout, and LightGBM's parser then fails with "Model format error, expect a
+# tree here" and calls abort() — which does not raise a Python exception, it takes
+# the whole uvicorn process down with a core dump. The API returns nothing at all
+# and the container restarts. Marking them -text pins the bytes on every platform.
+backend/config/models/*.txt -text
+
+# The SQLite store and its journals are binary; never touch them.
+*.db binary
+*.db-wal binary
+*.db-shm binary

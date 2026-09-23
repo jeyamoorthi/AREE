@@ -46,14 +46,14 @@ export default function PolicyConsole() {
         const storeStatus = policy.store_status ?? "starting";
         const isStoreActive = storeStatus === "active";
         
-        let statusColor = "#ca8a04";
+        let statusColor = "var(--aree-yellow)";
         let statusVariant: "solid" | "outline" | "ghost" = "outline";
         
         if (isStoreActive) {
-          statusColor = "#16a34a";
+          statusColor = "var(--aree-green)";
           statusVariant = "solid";
         } else if (storeStatus !== "starting") {
-          statusColor = "#dc2626";
+          statusColor = "var(--aree-red)";
         }
         
         const latest =
@@ -64,7 +64,7 @@ export default function PolicyConsole() {
             : null;
 
         return (
-          <div className="grid gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]">
+          <div className="grid gap-6 grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1.35fr)_minmax(320px,1fr)]">
             <IntelligencePanel
               title="Policy index"
               variant="default"
@@ -74,15 +74,15 @@ export default function PolicyConsole() {
                 </StatusBadge>
               }
             >
-              <div className="p-6">
-                <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8">
-                  <div className="bg-[#faf9f4] p-4 rounded-lg border border-[#e4e0d4]">
-                    <Stat label="Documents" value={policy.docs_indexed} color="#16a34a" />
+              <div className="p-4 sm:p-6">
+                <div className="grid gap-6 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-4 mb-8">
+                  <div className="bg-aree-surface-2 p-4 rounded-lg border border-aree-border">
+                    <Stat label="Documents" value={policy.docs_indexed} color="var(--aree-green)" />
                   </div>
-                  <div className="bg-[#faf9f4] p-4 rounded-lg border border-[#e4e0d4]">
+                  <div className="bg-aree-surface-2 p-4 rounded-lg border border-aree-border">
                     <Stat label="Chunks" value={policy.chunks_indexed} />
                   </div>
-                  <div className="bg-[#faf9f4] p-4 rounded-lg border border-[#e4e0d4]">
+                  <div className="bg-aree-surface-2 p-4 rounded-lg border border-aree-border">
                     <Stat
                       label="Index type"
                       value={orDash(policy.index_type, "Initializing")}
@@ -90,7 +90,7 @@ export default function PolicyConsole() {
                       size="sm"
                     />
                   </div>
-                  <div className="bg-[#faf9f4] p-4 rounded-lg border border-[#e4e0d4]">
+                  <div className="bg-aree-surface-2 p-4 rounded-lg border border-aree-border">
                     <Stat
                       label="Embedding model"
                       value={orDash(policy.embed_model, "Not available")}
@@ -104,21 +104,25 @@ export default function PolicyConsole() {
                 </div>
 
                 <div>
-                  <h4 className="text-sm font-bold text-[#17231c] mb-4">Indexed Documents</h4>
+                  <h4 className="text-sm font-bold text-aree-text mb-4">Indexed Documents</h4>
                   {policy.policy_files.length === 0 ? (
                     <EmptyState>
                       No policy documents found in the policies/ folder.
                     </EmptyState>
                   ) : (
-                    <div className="border border-[#e4e0d4] bg-white overflow-x-auto rounded-lg">
+                    <div className="border border-aree-border bg-aree-card overflow-x-auto rounded-lg">
                       <table className="w-full border-collapse text-left text-sm">
+                        <caption className="sr-only">
+                          Policy documents in the retrieval index: filename, type,
+                          size, last modified and parse status.
+                        </caption>
                         <thead>
-                          <tr className="border-b border-[#e4e0d4] bg-[#faf9f4]">
+                          <tr className="border-b border-aree-border bg-aree-surface-2">
                             {["Filename", "Type", "Size", "Modified", "Status"].map((h, i) => (
                               <th
                                 key={h}
                                 scope="col"
-                                className={`px-4 py-3 text-xs font-bold tracking-wider text-[#64748b] uppercase ${
+                                className={`px-4 py-3 text-xs font-bold tracking-wider text-aree-muted uppercase ${
                                   i > 1 ? "text-right" : ""
                                 }`}
                               >
@@ -127,24 +131,24 @@ export default function PolicyConsole() {
                             ))}
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#e4e0d4]">
+                        <tbody className="divide-y divide-aree-border">
                           {policy.policy_files.map((file) => {
                             const ok = file.supported && !file.parse_error;
                             return (
                               <tr
                                 key={file.name}
-                                className="hover:bg-[#faf9f4] transition-colors"
+                                className="hover:bg-aree-surface-2 transition-colors"
                               >
-                                <td className="px-4 py-3 font-mono text-[#17231c] text-xs break-all">
+                                <td className="px-4 py-3 font-mono text-aree-text text-xs break-all">
                                   {file.name}
                                 </td>
-                                <td className="px-4 py-3 text-[#64748b] text-xs font-medium uppercase">
+                                <td className="px-4 py-3 text-aree-muted text-xs font-medium uppercase">
                                   {file.type}
                                 </td>
-                                <td className="px-4 py-3 text-[#64748b] font-mono text-right text-xs">
+                                <td className="px-4 py-3 text-aree-muted font-mono text-right text-xs">
                                   {file.size_kb} KB
                                 </td>
-                                <td className="px-4 py-3 text-[#64748b] font-mono text-right text-xs">
+                                <td className="px-4 py-3 text-aree-muted font-mono text-right text-xs">
                                   {file.modified}
                                 </td>
                                 <td
@@ -152,7 +156,7 @@ export default function PolicyConsole() {
                                   title={file.parse_error ?? undefined}
                                 >
                                   <StatusBadge
-                                    color={ok ? "#16a34a" : "#ca8a04"}
+                                    color={ok ? "var(--aree-green)" : "var(--aree-yellow)"}
                                     variant={ok ? "ghost" : "outline"}
                                   >
                                     {ok ? "Indexed" : file.supported ? "Error" : "Unsupported"}
@@ -191,31 +195,31 @@ export default function PolicyConsole() {
               variant="default"
               className="flex flex-col"
             >
-              <div className="p-6 flex-1 flex flex-col">
+              <div className="p-4 sm:p-6 flex-1 flex flex-col">
                 <label
                   htmlFor="policy-upload"
                   className={`
                     flex flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed
                     px-6 py-10 text-center transition-all cursor-pointer group
                     ${uploading 
-                      ? "border-[#143828]/50 bg-[#143828]/5" 
-                      : "border-[#e4e0d4] hover:border-[#143828] hover:bg-[#faf9f4]"}
+                      ? "border-aree-forest/50 bg-aree-forest/5" 
+                      : "border-aree-border hover:border-aree-forest hover:bg-aree-surface-2"}
                   `}
                 >
                   <div className={`
                     w-14 h-14 rounded-full flex items-center justify-center
-                    ${uploading ? "bg-[#143828]/20" : "bg-[#faf9f4] group-hover:bg-[#143828]/10 transition-colors"}
+                    ${uploading ? "bg-aree-forest/20" : "bg-aree-surface-2 group-hover:bg-aree-forest/10 transition-colors"}
                   `}>
                     <Upload
-                      className={`h-6 w-6 ${uploading ? "text-[#143828] animate-pulse" : "text-[#64748b] group-hover:text-[#143828] transition-colors"}`}
+                      className={`h-6 w-6 ${uploading ? "text-aree-forest animate-pulse" : "text-aree-muted group-hover:text-aree-forest transition-colors"}`}
                       aria-hidden
                     />
                   </div>
                   <div>
-                    <div className="text-sm font-bold text-[#17231c] mb-1">
+                    <div className="text-sm font-bold text-aree-text mb-1">
                       {uploading ? "Uploading and indexing…" : "Upload PDF, DOCX or TXT"}
                     </div>
-                    <div className="text-xs text-[#64748b]">
+                    <div className="text-xs text-aree-muted">
                       Parsed, chunked and embedded by the Python RAG pipeline on arrival.
                     </div>
                   </div>
@@ -234,12 +238,12 @@ export default function PolicyConsole() {
                 />
 
                 {result ? (
-                  <div className="mt-6 rounded-lg border border-[#a7f3d0] bg-[#ecfdf5] p-4">
-                    <div className="text-[#065f46] flex items-center gap-2 text-sm font-bold mb-2">
+                  <div className="mt-6 rounded-lg border border-[color-mix(in srgb, var(--aree-green) 40%, transparent)] bg-[color-mix(in srgb, var(--aree-green) 8%, transparent)] p-4">
+                    <div className="text-[var(--aree-green)] flex items-center gap-2 text-sm font-bold mb-2">
                       <CheckCircle2 className="h-4 w-4" aria-hidden />
                       Document ingested and indexed in real time
                     </div>
-                    <div className="text-[#065f46] text-xs space-y-1">
+                    <div className="text-[var(--aree-green)] text-xs space-y-1">
                       <div>{result.uploaded} ({(result.size_bytes / 1024).toFixed(1)} KB) &rarr; {result.saved_to}</div>
                       <div>{result.docs_indexed} documents indexed</div>
                     </div>
@@ -253,14 +257,14 @@ export default function PolicyConsole() {
                 ) : null}
 
                 <div className="mt-auto pt-8">
-                  <div className="border-t border-[#e4e0d4] pt-6">
-                    <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-4">Latest Document</div>
+                  <div className="border-t border-aree-border pt-6">
+                    <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-4">Latest Document</div>
                     {latest ? (
-                      <div className="bg-[#faf9f4] rounded-lg p-4 border border-[#e4e0d4]">
-                        <div className="text-[#17231c] font-mono text-sm font-bold break-all mb-2">
+                      <div className="bg-aree-surface-2 rounded-lg p-4 border border-aree-border">
+                        <div className="text-aree-text font-mono text-sm font-bold break-all mb-2">
                           {latest.name}
                         </div>
-                        <div className="text-[#64748b] text-xs flex items-center gap-2 mb-3">
+                        <div className="text-aree-muted text-xs flex items-center gap-2 mb-3">
                           <span>{latest.type.toUpperCase()}</span>
                           <span>&bull;</span>
                           <span className="font-mono">{latest.size_kb} KB</span>
@@ -269,13 +273,13 @@ export default function PolicyConsole() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                           <StatusBadge
-                            color={latest.supported ? "#16a34a" : "#ca8a04"}
+                            color={latest.supported ? "var(--aree-green)" : "var(--aree-yellow)"}
                             variant="outline"
                           >
                             {latest.supported ? "Parsed" : "Unsupported"}
                           </StatusBadge>
                           <StatusBadge
-                            color={latest.parse_error ? "#ca8a04" : "#16a34a"}
+                            color={latest.parse_error ? "var(--aree-yellow)" : "var(--aree-green)"}
                             variant="outline"
                           >
                             {latest.parse_error ? "Not indexed" : "Indexed"}
@@ -283,7 +287,7 @@ export default function PolicyConsole() {
                         </div>
                       </div>
                     ) : (
-                      <div className="text-[#788796] text-sm bg-[#faf9f4] rounded-lg p-4 text-center border border-[#e4e0d4] border-dashed">
+                      <div className="text-aree-dim text-sm bg-aree-surface-2 rounded-lg p-4 text-center border border-aree-border border-dashed">
                         No document uploaded yet.
                       </div>
                     )}

@@ -26,6 +26,13 @@ python-docx>=1.1
 
 sentence-transformers==2.6.1
 numpy==1.26.4
+
+# The PM2.5 forecast. backend/forecast/pm25_forecast.py imports lightgbm to load
+# backend/config/models/{central,upper}__*.txt, so without it /api/aree/outlook —
+# the Outlook workspace's only data source — returns 500 on every request. It was
+# missing here entirely; the import is lazy, so nothing failed until the endpoint
+# was actually called.
+lightgbm==4.7.0
 google-generativeai==0.3.2
 python-dotenv==1.0.1
 codecarbon==2.3.5

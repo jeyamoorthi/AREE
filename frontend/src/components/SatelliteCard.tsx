@@ -63,7 +63,7 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
           </Pill>
         }
       >
-        <div className="grid gap-6 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-5 shadow-[var(--aree-shadow-sm)] sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-5 shadow-[var(--aree-shadow-sm)] grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-4">
           <Stat
             label="Fire detections"
             value={fireCount}
@@ -168,7 +168,7 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
         ) : null}
 
         {data.firms_error ? (
-          <div className="mt-5 rounded-[var(--aree-radius-sm)] border border-[#7f1d1d] p-4 shadow-[var(--aree-shadow-sm)]" style={{ background: "color-mix(in srgb, var(--aree-red) 6%, transparent)" }}>
+          <div className="mt-5 rounded-[var(--aree-radius-sm)] border border-aree-crimson p-4 shadow-[var(--aree-shadow-sm)]" style={{ background: "color-mix(in srgb, var(--aree-red) 6%, transparent)" }}>
             <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-aree-red">
               ⚠ Satellite verification temporarily unavailable
             </span>
@@ -178,7 +178,7 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
       </Panel>
 
       <Disclosure summary="Satellite engine data" className="mt-4">
-        <div className="grid gap-x-8 sm:grid-cols-2">
+        <div className="grid gap-x-8 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
           <KeyValue label="FIRMS status" value={orDash(data.firms_status)} color={statusColor} />
           <KeyValue label="Dataset" value={orDash(data.firms_dataset)} />
           <KeyValue label="Last NASA sync" value={`${orDash(data.firms_sync)} UTC`} />

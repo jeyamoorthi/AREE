@@ -2,7 +2,7 @@
 
 /**
  * National station map — Environmental Command Platform.
- * Light/terrain basemap with color-coded station nodes and freshness halos.
+ * Light/terrain basemap with color-coded station nodes.
  */
 
 import "leaflet/dist/leaflet.css";
@@ -10,6 +10,7 @@ import "leaflet/dist/leaflet.css";
 import L from "leaflet";
 import { useEffect, useMemo } from "react";
 import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
+import MapResizeSync from "@/components/MapResizeSync";
 import { freshness } from "@/lib/freshness";
 import { feedLabel, stationLabel } from "@/lib/station";
 import { aqiColor, eriColor, modeColor } from "@/lib/theme";
@@ -52,7 +53,11 @@ export interface MapStation {
    71 NCR stations in one indistinguishable clump somewhere north of the middle of the
    frame, and the title said "across India" over it. Bounds match
    ncr_observations.NCR_BBOX on the backend. */
-const NCR_CENTER: [number, number] = [28.6, 77.2];
+/* Opening view. Fitting the whole NCR box lands at zoom ~8, where the ~50 stations
+   inside Delhi/Gurugram/Noida/Faridabad collapse into one clump. Zoom 10 on the core
+   spreads them out; the outlying towns (Meerut, Sonipat, Rewari) are a pan away. */
+const NCR_CORE_CENTER: [number, number] = [28.6, 77.15];
+const NCR_CORE_ZOOM = 10;
 const NCR_BOUNDS: [[number, number], [number, number]] = [
   [27.9, 76.5],
   [29.3, 77.9],
@@ -79,6 +84,21 @@ function markerSize(station: MapStation): number {
   if (aqi >= 100) return 16;
   return 14;
 }
+
+/**
+ * Marker opacity by freshness.
+ *
+ * The third channel after colour (severity) and border style (freshness): a marker
+ * whose reading has stopped moving is dimmed so the eye lands on the live ones
+ * first. The floor stays well above invisible — an unavailable station is still a
+ * station on the network, and losing it from the map would misreport coverage.
+ */
+const FRESHNESS_EMPHASIS: Record<FreshnessStatus, number> = {
+  current: 1,
+  aging: 0.85,
+  stale: 0.7,
+  unavailable: 0.5,
+};
 
 function esc(value: string): string {
   return value.replace(
@@ -121,15 +141,20 @@ function buildIcon(station: MapStation, selected: boolean): L.DivIcon {
     `${stationLabel(station.station)}. AQI ${station.aqi ?? "unavailable"}, ${freshLabel}.`,
   );
 
+  /* A selected station is never dimmed: the operator has just asked for it, and a
+     faded answer to a direct request reads as a failure rather than as a caveat. */
+  const emphasis = selected ? 1 : FRESHNESS_EMPHASIS[fresh];
+
   return L.divIcon({
     className: "aree-map-marker",
     html: `
       <div role="img" aria-label="${label}" style="
         width:${size}px;height:${size}px;border-radius:9999px;
         display:flex;align-items:center;justify-content:center;
-        background:#ffffff;
+        background:var(--aree-surface-1);
         border:3px ${borderStyle} ${color};
-        box-shadow:0 2px 5px rgba(0,0,0,0.25)${selected ? `, 0 0 0 3px #143828` : ""};
+        opacity:${emphasis};
+        box-shadow:0 2px 5px rgba(0,0,0,0.25)${selected ? `, 0 0 0 3px var(--aree-forest)` : ""};
       ">
         ${centre}
       </div>`,
@@ -153,6 +178,19 @@ function ViewController({
     map.getPane("tilePane")?.setAttribute("aria-hidden", "true");
   }, [map]);
 
+  /* Wheel zoom only after the operator clicks into the map, and off again when the
+     pointer leaves, so scrolling the page past the map never hijacks into a zoom. */
+  useEffect(() => {
+    const enable = () => map.scrollWheelZoom.enable();
+    const disable = () => map.scrollWheelZoom.disable();
+    map.on("click", enable);
+    map.on("mouseout", disable);
+    return () => {
+      map.off("click", enable);
+      map.off("mouseout", disable);
+    };
+  }, [map]);
+
   useEffect(() => {
     if (focus) {
       map.flyTo(focus, Math.max(map.getZoom(), 10), { duration: 0.6 });
@@ -163,21 +201,33 @@ function ViewController({
       map.flyTo(points[0], 10, { duration: 0.6 });
       return;
     }
-    map.fitBounds(L.latLngBounds(NCR_BOUNDS), { padding: [20, 20], maxZoom: 10 });
+    map.setView(NCR_CORE_CENTER, NCR_CORE_ZOOM);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map, key]);
 
   return null;
 }
 
+/**
+ * Default height.
+ *
+ * A fixed pixel height is the wrong unit for a map that has to work on a 360px
+ * phone and a 1600px desk monitor: 480px is two thirds of a phone's viewport, so
+ * the map fills the screen and the page appears to end at it. `clamp` keeps the
+ * map proportional to the viewport between a floor that is still a usable map and
+ * a ceiling that leaves the cards below it visible on a laptop.
+ */
+const DEFAULT_HEIGHT = "clamp(280px, 46vh, 480px)";
+
 export default function StationMap({
   stations,
-  height = 480,
+  height = DEFAULT_HEIGHT,
   selected,
   onSelect,
 }: {
   stations: MapStation[];
-  height?: number;
+  /** A number is treated as pixels; a string is passed to CSS untouched. */
+  height?: number | string;
   selected?: string | null;
   onSelect?: (station: string) => void;
 }) {
@@ -191,18 +241,18 @@ export default function StationMap({
     return match ? [match.lat, match.lon] : null;
   }, [stations, selected]);
 
-  const initialCenter = focus ?? NCR_CENTER;
+  const initialCenter = focus ?? NCR_CORE_CENTER;
 
   return (
     <div
-      className="relative overflow-hidden rounded-xl border border-[#e4e0d4] shadow-xs"
+      className="relative overflow-hidden rounded-xl border border-aree-border shadow-xs"
       style={{ height }}
       role="region"
       aria-label={`Station map — ${stations.length} monitoring node${stations.length === 1 ? "" : "s"}`}
     >
       <MapContainer
         center={initialCenter}
-        zoom={9}
+        zoom={NCR_CORE_ZOOM}
         minZoom={7}
         maxBounds={NCR_BOUNDS}
         maxBoundsViscosity={0.7}
@@ -211,6 +261,7 @@ export default function StationMap({
         attributionControl
       >
         <ViewController points={points} focus={focus} />
+        <MapResizeSync />
         {/* CARTO Voyager / OpenStreetMap light terrain tiles.
 
             The attribution below is not decoration: keeping the CARTO and
@@ -238,7 +289,7 @@ export default function StationMap({
               alt={`${stationLabel(station.station)} — AQI ${station.aqi ?? "unavailable"}`}
             >
               <Tooltip direction="top" offset={[0, -8]} opacity={1}>
-                <span style={{ color: "#17231c", fontWeight: 600 }}>
+                <span style={{ color: "var(--aree-text)", fontWeight: 600 }}>
                   <strong>{stationLabel(station.station)}</strong> — AQI{" "}
                   {station.aqi ?? "—"}
                 </span>
@@ -246,12 +297,12 @@ export default function StationMap({
               <Popup>
                 <div style={{ minWidth: 200, fontFamily: "var(--font-sans)", padding: "4px 0" }}>
                   <div
-                    style={{ fontWeight: 800, color: "#17231c", marginBottom: 2, fontSize: 13 }}
+                    style={{ fontWeight: 800, color: "var(--aree-text)", marginBottom: 2, fontSize: 13 }}
                   >
                     {stationLabel(station.station)}
                   </div>
                   {feedLabel(station.feed_id) ? (
-                    <div style={{ color: "#64748b", fontSize: 11, marginBottom: 8 }}>
+                    <div style={{ color: "var(--aree-muted)", fontSize: 11, marginBottom: 8 }}>
                       {feedLabel(station.feed_id)}
                       {station.city ? ` · ${station.city}` : ""}
                     </div>
@@ -277,7 +328,7 @@ export default function StationMap({
                   <a
                     href={`/stations/${encodeURIComponent(station.station)}`}
                     style={{
-                      color: "#143828",
+                      color: "var(--aree-forest)",
                       display: "inline-block",
                       marginTop: 10,
                       fontSize: 11.5,
@@ -300,7 +351,7 @@ export default function StationMap({
 function Row({
   label,
   value,
-  color = "#17231c",
+  color = "var(--aree-text)",
 }: {
   label: string;
   value: string | number;
@@ -308,7 +359,7 @@ function Row({
 }) {
   return (
     <div className="flex justify-between gap-3 mb-1 text-xs">
-      <span className="text-[#64748b]">{label}</span>
+      <span className="text-aree-muted">{label}</span>
       <span className="font-bold" style={{ color }}>{value}</span>
     </div>
   );

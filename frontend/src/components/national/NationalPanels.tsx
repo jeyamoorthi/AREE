@@ -9,6 +9,7 @@ import { usePolling } from "@/hooks/usePolling";
 import { api } from "@/lib/api";
 import { istDateTime } from "@/lib/clock";
 import { stationLabel } from "@/lib/station";
+import { freshness } from "@/lib/freshness";
 import { grapColor, grapRank } from "@/lib/theme";
 import type {
   EscalationsResponse,
@@ -90,23 +91,23 @@ export function NationalSummaryPanel({
   const grapStage = facts.worstStage ?? "None";
 
   return (
-    <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between h-full">
+    <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs flex flex-col justify-between h-full">
       <div>
-        <h2 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans mb-4">
+        <h2 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans mb-4">
           NATIONAL SUMMARY
         </h2>
 
         {/* 2 columns x 3 rows grid of metrics */}
         <div className="grid grid-cols-2 gap-3.5">
           {/* Card 1: AQI Range */}
-          <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-3.5">
-            <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1">
+          <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-3.5">
+            <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1">
               AQI RANGE
             </div>
-            <div className="text-[20px] font-bold font-mono text-[#17231c]">
+            <div className="text-[20px] font-bold font-mono text-aree-text">
               {hasData ? `${minAqi} — ${maxAqi}` : "—"}
             </div>
-            <div className="text-[11px] text-[#788796] mt-0.5">
+            <div className="text-[11px] text-aree-dim mt-0.5">
               {hasData
                 ? `Across ${facts.withData.length} reporting stations`
                 : "No station is reporting yet"}
@@ -114,15 +115,15 @@ export function NationalSummaryPanel({
           </div>
 
           {/* Card 2: Highest AQI */}
-          <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-3.5">
-            <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1">
+          <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-3.5">
+            <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1">
               HIGHEST AQI
             </div>
-            <div className="text-[20px] font-bold font-mono text-[#17231c]">
+            <div className="text-[20px] font-bold font-mono text-aree-text">
               {hasData ? maxAqi : "—"}
             </div>
             <div
-              className="text-[11px] text-[#788796] mt-0.5 truncate"
+              className="text-[11px] text-aree-dim mt-0.5 truncate"
               title={worstName ?? undefined}
             >
               {worstName ?? "Awaiting telemetry"}
@@ -130,18 +131,18 @@ export function NationalSummaryPanel({
           </div>
 
           {/* Card 3: Regulatory State */}
-          <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-3.5">
-            <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1">
+          <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-3.5">
+            <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1">
               REGULATORY STATE
             </div>
             <div
               className={`text-[17px] font-extrabold ${
-                facts.triggered > 0 ? "text-[#dc2626]" : "text-[#16a34a]"
+                facts.triggered > 0 ? "text-aree-red" : "text-aree-green"
               }`}
             >
               {facts.triggered > 0 ? "Triggered" : "Within Limits"}
             </div>
-            <div className="text-[11px] text-[#788796] mt-0.5">
+            <div className="text-[11px] text-aree-dim mt-0.5">
               {facts.triggered > 0
                 ? "Active escalation"
                 : "No immediate escalation"}
@@ -149,32 +150,32 @@ export function NationalSummaryPanel({
           </div>
 
           {/* Card 4: GRAP Status */}
-          <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-3.5">
-            <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1">
+          <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-3.5">
+            <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1">
               GRAP STATUS
             </div>
-            <div className="text-[18px] font-bold text-[#17231c]">
+            <div className="text-[18px] font-bold text-aree-text">
               {grapStage}
             </div>
             {/* "(Watch & Advise)" was hardcoded and describes Stage I regardless of the
                 stage shown. The distinction that matters more: AREE COMPUTES a stage
                 from the highest observed AQI; only CAQM INVOKES one. */}
-            <div className="text-[11px] text-[#788796] mt-0.5">
+            <div className="text-[11px] text-aree-dim mt-0.5">
               Computed from highest station AQI · not a CAQM invocation
             </div>
           </div>
 
           {/* Card 5: Active Escalations */}
-          <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-3.5">
-            <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1">
+          <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-3.5">
+            <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1">
               ACTIVE ESCALATIONS
             </div>
-            <div className="text-[20px] font-bold font-mono text-[#17231c]">
+            <div className="text-[20px] font-bold font-mono text-aree-text">
               {facts.triggered}
             </div>
             {/* The caption used to read "No escalations at this time" even when the
                 count beside it was non-zero. */}
-            <div className="text-[11px] text-[#788796] mt-0.5">
+            <div className="text-[11px] text-aree-dim mt-0.5">
               {facts.triggered > 0
                 ? `${facts.triggered} station${facts.triggered === 1 ? "" : "s"} in a triggered state`
                 : "No escalations at this time"}
@@ -182,25 +183,25 @@ export function NationalSummaryPanel({
           </div>
 
           {/* Card 6: Data Freshness Breakdown */}
-          <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-3.5">
-            <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1.5">
+          <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-3.5">
+            <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1.5">
               DATA FRESHNESS
             </div>
             <div className="space-y-1 text-[11px] font-semibold">
-              <div className="flex items-center gap-1.5 text-[#17231c]">
-                <span className="h-2 w-2 rounded-full bg-[#16a34a]" />
+              <div className="flex items-center gap-1.5 text-aree-text">
+                <span className="h-2 w-2 rounded-full bg-aree-green" />
                 <span>{current} Current</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[#17231c]">
-                <span className="h-2 w-2 rounded-full bg-[#ca8a04]" />
+              <div className="flex items-center gap-1.5 text-aree-text">
+                <span className="h-2 w-2 rounded-full bg-aree-yellow" />
                 <span>{aging} Aging</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[#17231c]">
-                <span className="h-2 w-2 rounded-full bg-[#ea580c]" />
+              <div className="flex items-center gap-1.5 text-aree-text">
+                <span className="h-2 w-2 rounded-full bg-aree-orange" />
                 <span>{stale} Stale</span>
               </div>
-              <div className="flex items-center gap-1.5 text-[#17231c]">
-                <span className="text-[10px] text-[#788796]">⊗</span>
+              <div className="flex items-center gap-1.5 text-aree-text">
+                <span className="text-[10px] text-aree-dim">⊗</span>
                 <span>{unavailable} Unavailable</span>
               </div>
             </div>
@@ -211,15 +212,15 @@ export function NationalSummaryPanel({
       {/* Engine status. This read "Pathway pipeline - Running" as two literal strings,
           on a machine where Pathway had never started and the direct engine was doing
           the work. Both halves now come from /api/system/status. */}
-      <div className="mt-4 pt-3.5 border-t border-[#f0eee4] flex items-center justify-between text-[12px]">
+      <div className="mt-4 pt-3.5 border-t border-aree-border flex items-center justify-between text-[12px]">
         <div className="flex items-center gap-2">
           <span
             className="h-2.5 w-2.5 rounded-full"
             style={{
-              background: status?.engine_loaded ? "#16a34a" : "#dc2626",
+              background: status?.engine_loaded ? "var(--aree-green)" : "var(--aree-red)",
             }}
           />
-          <span className="font-semibold text-[#17231c]">
+          <span className="font-semibold text-aree-text">
             {status?.mode === "streaming"
               ? "Pathway streaming engine"
               : status?.mode === "direct"
@@ -229,13 +230,13 @@ export function NationalSummaryPanel({
         </div>
         <span
           className="font-bold"
-          style={{ color: status?.engine_loaded ? "#16a34a" : "#dc2626" }}
+          style={{ color: status?.engine_loaded ? "var(--aree-green)" : "var(--aree-red)" }}
         >
           {status ? (status.engine_loaded ? "Running" : "Offline") : "—"}
         </span>
       </div>
       {status?.degraded ? (
-        <p className="mt-1.5 text-[10.5px] text-[#788796] leading-snug">
+        <p className="mt-1.5 text-[10.5px] text-aree-dim leading-snug">
           Direct mode: GRAP state machine, causal attribution and the forecast layer are
           unchanged. Event-time windowing and policy retrieval are unavailable.
         </p>
@@ -247,12 +248,12 @@ export function NationalSummaryPanel({
 /* ── Middle Col 1: AQI Distribution Donut Chart ── */
 export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
   const bands = [
-    { label: "Good (0-50)", count: 0, color: "#16a34a" },
-    { label: "Satisfactory (51-100)", count: 0, color: "#65a30d" },
-    { label: "Moderate (101-200)", count: 0, color: "#ca8a04" },
-    { label: "Poor (201-300)", count: 0, color: "#ea580c" },
-    { label: "Very Poor (301-400)", count: 0, color: "#dc2626" },
-    { label: "Severe (401+)", count: 0, color: "#991b1b" },
+    { label: "Good (0-50)", count: 0, color: "var(--aree-green)" },
+    { label: "Satisfactory (51-100)", count: 0, color: "var(--aree-lime)" },
+    { label: "Moderate (101-200)", count: 0, color: "var(--aree-yellow)" },
+    { label: "Poor (201-300)", count: 0, color: "var(--aree-orange)" },
+    { label: "Very Poor (301-400)", count: 0, color: "var(--aree-red)" },
+    { label: "Severe (401+)", count: 0, color: "var(--aree-crimson)" },
   ];
 
   for (const s of facts.withData) {
@@ -272,17 +273,17 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
   const chartData = bands.filter((b) => b.count > 0);
 
   return (
-    <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between">
+    <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs flex flex-col justify-between">
       <div>
-        <h3 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
+        <h3 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
           AQI DISTRIBUTION
         </h3>
-        <p className="text-[11px] text-[#788796] mt-0.5 mb-4">
+        <p className="text-[11px] text-aree-dim mt-0.5 mb-4">
           Distribution of stations by AQI category
         </p>
 
         {total === 0 ? (
-          <p className="py-10 text-center text-[12px] text-[#788796]">
+          <p className="py-10 text-center text-[12px] text-aree-dim">
             No station has reported yet — the distribution appears once the network is
             online.
           </p>
@@ -310,10 +311,10 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[19px] font-extrabold font-mono text-[#17231c] leading-none">
+              <span className="text-[19px] font-extrabold font-mono text-aree-text leading-none">
                 {total}
               </span>
-              <span className="text-[9px] text-[#788796] font-bold uppercase mt-0.5">
+              <span className="text-[9px] text-aree-dim font-bold uppercase mt-0.5">
                 Stations
               </span>
             </div>
@@ -325,16 +326,23 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
               return (
                 <div
                   key={b.label}
-                  className="flex items-center justify-between text-[#2d3748]"
+                  /* `justify-between` alone leaves NO gap once the band name fills
+                     the row, which on a phone read as "Satisfactory (51-100)48". */
+                  className="flex items-start justify-between gap-2 text-aree-body"
                 >
-                  <div className="flex items-center gap-1.5 truncate">
+                  {/* The band name WRAPS rather than truncating. This column is a
+                      third of a card, and "Satisfactory (51-100)" does not fit it on
+                      any screen — truncating turns the legend into "Satisfactory
+                      (51-…", which is precisely the half a reader needs to check a
+                      colour against the CPCB scale. Two lines cost nothing here. */}
+                  <div className="flex min-w-0 items-start gap-1.5">
                     <span
-                      className="h-2 w-2 rounded-full shrink-0"
+                      className="mt-1 h-2 w-2 shrink-0 rounded-full"
                       style={{ background: b.color }}
                     />
-                    <span className="truncate">{b.label}</span>
+                    <span className="leading-tight">{b.label}</span>
                   </div>
-                  <span className="font-semibold text-[#17231c] shrink-0 font-mono">
+                  <span className="font-semibold text-aree-text shrink-0 font-mono">
                     {b.count} ({pct}%)
                   </span>
                 </div>
@@ -362,54 +370,78 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
           station: s.station,
           name: stationLabel(s.station),
           aqi: s.aqi ?? 0,
+          // Already on the summary; the row simply used to drop it, so a nine-hour-old
+          // reading sat in the top five looking exactly like a live one.
+          freshness_status: s.freshness_status,
         })),
     [facts.withData],
   );
 
   return (
-    <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between">
+    <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs flex flex-col justify-between">
       <div>
-        <h3 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
+        <h3 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
           TOP 5 STATIONS BY AQI
         </h3>
-        <p className="text-[11px] text-[#788796] mt-0.5 mb-3">
+        <p className="text-[11px] text-aree-dim mt-0.5 mb-3">
           Highest current AQI
         </p>
 
         <div className="space-y-2.5">
           {topList.length === 0 ? (
-            <p className="py-8 text-center text-[12px] text-[#788796]">
+            <p className="py-8 text-center text-[12px] text-aree-dim">
               No station has reported yet.
             </p>
           ) : null}
-          {topList.map((st, i) => (
-            <div
-              key={st.station}
-              className="flex items-center justify-between text-[12px] py-1 border-b border-[#f0eee4] last:border-b-0"
-            >
-              <div className="flex items-center gap-3">
-                <span className="font-bold text-[#788796] text-[11px] w-3">
-                  {i + 1}
-                </span>
-                <Link
-                  href={`/stations/${encodeURIComponent(st.station)}`}
-                  className="font-semibold text-[#17231c] hover:text-[#143828] transition-colors"
+          {topList.map((st, i) => {
+            const look = freshness(st.freshness_status);
+            const provisional = st.freshness_status !== "current";
+            return (
+              <div
+                key={st.station}
+                className="flex items-center justify-between text-[12px] py-1 border-b border-aree-border last:border-b-0"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="font-bold text-aree-dim text-[11px] w-3 shrink-0">
+                    {i + 1}
+                  </span>
+                  {/* The LINK keeps full contrast — a stale station must stay as easy
+                      to read and to click as any other. The caveat rides on a marker
+                      and a word beside it, not on faded text. */}
+                  <Link
+                    href={`/stations/${encodeURIComponent(st.station)}`}
+                    className="font-semibold text-aree-text hover:text-aree-forest transition-colors truncate"
+                  >
+                    {st.name}
+                  </Link>
+                  {provisional ? (
+                    <span
+                      className="shrink-0 text-[10px] font-bold uppercase tracking-wide"
+                      style={{ color: look.color }}
+                      title={`Reading is ${look.label.toLowerCase()}`}
+                    >
+                      {look.marker} {look.label}
+                    </span>
+                  ) : null}
+                </div>
+                {/* Only the VALUE is dimmed. It is the number that would otherwise be
+                    read as equivalent to a live one; the identity is not in doubt. */}
+                <span
+                  className="font-bold font-mono text-aree-orange shrink-0"
+                  style={provisional ? { opacity: 0.55 } : undefined}
                 >
-                  {st.name}
-                </Link>
+                  {st.aqi}
+                </span>
               </div>
-              <span className="font-bold font-mono text-[#ea580c]">
-                {st.aqi}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-[#f0eee4] text-right">
+      <div className="mt-4 pt-3 border-t border-aree-border text-right">
         <Link
           href="/dashboard"
-          className="text-[11px] font-bold text-[#143828] hover:underline inline-flex items-center gap-1"
+          className="text-[11px] font-bold text-aree-forest hover:underline inline-flex items-center gap-1"
         >
           View All Stations &rarr;
         </Link>
@@ -433,44 +465,44 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
   const aging = status?.aging_stations ?? 0;
   const unavailable = status?.unavailable_stations ?? 0;
 
-  const unknown = { label: "Unknown", color: "#788796" };
+  const unknown = { label: "Unknown", color: "var(--aree-dim)" };
 
   const networkState = !status
     ? unknown
     : stale > 0
-      ? { label: `${stale} stale`, color: "#ea580c" }
+      ? { label: `${stale} stale`, color: "var(--aree-orange)" }
       : aging > 0
-        ? { label: `${aging} aging`, color: "#ca8a04" }
-        : { label: "Current", color: "#16a34a" };
+        ? { label: `${aging} aging`, color: "var(--aree-yellow)" }
+        : { label: "Current", color: "var(--aree-green)" };
 
   const engineState = !status
     ? unknown
     : !status.engine_loaded
-      ? { label: "Offline", color: "#dc2626" }
+      ? { label: "Offline", color: "var(--aree-red)" }
       : status.mode === "streaming"
-        ? { label: "Streaming", color: "#16a34a" }
-        : { label: "Direct", color: "#ca8a04" };
+        ? { label: "Streaming", color: "var(--aree-green)" }
+        : { label: "Direct", color: "var(--aree-yellow)" };
 
   const ragState = !status
     ? unknown
     : status.rag_status === "active"
-      ? { label: "Active", color: "#16a34a" }
-      : { label: status.rag_status ?? "Unavailable", color: "#ca8a04" };
+      ? { label: "Active", color: "var(--aree-green)" }
+      : { label: status.rag_status ?? "Unavailable", color: "var(--aree-yellow)" };
 
   const docs = status?.rag_docs_indexed ?? null;
   const policyState =
     docs === null
       ? unknown
       : docs > 0
-        ? { label: `${docs} on disk`, color: "#16a34a" }
-        : { label: "Empty", color: "#ca8a04" };
+        ? { label: `${docs} on disk`, color: "var(--aree-green)" }
+        : { label: "Empty", color: "var(--aree-yellow)" };
 
   const llmState = !status
     ? unknown
     : status.llm_ready === true
-      ? { label: "Ready", color: "#16a34a" }
+      ? { label: "Ready", color: "var(--aree-green)" }
       : status.llm_ready === false
-        ? { label: "Fallback", color: "#ca8a04" }
+        ? { label: "Fallback", color: "var(--aree-yellow)" }
         : unknown;
 
   const sources = [
@@ -513,18 +545,18 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
       name: "Unavailable feeds",
       sub: "no usable AQI",
       status: status ? String(unavailable) : "—",
-      color: unavailable > 0 ? "#ca8a04" : "#16a34a",
+      color: unavailable > 0 ? "var(--aree-yellow)" : "var(--aree-green)",
       icon: <Flame className="w-3.5 h-3.5" />,
     },
   ];
 
   return (
-    <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs flex flex-col justify-between">
+    <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs flex flex-col justify-between">
       <div>
-        <h3 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
+        <h3 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
           DATA HEALTH OVERVIEW
         </h3>
-        <p className="text-[11px] text-[#788796] mt-0.5 mb-3">
+        <p className="text-[11px] text-aree-dim mt-0.5 mb-3">
           Health of key data sources
         </p>
 
@@ -532,13 +564,13 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
           {sources.map((src) => (
             <div
               key={src.name}
-              className="flex items-center justify-between text-[12px] py-1 border-b border-[#f0eee4] last:border-b-0"
+              className="flex items-center justify-between text-[12px] py-1 border-b border-aree-border last:border-b-0"
             >
-              <div className="flex items-center gap-2.5 text-[#17231c] min-w-0">
-                <span className="text-[#788796] shrink-0">{src.icon}</span>
+              <div className="flex items-center gap-2.5 text-aree-text min-w-0">
+                <span className="text-aree-dim shrink-0">{src.icon}</span>
                 <span className="font-semibold truncate">{src.name}</span>
                 {src.sub ? (
-                  <span className="text-[10.5px] text-[#788796] truncate shrink">
+                  <span className="text-[10.5px] text-aree-dim truncate shrink">
                     {src.sub}
                   </span>
                 ) : null}
@@ -562,8 +594,8 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
 
       {/* The old "View All Sources" link pointed at /?section=health, which no route
           reads - it reloaded this same page. */}
-      <div className="mt-4 pt-3 border-t border-[#f0eee4]">
-        <p className="text-[10.5px] text-[#788796] leading-snug">
+      <div className="mt-4 pt-3 border-t border-aree-border">
+        <p className="text-[10.5px] text-aree-dim leading-snug">
           Freshness: current 0–90 min · aging 90–120 min · stale beyond 120 min. Satellite
           and meteorological feeds are reported on the Atmospheric Outlook.
         </p>
@@ -590,31 +622,31 @@ export function RecentEventsRow() {
   const events = (state.data?.events ?? []).slice(0, 5);
 
   return (
-    <div className="bg-white border border-[#e4e0d4] rounded-xl p-5 shadow-xs">
+    <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs">
       <div className="flex items-center justify-between mb-3.5">
         <div>
-          <h3 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
+          <h3 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
             RECENT EVENTS
           </h3>
-          <p className="text-[11px] text-[#788796]">
+          <p className="text-[11px] text-aree-dim">
             GRAP stage transitions recorded by the state machine
           </p>
         </div>
         {state.data && state.data.total > events.length ? (
-          <span className="text-[11px] text-[#788796]">
+          <span className="text-[11px] text-aree-dim">
             {events.length} of {state.data.total}
           </span>
         ) : null}
       </div>
 
       {state.initialLoading ? (
-        <p className="py-6 text-center text-[12px] text-[#788796]">Loading events…</p>
+        <p className="py-6 text-center text-[12px] text-aree-dim">Loading events…</p>
       ) : state.error && !state.data ? (
-        <p className="py-6 text-center text-[12px] text-[#788796]">
+        <p className="py-6 text-center text-[12px] text-aree-dim">
           Event log unavailable — {state.error.message}
         </p>
       ) : events.length === 0 ? (
-        <p className="py-6 text-center text-[12px] text-[#788796]">
+        <p className="py-6 text-center text-[12px] text-aree-dim">
           No stage transition recorded in this session. Events appear here when a
           station&apos;s GRAP stage changes.
         </p>
@@ -625,19 +657,19 @@ export function RecentEventsRow() {
             return (
               <div
                 key={`${ev.timestamp}-${ev.city ?? ev.station ?? i}`}
-                className="rounded-lg p-3 border flex flex-col justify-between bg-[#faf9f4]"
-                style={{ borderColor: "#e4e0d4" }}
+                className="rounded-lg p-3 border flex flex-col justify-between bg-aree-surface-2"
+                style={{ borderColor: "var(--aree-border)" }}
               >
-                <div className="text-[10px] font-bold font-mono text-[#788796] mb-1">
+                <div className="text-[10px] font-bold font-mono text-aree-dim mb-1">
                   {istDateTime(ev.timestamp) ?? ev.timestamp ?? "—"}
                 </div>
                 <div className="flex items-center gap-1.5 mb-1">
                   <Shield className="w-4 h-4 shrink-0" style={{ color: colour }} />
-                  <span className="text-[12px] font-bold text-[#17231c] leading-tight truncate">
+                  <span className="text-[12px] font-bold text-aree-text leading-tight truncate">
                     {stationLabel(ev.city ?? ev.station ?? "—")}
                   </span>
                 </div>
-                <div className="text-[11px] text-[#4a5568] leading-tight">
+                <div className="text-[11px] text-aree-body leading-tight">
                   {ev.from_stage ?? "—"} → <b style={{ color: colour }}>{ev.to_stage}</b>
                   {ev.aqi !== null && ev.aqi !== undefined ? ` · AQI ${ev.aqi}` : ""}
                 </div>

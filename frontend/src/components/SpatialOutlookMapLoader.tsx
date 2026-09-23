@@ -12,7 +12,7 @@ const SpatialOutlookMap = dynamic(() => import("./SpatialOutlookMap"), {
   loading: () => (
     <div
       className="flex items-center justify-center rounded-lg"
-      style={{ height: 260, background: "#faf8f2", color: "#a8a196", fontSize: 12 }}
+      style={{ height: 260, background: "var(--aree-surface-2)", color: "var(--aree-dim)", fontSize: 12 }}
     >
       Loading map…
     </div>
@@ -23,7 +23,7 @@ export type { SpatialStation };
 
 export default function SpatialOutlookMapLoader(props: {
   stations: SpatialStation[];
-  height?: number;
+  height?: number | string;
   labelCount?: number;
   /** The hour every reading on the map describes. */
   observedAt?: string;

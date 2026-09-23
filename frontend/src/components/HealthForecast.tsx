@@ -38,7 +38,7 @@ export default function HealthForecast({ health }: { health: HealthImpactRespons
         </Pill>
       }
     >
-      <div className="grid gap-6 sm:grid-cols-3">
+      <div className="grid gap-6 grid-cols-[minmax(0,1fr)] sm:grid-cols-3">
         <Stat
           label="30-min projected AQI"
           value={proj30 ?? "—"}
@@ -68,7 +68,7 @@ export default function HealthForecast({ health }: { health: HealthImpactRespons
       </div>
 
       <div className="aree-eyebrow mt-6 mb-3">Vulnerable population risk</div>
-      <div className="grid gap-px overflow-hidden rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-border shadow-[var(--aree-shadow-sm)] sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-px overflow-hidden rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-border shadow-[var(--aree-shadow-sm)] grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-4">
         {health.groups.map((group) => {
           const color = riskLevelColor(group.level);
           return (

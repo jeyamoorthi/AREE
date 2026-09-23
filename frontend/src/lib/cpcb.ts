@@ -49,6 +49,22 @@ export function bandColour(band: string | null | undefined): string {
 
 export const BAND_ORDER = CPCB_PM25_BANDS.map((b) => b.band);
 
+/**
+ * NAAQS 24-hour standards, in µg/m³.
+ *
+ * Here for the same reason the band table is: they are the national standard an
+ * officer checks a reading against, not a presentation choice, so there is one copy
+ * of them. A concentration printed with no standard beside it is a number an
+ * authority has to look up before it means anything.
+ *
+ * Twenty-four-hour values, deliberately — the annual standards are 40 and 60 and
+ * comparing an hourly reading to an annual mean would overstate every episode.
+ */
+export const NAAQS_24H: Record<"pm25" | "pm10", { limit: number; unit: string }> = {
+  pm25: { limit: 60, unit: "µg/m³" },
+  pm10: { limit: 100, unit: "µg/m³" },
+};
+
 /** "120–250 µg/m³", or "250+ µg/m³" for the open-ended top band. */
 export function bandRange(b: CpcbBand): string {
   return b.to === null ? `${b.from}+ µg/m³` : `${b.from}–${b.to} µg/m³`;

@@ -31,7 +31,7 @@ export function LiveRegulatoryState({
     <Panel
       title="Engine verdict"
       accent={modeColor(mode)}
-      padding="p-6"
+      padding="p-4 sm:p-6"
       right={
         <Pill color={modeColor(mode)} filled={mode === "TRIGGERED"}>
           {modeLabel(mode)}
@@ -102,7 +102,7 @@ export function GRAPTimeline({
   const color = grapColor(data.grap_stage);
 
   return (
-    <Panel title="GRAP stage progression" accent={color} padding="p-6">
+    <Panel title="GRAP stage progression" accent={color} padding="p-4 sm:p-6">
       {stages.length === 0 ? (
         <div className="text-aree-muted text-[14px] bg-aree-surface-2 p-4 rounded-lg">
           Stage definitions are not available from the engine configuration.
@@ -175,7 +175,7 @@ export function GRAPTimeline({
         </div>
       )}
 
-      <div className="border-aree-border mt-4 grid gap-x-8 gap-y-4 border-t pt-5 sm:grid-cols-2 lg:grid-cols-3 bg-aree-surface-1/50 rounded-b-xl -mx-6 -mb-6 px-6 pb-6">
+      <div className="border-aree-border mt-4 grid gap-x-8 gap-y-4 border-t pt-5 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-3 bg-aree-surface-1/50 rounded-b-xl -mx-4 -mb-4 px-4 pb-4 sm:-mx-6 sm:-mb-6 sm:px-6 sm:pb-6">
         <KeyValue
           label="Current stage"
           value={orDash(data.grap_stage, "Not available")}
@@ -221,7 +221,7 @@ export function RegulatoryContext({
   config: EngineConfig | null;
 }) {
   return (
-    <div className="grid gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 bg-aree-surface-2 p-5 rounded-lg border border-aree-border">
+    <div className="grid gap-x-8 gap-y-4 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-3 bg-aree-surface-2 p-5 rounded-lg border border-aree-border">
       <KeyValue
         label="Engine mode"
         value={orDash(data.engine_mode)}

@@ -106,7 +106,7 @@ export default function AIAnalysis({
           className="border-b px-5 py-3"
           style={{
             borderColor: "var(--aree-border)",
-            background: "color-mix(in srgb, #eab308 10%, transparent)",
+            background: "color-mix(in srgb, var(--aree-yellow) 10%, transparent)",
           }}
         >
           <span className="text-aree-yellow text-[11px] font-bold tracking-[0.1em] uppercase">
@@ -120,14 +120,14 @@ export default function AIAnalysis({
         </div>
       ) : null}
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         <div className="text-aree-dim mb-3 text-xs font-semibold tracking-wider uppercase">Current assessment</div>
         <p className="text-aree-body text-[14px] leading-relaxed whitespace-pre-wrap">
           {ai.summary || "Awaiting the first interpretation for this station."}
         </p>
       </div>
 
-      <div className="border-aree-border grid gap-4 border-t bg-aree-surface-1/50 px-6 py-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="border-aree-border grid gap-4 border-t bg-aree-surface-1/50 px-6 py-5 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-4">
         <Factor label="Risk trajectory" value={ai.risk_trajectory} />
         <Factor label="Escalation likelihood" value={ai.regulatory_escalation_likelihood} />
         <Factor label="Public health risk" value={ai.public_health_risk} />

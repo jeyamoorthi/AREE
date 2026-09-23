@@ -93,6 +93,72 @@ export class NetworkError extends Error {
   }
 }
 
+/**
+ * Thrown when a request was abandoned because it took too long.
+ *
+ * WHY IT IS NOT A NetworkError
+ *   They are different facts and they call for different actions. A NetworkError
+ *   means nothing answered — the backend is down, or the machine is offline, and
+ *   retrying now will fail the same way. A timeout means the request WAS accepted
+ *   and the server is still working on it; the connection is fine and retrying is
+ *   often the right move. Collapsing the two would print "Is the backend running?"
+ *   at an operator whose backend is running perfectly well and merely busy.
+ *
+ * WHY IT IS NOT A DOMException AbortError
+ *   Every abort in this codebase looks identical at the catch site: a component
+ *   unmounting, a station changing, and a deadline expiring all produce the same
+ *   AbortError, and the first two must be swallowed silently while the third must
+ *   reach the screen. The caller that armed the deadline is the only code that
+ *   knows which of the three happened, so it converts.
+ */
+export class TimeoutError extends Error {
+  /** The deadline that expired, in milliseconds. */
+  readonly timeoutMs: number;
+
+  constructor(timeoutMs: number) {
+    super(
+      `The server is taking too long to respond. Check your connection or try again.`,
+    );
+    this.name = "TimeoutError";
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+/**
+ * Run one request under a deadline.
+ *
+ * For the one-shot calls that do not go through usePolling — a report download, a
+ * decision POST — so they get the same timeout behaviour without each growing its
+ * own timer. An external `signal` is still honoured: whichever fires first wins,
+ * and only the deadline is reported as a TimeoutError.
+ */
+export async function withTimeout<T>(
+  timeoutMs: number,
+  run: (signal: AbortSignal) => Promise<T>,
+  external?: AbortSignal,
+): Promise<T> {
+  const controller = new AbortController();
+  let expired = false;
+
+  const timer = setTimeout(() => {
+    expired = true;
+    controller.abort();
+  }, timeoutMs);
+
+  const relay = () => controller.abort();
+  external?.addEventListener("abort", relay);
+
+  try {
+    return await run(controller.signal);
+  } catch (err) {
+    if (expired) throw new TimeoutError(timeoutMs);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    external?.removeEventListener("abort", relay);
+  }
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
@@ -210,10 +276,15 @@ export const api = {
     return (await response.json()) as PolicyUploadResponse;
   },
 
-  /** Download the PDF report through the browser without leaving the page. */
-  async downloadReport(station: string): Promise<void> {
+  /**
+   * Download the PDF report through the browser without leaving the page.
+   *
+   * Takes a signal like every other call here, so the caller can put report
+   * generation under a deadline — see withTimeout.
+   */
+  async downloadReport(station: string, signal?: AbortSignal): Promise<void> {
     const url = api.reportPdfUrl(station);
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     if (!response.ok) {
       let body: ApiErrorBody | null = null;
       try {

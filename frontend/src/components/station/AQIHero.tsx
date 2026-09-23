@@ -19,12 +19,12 @@ const GAUGE_MAX = 500;
 
 /** CPCB band boundaries, matching `aqiColor` exactly. */
 const BANDS: { from: number; to: number; color: string }[] = [
-  { from: 0, to: 50, color: "#22c55e" },
-  { from: 50, to: 100, color: "#84cc16" },
-  { from: 100, to: 200, color: "#eab308" },
-  { from: 200, to: 300, color: "#f97316" },
-  { from: 300, to: 400, color: "#ef4444" },
-  { from: 400, to: 500, color: "#dc2626" },
+  { from: 0, to: 50, color: "var(--aree-accent)" },
+  { from: 50, to: 100, color: "var(--aree-lime)" },
+  { from: 100, to: 200, color: "var(--aree-yellow)" },
+  { from: 200, to: 300, color: "var(--aree-orange)" },
+  { from: 300, to: 400, color: "var(--aree-red)" },
+  { from: 400, to: 500, color: "var(--aree-red)" },
 ];
 
 const CX = 120;
@@ -43,21 +43,49 @@ function arcPath(from: number, to: number) {
   return `M ${start.x.toFixed(2)} ${start.y.toFixed(2)} A ${R} ${R} 0 0 1 ${end.x.toFixed(2)} ${end.y.toFixed(2)}`;
 }
 
-function AQIGauge({ aqi }: { aqi: number | null | undefined }) {
+function AQIGauge({
+  aqi,
+  band,
+}: {
+  aqi: number | null | undefined;
+  /** The backend's CPCB classification. Never derived here — see the file header. */
+  band: string | null | undefined;
+}) {
   const value = aqi ?? null;
   const color = aqiColor(value);
   const needle = value === null ? null : polar(value);
+
+  /* WHAT A SCREEN READER IS TOLD ABOUT A DIAL.
+     The needle is the only thing in this graphic that carries information, so the
+     label has to describe WHERE IT POINTS and not merely that a gauge exists. Three
+     facts, in the order a sighted reader takes them from the picture: the reading,
+     the band it lands in, and how far along the 0–500 scale that is. The last one is
+     what replaces seeing the needle's angle — "180 of 500" is a number, "36 per cent
+     of the way along" is a position.
+
+     The band is the backend's, exactly as it is on the chip beside the gauge. A
+     second classification computed here would eventually disagree with the one an
+     officer is reading two inches to the left. */
+  const sweptPercent =
+    value === null ? null : Math.round((Math.min(value, GAUGE_MAX) / GAUGE_MAX) * 100);
+
+  const gaugeLabel =
+    value === null
+      ? "Air quality index gauge. No value available, the needle is not shown."
+      : [
+          `Air quality index gauge. Needle at ${value} out of ${GAUGE_MAX}`,
+          band ? `in the ${band} band` : null,
+          `${sweptPercent} per cent along the scale`,
+        ]
+          .filter(Boolean)
+          .join(", ") + ".";
 
   return (
     <svg
       viewBox="0 0 240 134"
       className="h-auto w-full max-w-[260px] drop-shadow-md"
       role="img"
-      aria-label={
-        value === null
-          ? "Air quality index gauge, no value available"
-          : `Air quality index gauge showing ${value} out of ${GAUGE_MAX}`
-      }
+      aria-label={gaugeLabel}
     >
       {/* Background track */}
       <path
@@ -185,7 +213,7 @@ export default function AQIHero({ data }: { data: StationDetail }) {
         </div>
 
         <div className="flex shrink-0 justify-center sm:justify-end sm:w-[280px]">
-          <AQIGauge aqi={data.aqi} />
+          <AQIGauge aqi={data.aqi} band={data.cpcb_band} />
         </div>
       </div>
     </section>

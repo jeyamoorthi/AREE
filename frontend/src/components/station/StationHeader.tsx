@@ -58,7 +58,7 @@ export default function StationHeader({
       <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-1">
-            <h1 className="text-aree-text truncate text-3xl leading-tight font-black tracking-[0.04em] uppercase drop-shadow-sm">
+            <h1 className="text-aree-text truncate text-xl sm:text-2xl lg:text-3xl leading-tight font-black tracking-[0.04em] uppercase drop-shadow-sm">
               {stationLabel(station)}
             </h1>
             {feedLabel(feedId) ? (

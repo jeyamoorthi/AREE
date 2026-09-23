@@ -80,7 +80,7 @@ export function RiskExplain({
       )}
 
       {confidence !== null || causeConfidence !== null ? (
-        <div className="mt-5 grid gap-5 border-t border-aree-border pt-4 sm:grid-cols-2">
+        <div className="mt-5 grid gap-5 border-t border-aree-border pt-4 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
           {confidence !== null ? (
             <div className="rounded-[var(--aree-radius-sm)] border border-aree-border bg-aree-surface-2 p-3">
               <div className="flex items-baseline justify-between">

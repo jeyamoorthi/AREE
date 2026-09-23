@@ -200,8 +200,20 @@ export interface StationDetail {
   raw_so2?: number | null;
   raw_o3?: number | null;
   raw_co?: number | null;
+  raw_nh3?: number | null;
   dominant_pollutant?: string;
   pollutants_available?: number;
+  /**
+   * Who measured the CONCENTRATIONS, e.g. "CPCB CAAQMS via data.gov.in".
+   *
+   * Not the source of the AQI above them: the engine reads the index from one feed
+   * and the per-pollutant concentrations from another, slower one. Null when the
+   * enrichment step found no match for this station, in which case nothing is
+   * claimed about where the numbers came from.
+   */
+  pollutant_source?: string | null;
+  /** Age of those concentrations in minutes — separate from the AQI's own age. */
+  pollutant_age_minutes?: number | null;
 
   wind_speed?: number | null;
   wind_direction?: number | null;
