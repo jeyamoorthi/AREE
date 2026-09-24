@@ -324,3 +324,86 @@ station_id,timestamp,pm25,latitude,longitude,n_stations,source
 "General Hospital, Mandikhera(Nuh) - HSPCB",2026-09-24T18:00:00Z,24.0,27.9002,76.9938,1,live:CPCB CAAQMS via data.gov.in
 "IGNOU_Maidan Garhi, Delhi - DPCC",2026-09-24T18:00:00Z,22.0,28.493624,77.201159,1,live:CPCB CAAQMS via data.gov.in
 "Amity University, Panchgaon - IITM",2026-09-24T18:00:00Z,22.0,28.3153,76.9143,1,live:CPCB CAAQMS via data.gov.in
+"Vikas Sadan, Gurugram - HSPCB",2026-09-24T21:00:00Z,276.0,28.4501238,77.0263051,1,live:CPCB CAAQMS via data.gov.in
+"Teri Gram, Gurugram - HSPCB",2026-09-24T21:00:00Z,217.0,28.4275,77.1465,1,live:CPCB CAAQMS via data.gov.in
+"Bawana, Delhi - DPCC",2026-09-24T21:00:00Z,135.0,28.7762,77.051074,1,live:CPCB CAAQMS via data.gov.in
+"Arya Nagar, Bahadurgarh - HSPCB",2026-09-24T21:00:00Z,134.0,28.6701,76.9254,1,live:CPCB CAAQMS via data.gov.in
+"Sector-51, Gurugram - HSPCB",2026-09-24T21:00:00Z,131.0,28.4227,77.0667,1,live:CPCB CAAQMS via data.gov.in
+"NSUT Jaffarpur, Delhi - DPCC",2026-09-24T21:00:00Z,126.0,28.594004,76.909423,1,live:CPCB CAAQMS via data.gov.in
+"Nagar Palika Parishad, Baraut - UPPCB",2026-09-24T21:00:00Z,125.0,29.09956,77.26235,1,live:CPCB CAAQMS via data.gov.in
+"Ved Vihar-Loni, Ghaziabad - UPPCB",2026-09-24T21:00:00Z,125.0,28.739153,77.273668,1,live:CPCB CAAQMS via data.gov.in
+"Jahangirpuri, Delhi - DPCC",2026-09-24T21:00:00Z,112.0,28.73282,77.170633,1,live:CPCB CAAQMS via data.gov.in
+"Rohini, Delhi - DPCC",2026-09-24T21:00:00Z,111.0,28.732528,77.11992,1,live:CPCB CAAQMS via data.gov.in
+"Loni, Ghaziabad - UPPCB",2026-09-24T21:00:00Z,110.0,28.757294,77.278792,1,live:CPCB CAAQMS via data.gov.in
+"Chandni Chowk, Delhi - IITM",2026-09-24T21:00:00Z,105.0,28.656756,77.227234,1,live:CPCB CAAQMS via data.gov.in
+"Alipur, Delhi - DPCC",2026-09-24T21:00:00Z,104.0,28.815329,77.15301,1,live:CPCB CAAQMS via data.gov.in
+"DTU, Delhi - CPCB",2026-09-24T21:00:00Z,104.0,28.7500499,77.1112615,1,live:CPCB CAAQMS via data.gov.in
+"Sector-2 IMT, Manesar - HSPCB",2026-09-24T21:00:00Z,104.0,28.360699,76.93609,1,live:CPCB CAAQMS via data.gov.in
+"Narela, Delhi - DPCC",2026-09-24T21:00:00Z,101.0,28.822836,77.101981,1,live:CPCB CAAQMS via data.gov.in
+"Wazirpur, Delhi - DPCC",2026-09-24T21:00:00Z,99.0,28.699793,77.165453,1,live:CPCB CAAQMS via data.gov.in
+"Municipal Corporation Office, Dharuhera -  HSPCB",2026-09-24T21:00:00Z,99.0,28.2068,76.7997,1,live:CPCB CAAQMS via data.gov.in
+"RIICO Ind. Area III, Bhiwadi - RSPCB",2026-09-24T21:00:00Z,99.0,28.194909,76.862296,1,live:CPCB CAAQMS via data.gov.in
+"IHBAS, Dilshad Garden, Delhi - CPCB",2026-09-24T21:00:00Z,97.0,28.6811736,77.3025234,1,live:CPCB CAAQMS via data.gov.in
+"Sonia Vihar, Delhi - DPCC",2026-09-24T21:00:00Z,96.0,28.710508,77.249485,1,live:CPCB CAAQMS via data.gov.in
+"Sirifort, Delhi - CPCB",2026-09-24T21:00:00Z,95.0,28.5504249,77.2159377,1,live:CPCB CAAQMS via data.gov.in
+"Punjabi Bagh, Delhi - DPCC",2026-09-24T21:00:00Z,93.0,28.674045,77.131023,1,live:CPCB CAAQMS via data.gov.in
+"Prashant Garden, Khora - UPPCB",2026-09-24T21:00:00Z,93.0,28.61119,77.34206,1,live:CPCB CAAQMS via data.gov.in
+"Mundka, Delhi - DPCC",2026-09-24T21:00:00Z,92.0,28.684678,77.076574,1,live:CPCB CAAQMS via data.gov.in
+"Sector-116, Noida - UPPCB",2026-09-24T21:00:00Z,90.0,28.56923,77.393848,1,live:CPCB CAAQMS via data.gov.in
+"NISE Gwal Pahari, Gurugram - IITM",2026-09-24T21:00:00Z,89.0,28.422681,77.148944,1,live:CPCB CAAQMS via data.gov.in
+"Nehru Nagar, Delhi - DPCC",2026-09-24T21:00:00Z,87.0,28.56789,77.250515,1,live:CPCB CAAQMS via data.gov.in
+"Aya Nagar, Delhi - IITM",2026-09-24T21:00:00Z,86.0,28.4706914,77.1099364,1,live:CPCB CAAQMS via data.gov.in
+"Pusa, Delhi - IITM",2026-09-24T21:00:00Z,84.0,28.63611,77.173332,1,live:CPCB CAAQMS via data.gov.in
+"MIET College, Meerut - UPPCB",2026-09-24T21:00:00Z,81.0,28.972677,77.641018,1,live:CPCB CAAQMS via data.gov.in
+"Talkatora Garden, Delhi - DPCC",2026-09-24T21:00:00Z,80.0,28.62181,77.1944633,1,live:CPCB CAAQMS via data.gov.in
+"IIT Delhi, Delhi - IITM",2026-09-24T21:00:00Z,79.0,28.54246,77.191651,1,live:CPCB CAAQMS via data.gov.in
+"Pusa, Delhi - DPCC",2026-09-24T21:00:00Z,79.0,28.639652,77.146275,1,live:CPCB CAAQMS via data.gov.in
+"Anand Vihar, Delhi - DPCC",2026-09-24T21:00:00Z,78.0,28.647622,77.315809,1,live:CPCB CAAQMS via data.gov.in
+"Najafgarh, Delhi - DPCC",2026-09-24T21:00:00Z,77.0,28.570173,76.933762,1,live:CPCB CAAQMS via data.gov.in
+"Jawaharlal Nehru Stadium, Delhi - DPCC",2026-09-24T21:00:00Z,77.0,28.58028,77.233829,1,live:CPCB CAAQMS via data.gov.in
+"Sri Aurobindo Marg, Delhi - DPCC",2026-09-24T21:00:00Z,76.0,28.531346,77.190156,1,live:CPCB CAAQMS via data.gov.in
+"Ashok Vihar, Delhi - DPCC",2026-09-24T21:00:00Z,76.0,28.695381,77.181665,1,live:CPCB CAAQMS via data.gov.in
+"Dwarka-Sector 8, Delhi - DPCC ",2026-09-24T21:00:00Z,76.0,28.5710274,77.0719006,1,live:CPCB CAAQMS via data.gov.in
+"Sector - 62, Noida - IITM",2026-09-24T21:00:00Z,76.0,28.6245479,77.3577104,1,live:CPCB CAAQMS via data.gov.in
+"Commonwealth Sports Complex, Delhi - DPCC",2026-09-24T21:00:00Z,75.0,28.615828,77.271992,1,live:CPCB CAAQMS via data.gov.in
+"JNU, Delhi - DPCC",2026-09-24T21:00:00Z,74.0,28.540721,77.168544,1,live:CPCB CAAQMS via data.gov.in
+"Murthal, Sonipat - HSPCB",2026-09-24T21:00:00Z,74.0,29.0272,77.0621,1,live:CPCB CAAQMS via data.gov.in
+"R K Puram, Delhi - DPCC",2026-09-24T21:00:00Z,73.0,28.563262,77.186937,1,live:CPCB CAAQMS via data.gov.in
+"SRM University, Modinagar - UPPCB",2026-09-24T21:00:00Z,73.0,28.798171,77.540243,1,live:CPCB CAAQMS via data.gov.in
+"Sector - 125, Noida - UPPCB",2026-09-24T21:00:00Z,73.0,28.5447608,77.3231257,1,live:CPCB CAAQMS via data.gov.in
+"North Campus, DU, Delhi - IITM",2026-09-24T21:00:00Z,72.0,28.6573814,77.1585447,1,live:CPCB CAAQMS via data.gov.in
+"Vasundhara, Ghaziabad - UPPCB",2026-09-24T21:00:00Z,71.0,28.6603346,77.3572563,1,live:CPCB CAAQMS via data.gov.in
+"Sardar Patel Inter College, Baghpat - UPPCB",2026-09-24T21:00:00Z,71.0,28.964949,77.278761,1,live:CPCB CAAQMS via data.gov.in
+"Indirapuram, Ghaziabad - UPPCB",2026-09-24T21:00:00Z,65.0,28.646233,77.358075,1,live:CPCB CAAQMS via data.gov.in
+"Okhla Phase-2, Delhi - DPCC",2026-09-24T21:00:00Z,64.0,28.530785,77.271255,1,live:CPCB CAAQMS via data.gov.in
+"Knowledge Park - V, Greater Noida - UPPCB",2026-09-24T21:00:00Z,64.0,28.557054,77.453663,1,live:CPCB CAAQMS via data.gov.in
+"Govindpuram, Ghaziabad - UPPCB",2026-09-24T21:00:00Z,64.0,28.694528,77.494705,1,live:CPCB CAAQMS via data.gov.in
+"Dr. Karni Singh Shooting Range, Delhi - DPCC",2026-09-24T21:00:00Z,63.0,28.498571,77.26484,1,live:CPCB CAAQMS via data.gov.in
+"New Industrial Town, Faridabad - HSPCB",2026-09-24T21:00:00Z,59.0,28.39072,77.30059,1,live:CPCB CAAQMS via data.gov.in
+"ITO, Delhi - CPCB",2026-09-24T21:00:00Z,58.0,28.628624,77.24106,1,live:CPCB CAAQMS via data.gov.in
+"Sector 30, Faridabad - HSPCB",2026-09-24T21:00:00Z,58.0,28.4417,77.3217,1,live:CPCB CAAQMS via data.gov.in
+"Vivek Vihar, Delhi - DPCC",2026-09-24T21:00:00Z,57.0,28.672342,77.31526,1,live:CPCB CAAQMS via data.gov.in
+"IMD Lodhi Road, Delhi - IITM",2026-09-24T21:00:00Z,57.0,28.5918245,77.2273074,1,live:CPCB CAAQMS via data.gov.in
+"Sanjay Nagar, Ghaziabad - UPPCB",2026-09-24T21:00:00Z,57.0,28.685382,77.453839,1,live:CPCB CAAQMS via data.gov.in
+"CRRI Mathura Road, Delhi - IITM",2026-09-24T21:00:00Z,54.0,28.5512005,77.2735737,1,live:CPCB CAAQMS via data.gov.in
+"Vasundhara Nagar_UIT, Bhiwadi - RSPCB",2026-09-24T21:00:00Z,53.0,28.207266,76.829265,1,live:CPCB CAAQMS via data.gov.in
+"IGI Airport (T3), Delhi - IITM",2026-09-24T21:00:00Z,52.0,28.5627763,77.1180053,1,live:CPCB CAAQMS via data.gov.in
+"Anand Vihar, Hapur - UPPCB",2026-09-24T21:00:00Z,51.0,28.725645,77.749675,1,live:CPCB CAAQMS via data.gov.in
+"Nathu Colony, Ballabgarh - HSPCB",2026-09-24T21:00:00Z,48.0,28.3419248,77.319699,1,live:CPCB CAAQMS via data.gov.in
+"Shyam Nagar, Palwal - HSPCB",2026-09-24T21:00:00Z,48.0,28.1485564,77.3320667,1,live:CPCB CAAQMS via data.gov.in
+"Shadipur, Delhi - CPCB",2026-09-24T21:00:00Z,47.0,28.6514781,77.1473105,1,live:CPCB CAAQMS via data.gov.in
+"Pallavpuram Phase 2, Meerut - UPPCB",2026-09-24T21:00:00Z,47.0,29.06351,77.709723,1,live:CPCB CAAQMS via data.gov.in
+"Knowledge Park - III, Greater Noida - UPPCB",2026-09-24T21:00:00Z,47.0,28.47272,77.482,1,live:CPCB CAAQMS via data.gov.in
+"Sector 11, Faridabad - HSPCB",2026-09-24T21:00:00Z,43.0,28.376058,77.315741,1,live:CPCB CAAQMS via data.gov.in
+"Sector-1, Noida - UPPCB",2026-09-24T21:00:00Z,43.0,28.5898,77.3101,1,live:CPCB CAAQMS via data.gov.in
+"Cantonment Area, Delhi - DPCC",2026-09-24T21:00:00Z,40.0,28.594169,77.1251,1,live:CPCB CAAQMS via data.gov.in
+"Major Dhyan Chand National Stadium, Delhi - DPCC",2026-09-24T21:00:00Z,38.0,28.611281,77.237738,1,live:CPCB CAAQMS via data.gov.in
+"Mandir Marg, Delhi - DPCC",2026-09-24T21:00:00Z,38.0,28.636429,77.201067,1,live:CPCB CAAQMS via data.gov.in
+"Ganga Nagar, Meerut - UPPCB",2026-09-24T21:00:00Z,36.0,28.999264,77.7590354,1,live:CPCB CAAQMS via data.gov.in
+"NSIT Dwarka, Delhi - CPCB",2026-09-24T21:00:00Z,35.0,28.60909,77.0325413,1,live:CPCB CAAQMS via data.gov.in
+"Jai Bhim Nagar, Meerut - UPPCB",2026-09-24T21:00:00Z,35.0,28.9535882,77.7622941,1,live:CPCB CAAQMS via data.gov.in
+"Kalindi Kunj, Khurja - UPPCB",2026-09-24T21:00:00Z,33.0,28.2348927,77.8683002,1,live:CPCB CAAQMS via data.gov.in
+"Yamunapuram, Bulandshahr - UPPCB",2026-09-24T21:00:00Z,32.0,28.406963,77.849831,1,live:CPCB CAAQMS via data.gov.in
+"General Hospital, Mandikhera(Nuh) - HSPCB",2026-09-24T21:00:00Z,24.0,27.9002,76.9938,1,live:CPCB CAAQMS via data.gov.in
+"IGNOU_Maidan Garhi, Delhi - DPCC",2026-09-24T21:00:00Z,19.0,28.493624,77.201159,1,live:CPCB CAAQMS via data.gov.in
+"Amity University, Panchgaon - IITM",2026-09-24T21:00:00Z,3.0,28.3153,76.9143,1,live:CPCB CAAQMS via data.gov.in
