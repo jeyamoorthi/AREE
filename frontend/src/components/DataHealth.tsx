@@ -20,7 +20,7 @@ export interface SourceRow {
 
 export function SourceHealthGrid({ rows }: { rows: SourceRow[] }) {
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-3 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 lg:grid-cols-3">
       {rows.map((row) => (
         <DataHealthItem
           key={row.name}
@@ -106,11 +106,11 @@ export function NationalDataHealth() {
   ];
 
   return (
-    <Panel title="Data health pipeline" padding="p-6">
+    <Panel title="Data health pipeline" padding="p-4 sm:p-6">
       <SourceHealthGrid rows={rows} />
-      <div className="mt-5 rounded-lg bg-[#faf9f4] border border-[#e4e0d4] p-3 flex items-center gap-3">
-        <div className="h-2 w-2 rounded-full bg-[#16a34a] animate-pulse" />
-        <p className="text-[#64748b] text-[12px] leading-relaxed">
+      <div className="mt-5 rounded-lg bg-aree-surface-2 border border-aree-border p-3 flex items-center gap-3">
+        <div className="h-2 w-2 rounded-full bg-aree-green animate-pulse" />
+        <p className="text-aree-muted text-[12px] leading-relaxed">
           Freshness policy: current (0–90m) · aging (90–120m) · stale (&gt;120m).
         </p>
       </div>

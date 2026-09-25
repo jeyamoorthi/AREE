@@ -11,6 +11,7 @@
 
 import { AlertTriangle } from "lucide-react";
 
+import { NAAQS_24H } from "@/lib/cpcb";
 import { formatDuration, formatUtcIso } from "@/lib/duration";
 import { freshness } from "@/lib/freshness";
 import { KeyValue, Panel, Stat } from "@/components/ui/Card";
@@ -99,8 +100,8 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
         </div>
       </div>
 
-      <div className="grid gap-px bg-[color-mix(in_srgb,var(--aree-orange)_25%,transparent)] sm:grid-cols-3">
-        <div className="bg-[var(--aree-surface-1)] px-5 py-3">
+      <div className="grid gap-px bg-[color-mix(in_srgb,var(--aree-orange)_25%,transparent)] grid-cols-[minmax(0,1fr)] sm:grid-cols-3">
+        <div className="bg-aree-surface-1 px-5 py-3">
           <div className="aree-eyebrow text-[9.5px]">Last reading</div>
           <div className="aree-num mt-1 text-[12px] font-semibold text-aree-body">
             {localReading ?? "Not available"}
@@ -109,13 +110,13 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
             <div className="aree-num text-[11px] text-aree-dim">{utcReading}</div>
           ) : null}
         </div>
-        <div className="bg-[var(--aree-surface-1)] px-5 py-3">
+        <div className="bg-aree-surface-1 px-5 py-3">
           <div className="aree-eyebrow text-[9.5px]">Feed sync</div>
           <div className="aree-num mt-1 text-[12px] font-semibold text-aree-body">
             {lastSync ?? "Not reported"}
           </div>
         </div>
-        <div className="bg-[var(--aree-surface-1)] px-5 py-3">
+        <div className="bg-aree-surface-1 px-5 py-3">
           <div className="aree-eyebrow text-[9.5px]">Last published AQI</div>
           <div
             className="aree-num mt-1 text-[12px] font-bold"
@@ -137,7 +138,7 @@ export function StaleDataBanner({ data }: { data: StationDetail; config?: Engine
 export function IngestionErrorBanner({ data }: { data: StationDetail }) {
   if (data.ingestion_status !== "error" || !data.ingestion_error) return null;
   return (
-    <div className="mb-4 rounded-[var(--aree-radius-sm)] border border-[#7f1d1d] bg-[rgba(239,68,68,0.06)] px-4 py-3 shadow-[var(--aree-shadow-sm)]">
+    <div className="mb-4 rounded-[var(--aree-radius-sm)] border border-aree-crimson bg-[rgba(239,68,68,0.06)] px-4 py-3 shadow-[var(--aree-shadow-sm)]">
       <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-aree-red">
         × Station feed temporarily unavailable
       </span>
@@ -146,10 +147,40 @@ export function IngestionErrorBanner({ data }: { data: StationDetail }) {
   );
 }
 
+/**
+ * The 24-hour national standard for a pollutant, or null where none applies.
+ *
+ * Only PM2.5 and PM10 have one here because those are the two the GRAP schedule is
+ * written against. Inventing a comparison for the others would be worse than
+ * omitting it: an operator would read the absence of a breach as compliance with a
+ * standard this file made up.
+ */
+function standardFor(waqiKey: string): { limit: number; unit: string } | null {
+  if (waqiKey === "pm25") return NAAQS_24H.pm25;
+  if (waqiKey === "pm10") return NAAQS_24H.pm10;
+  return null;
+}
+
 /** Compact pollutant readings. Missing pollutants are stated, not hidden. */
-export function PollutantGrid({ data }: { data: StationDetail }) {
+export function PollutantGrid({
+  data,
+  showStandards = false,
+}: {
+  data: StationDetail;
+  /**
+   * Print the NAAQS 24-hour limit under PM2.5 and PM10, and mark a reading over it.
+   *
+   * Off by default so the station command centre is unchanged. The report centre
+   * turns it on: a brief is read away from this application, by someone who cannot
+   * hover a cell to find out what the number should be.
+   */
+  showStandards?: boolean;
+}) {
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-border shadow-[var(--aree-shadow-sm)] sm:grid-cols-3 lg:grid-cols-6">
+    <div
+      className="grid gap-px overflow-hidden rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-border shadow-[var(--aree-shadow-sm)]"
+      style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
+    >
       {POLLUTANTS.map(({ name, key, waqiKey }) => {
         const value = data[key] as number | null | undefined;
         const available = value !== null && value !== undefined;
@@ -185,6 +216,27 @@ export function PollutantGrid({ data }: { data: StationDetail }) {
             <div className="mt-1.5 text-[10.5px] text-aree-dim">
               {available ? (name === "CO" ? "mg/m³" : "µg/m³") : "not reported"}
             </div>
+            {showStandards
+              ? (() => {
+                  const standard = standardFor(waqiKey);
+                  if (!standard) return null;
+                  // Only the ENGINE's numbers are compared. "over" is arithmetic on
+                  // two published values, not a classification: the band and the
+                  // GRAP stage remain the backend's alone.
+                  const over =
+                    available && typeof value === "number" && value > standard.limit;
+                  return (
+                    <div
+                      className="mt-1 text-[10px] font-semibold"
+                      style={{ color: over ? "var(--aree-orange)" : "var(--aree-faint)" }}
+                      title={`National ambient air quality standard, 24-hour average: ${standard.limit} ${standard.unit}`}
+                    >
+                      {over ? "over " : ""}
+                      24h std {standard.limit}
+                    </div>
+                  );
+                })()
+              : null}
           </div>
         );
       })}
@@ -212,7 +264,7 @@ export function DataSourceTransparency({
         : "var(--aree-green)";
 
   return (
-    <div className="grid gap-x-8 gap-y-0 sm:grid-cols-2">
+    <div className="grid gap-x-8 gap-y-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
       <KeyValue label="Station feed ID" value={orDash(data.feed_id)} />
       <KeyValue
         label="WAQI AQI (raw)"

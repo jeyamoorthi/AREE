@@ -14,6 +14,7 @@ import AdvisoryCard, {
   PolicyRetrievalCard,
 } from "@/components/AdvisoryCard";
 import AIAnalysis from "@/components/AIAnalysis";
+import Breadcrumbs from "@/components/Breadcrumbs";
 import {
   DataSourceTransparency,
   IngestionErrorBanner,
@@ -46,7 +47,9 @@ import {
 import { useEngineConfig } from "@/hooks/useEngineConfig";
 import { useLiveChannel } from "@/hooks/useLiveChannel";
 import { usePolling } from "@/hooks/usePolling";
+import { usePrintSubject } from "@/hooks/usePrintSubject";
 import { ApiError, api } from "@/lib/api";
+import { stationLabel } from "@/lib/station";
 import type { MapStation } from "@/components/StationMap";
 import type {
   AdvisoryResponse,
@@ -61,6 +64,9 @@ const POLL_MS = 5000;
 
 export default function StationDashboard({ station }: { station: string }) {
   const config = useEngineConfig();
+
+  // Names the printed brief. The label, not the key: the paper is read by people.
+  usePrintSubject(stationLabel(station));
 
   const live = useLiveChannel(station);
   const refreshKey = live.revision;
@@ -93,6 +99,26 @@ export default function StationDashboard({ station }: { station: string }) {
 
   const data = detail.data;
 
+  /* AREE / Command Center / <station>.
+
+     "Command Center" and not "Stations": /stations has no index route to link to —
+     only /stations/[station] exists — and /dashboard IS the station-selection page,
+     which is also why the sidebar lights Command Center on /stations. One hierarchy,
+     matching the navigation, rather than a second one invented for this trail.
+
+     The name comes from the station key the page was already given. stationLabel()
+     only strips the feed suffix, so it cannot invent a name; if the key is somehow
+     empty it returns "—", and the fallback below keeps the crumb readable. */
+  const stationName = stationLabel(station) || "Station";
+  const crumbs = useMemo(
+    () => [
+      { label: "AREE", href: "/" },
+      { label: "Command Center", href: "/dashboard" },
+      { label: stationName },
+    ],
+    [stationName],
+  );
+
   const mapStations = useMemo<MapStation[]>(() => {
     if (!data || data.lat === null || data.lat === undefined) return [];
     if (data.lon === null || data.lon === undefined) return [];
@@ -121,11 +147,14 @@ export default function StationDashboard({ station }: { station: string }) {
   if (feedDown) {
     return (
       <div className="flex flex-col max-w-[1400px] mx-auto pb-12">
+        {/* Also on the feed-down view: that is precisely when an operator has
+            arrived at a dead end and wants the way back out. */}
+        <Breadcrumbs items={crumbs} className="mb-3" />
         <StationHeader station={station} data={data} liveStatus={live.status} />
         <ErrorState error={feedDown} />
         <IntelligencePanel title="What this means" className="mt-6">
-          <div className="p-6">
-            <p className="text-[#64748b] text-[14px] leading-relaxed">
+          <div className="p-4 sm:p-6">
+            <p className="text-aree-muted text-[14px] leading-relaxed">
               This station publishes no usable AQI, so the engine computes no regulatory
               state for it and the intelligence sections are not shown.
             </p>
@@ -139,13 +168,14 @@ export default function StationDashboard({ station }: { station: string }) {
   return (
     <div className="flex flex-col max-w-[1400px] mx-auto pb-12 space-y-12">
       <div>
+        <Breadcrumbs items={crumbs} className="mb-3" />
         <StationHeader station={station} data={data} liveStatus={live.status} />
-        <div className="mt-6 flex flex-wrap items-center gap-3 bg-white p-3 rounded-lg border border-[#e4e0d4] inline-flex shadow-xs">
+        <div className="mt-6 flex flex-wrap items-center gap-3 bg-aree-card p-3 rounded-lg border border-aree-border inline-flex shadow-xs">
           <ReportDownload station={station} />
-          <div className="w-px h-6 bg-[#e4e0d4] mx-2"></div>
+          <div className="w-px h-6 bg-aree-border mx-2"></div>
           <Link
             href="/reports"
-            className="text-[#64748b] hover:text-[#143828] px-3 py-1.5 text-sm font-semibold transition-colors flex items-center gap-1.5"
+            className="text-aree-muted hover:text-aree-forest px-3 py-1.5 text-sm font-semibold transition-colors flex items-center gap-1.5"
           >
             Report Centre <ChevronRight className="w-4 h-4" />
           </Link>
@@ -165,7 +195,7 @@ export default function StationDashboard({ station }: { station: string }) {
               <StaleDataBanner data={d} config={config.data} />
               <IngestionErrorBanner data={d} />
 
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1.85fr)_minmax(280px,1fr)]">
+              <div className="grid gap-6 grid-cols-[minmax(0,1fr)] xl:grid-cols-[minmax(0,1.85fr)_minmax(280px,1fr)]">
                 <AQIHero data={d} />
                 <IntelligencePanel
                   title="Station location"
@@ -182,7 +212,7 @@ export default function StationDashboard({ station }: { station: string }) {
                         />
                       </div>
                     ) : (
-                      <div className="text-[#788796] flex h-full min-h-[260px] flex-col items-center justify-center text-center text-[13px] bg-[#faf9f4] rounded-lg">
+                      <div className="text-aree-dim flex h-full min-h-[260px] flex-col items-center justify-center text-center text-[13px] bg-aree-surface-2 rounded-lg">
                         <MapPin className="w-8 h-8 mb-2 opacity-50" />
                         No coordinates available
                       </div>
@@ -252,13 +282,13 @@ export default function StationDashboard({ station }: { station: string }) {
         <div className="space-y-6">
           <SectionState state={detail} skeletonRows={4} loadingLabel="Loading risk factors…">
             {(d) => (
-              <div className="grid gap-6 lg:grid-cols-2">
+              <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
                 <RiskExplain data={d} advisory={advisory.data} />
                 <RecommendedAction advisory={advisory.data} health={health.data} />
               </div>
             )}
           </SectionState>
-          <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+          <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
             <SectionState state={detail} skeletonRows={3}>
               {(d) => <RiskChart data={d} />}
             </SectionState>
@@ -293,14 +323,14 @@ export default function StationDashboard({ station }: { station: string }) {
             {(a) => (
               <div className="flex flex-col gap-6">
                 <AdvisoryCard advisory={a} />
-                <div className="grid gap-6 lg:grid-cols-2">
+                <div className="grid gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-2">
                   <PolicyRetrievalCard advisory={a} />
                   <DecisionTraceCard advisory={a} />
                 </div>
               </div>
             )}
           </SectionState>
-          <div className="pt-4 border-t border-[#e4e0d4]">
+          <div className="pt-4 border-t border-aree-border">
             <PolicyConsole />
           </div>
         </div>
@@ -318,7 +348,7 @@ export default function StationDashboard({ station }: { station: string }) {
             {data ? (
               <DataSourceTransparency data={data} config={config.data} />
             ) : (
-              <span className="text-[#64748b] text-[13px]">No station payload yet.</span>
+              <span className="text-aree-muted text-[13px]">No station payload yet.</span>
             )}
           </Disclosure>
 
@@ -326,7 +356,7 @@ export default function StationDashboard({ station }: { station: string }) {
             {data ? (
               <RegulatoryContext data={data} config={config.data} />
             ) : (
-              <span className="text-[#64748b] text-[13px]">No station payload yet.</span>
+              <span className="text-aree-muted text-[13px]">No station payload yet.</span>
             )}
           </Disclosure>
 
@@ -334,7 +364,7 @@ export default function StationDashboard({ station }: { station: string }) {
             {data ? (
               <WindowAggregates data={data} />
             ) : (
-              <span className="text-[#64748b] text-[13px]">No station payload yet.</span>
+              <span className="text-aree-muted text-[13px]">No station payload yet.</span>
             )}
           </Disclosure>
 
@@ -351,7 +381,7 @@ export default function StationDashboard({ station }: { station: string }) {
       </div>
 
       {config.error ? (
-        <div className="pt-6 border-t border-[#e4e0d4]">
+        <div className="pt-6 border-t border-aree-border">
           <ErrorState error={config.error} onRetry={config.refresh} compact />
         </div>
       ) : null}
@@ -366,7 +396,7 @@ function BackLink() {
     <div className="pt-12 text-center">
       <Link
         href="/"
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white hover:bg-[#faf9f4] border border-[#e4e0d4] text-[#17231c] text-sm font-semibold transition-colors shadow-xs"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-aree-surface-1 hover:bg-aree-surface-2 border border-aree-border text-aree-text text-sm font-semibold transition-colors shadow-xs"
       >
         <ArrowLeft className="h-4 w-4" aria-hidden />
         Back to National Overview

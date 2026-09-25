@@ -14,10 +14,10 @@ import {
   FileText,
   LayoutDashboard,
   MapPin,
-  Wind,
   X,
 } from "lucide-react";
 
+import { AreeLogo } from "@/components/brand/AreeLogo";
 import { useSystemStatus } from "@/components/providers/LiveDataProvider";
 import { useOutlookMode } from "@/components/providers/OutlookModeProvider";
 import { istClock } from "@/lib/clock";
@@ -46,24 +46,19 @@ const NAV_ITEMS = [
     extraMatch: "/stations",
   },
   {
-    // The MVP screen: the whole chain on one page, and like /ventilation it is
-    // free of the Pathway engine so a demonstration cannot be killed by one
-    // import failing.
+    // The MVP screen: the whole decision chain in one workspace — Summary for the
+    // call, Diagnostics for the dispersion evidence under it. Neither view depends
+    // on the Pathway engine (both read a met feed, a calibrated threshold and the
+    // stored observation record), so this stays usable when the streaming pipeline
+    // is down and a demonstration cannot be killed by one import failing.
+    //
+    // `extraMatch` keeps the item lit while /ventilation is redirecting to its tab.
     href: "/outlook",
-    label: "Atmospheric Outlook",
+    label: "Outlook",
     shortLabel: "Outlook",
     icon: Activity,
     exact: false,
-  },
-  {
-    // Ventilation is the only route here that does not depend on the Pathway
-    // engine - it reads a met feed and a calibrated threshold - so it stays
-    // usable when the streaming pipeline is down.
-    href: "/ventilation",
-    label: "Ventilation Outlook",
-    shortLabel: "Ventilation",
-    icon: Wind,
-    exact: false,
+    extraMatch: "/ventilation",
   },
   {
     href: "/reports",
@@ -75,11 +70,25 @@ const NAV_ITEMS = [
 ];
 
 export default function Sidebar({
-  collapsed,
+  collapsed: collapsedProp,
   mobileOpen,
   onToggle,
   onMobileClose,
 }: SidebarProps) {
+  /* COLLAPSE IS A DESKTOP STATE AND DOES NOT SURVIVE INTO THE DRAWER.
+
+     `collapsed` narrows the rail to an icon strip and drops every nav label. That is
+     the right thing on a wide screen, where the icons sit permanently in view and are
+     learned. It is the wrong thing in the mobile drawer, which is summoned
+     deliberately, covers the page, and exists precisely to be read — a user who had
+     collapsed the rail on a laptop and then opened the same app on a phone got a
+     60px strip of unlabelled icons with no way to widen it, because the control that
+     widens it is itself desktop-only.
+
+     So the drawer is always the full, labelled sidebar; the collapsed preference is
+     kept and simply does not apply while it is open. */
+  const collapsed = collapsedProp && !mobileOpen;
+
   const pathname = usePathname();
   const statusState = useSystemStatus();
   const status = statusState.data;
@@ -88,6 +97,12 @@ export default function Sidebar({
   const offline = Boolean(statusState.error) && !status;
   const engineDown = Boolean(status && !status.engine_loaded);
   const live = Boolean(status?.engine_loaded);
+
+  /* Same rule as the command bar: no status and no error means nothing is known, and
+     the pill says nothing rather than falling through to a green LIVE it has not
+     earned. A replay is a statement about the PAGE, not the server, so it is known
+     from the moment the page declares it and is exempt. */
+  const stateKnown = Boolean(status) || Boolean(statusState.error);
 
   const indicatorColor = offline
     ? "var(--aree-red)"
@@ -98,7 +113,7 @@ export default function Sidebar({
   // A replay on screen outranks engine liveness here for the same reason it does in the
   // header: the badge is read as "what am I looking at", not "is the server up".
   const replay = pageMode === "replay";
-  const indicatorColorEffective = replay ? "#4338ca" : indicatorColor;
+  const indicatorColorEffective = replay ? "var(--aree-violet)" : indicatorColor;
   const indicatorLabel = replay
     ? "REPLAY"
     : offline
@@ -133,26 +148,14 @@ export default function Sidebar({
             <Link
               href="/"
               onClick={onMobileClose}
-              className="flex items-center gap-3 overflow-hidden group focus:outline-none"
+              className="flex items-center gap-3 overflow-hidden group"
               title="AREE Environmental Intelligence"
             >
-              <span
-                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-aree-forest text-white font-black text-sm tracking-wider shadow-sm transition-transform duration-200 group-hover:scale-105"
-                aria-hidden="true"
-              >
-                AR
-              </span>
-
-              {!collapsed && (
-                <div className="flex flex-col min-w-0 transition-opacity duration-200">
-                  <span className="text-base font-black tracking-[0.14em] text-aree-text leading-tight">
-                    AREE
-                  </span>
-                  <span className="text-[10px] font-semibold tracking-wider text-aree-dim uppercase truncate">
-                    Environmental Intel
-                  </span>
-                </div>
-              )}
+              <AreeLogo
+                size={34}
+                wordmark={!collapsed}
+                className="transition-transform duration-200 group-hover:scale-[1.03]"
+              />
             </Link>
 
             {/* Mobile close button */}
@@ -184,7 +187,9 @@ export default function Sidebar({
                   title={collapsed ? item.label : undefined}
                   className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-xs font-semibold tracking-wide transition-all ${
                     active
-                      ? "bg-aree-forest text-white shadow-sm"
+                      ? // --aree-forest stays a dark fill in both themes, so white
+                        // is the correct foreground here and not --aree-on-solid.
+                        "bg-aree-forest text-white shadow-sm"
                       : "text-aree-body hover:bg-aree-surface-3 hover:text-aree-text"
                   } ${collapsed ? "justify-center px-0" : ""}`}
                 >
@@ -209,21 +214,25 @@ export default function Sidebar({
           {!collapsed ? (
             <div className="rounded-lg border border-aree-border bg-aree-surface-1 p-2.5 text-xs shadow-xs space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5">
-                  <span
-                    className={`h-2 w-2 rounded-full ${
-                      live && !replay ? "aree-live-dot" : ""
-                    }`}
-                    style={{ backgroundColor: indicatorColorEffective }}
-                    aria-hidden="true"
-                  />
-                  <span
-                    className="text-[11px] font-bold tracking-wider uppercase"
-                    style={{ color: indicatorColorEffective }}
-                  >
-                    {indicatorLabel}
+                {stateKnown || replay ? (
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className={`h-2 w-2 rounded-full ${
+                        live && !replay ? "aree-live-dot" : ""
+                      }`}
+                      style={{ backgroundColor: indicatorColorEffective }}
+                      aria-hidden="true"
+                    />
+                    <span
+                      className="text-[11px] font-bold tracking-wider uppercase"
+                      style={{ color: indicatorColorEffective }}
+                    >
+                      {indicatorLabel}
+                    </span>
                   </span>
-                </span>
+                ) : (
+                  <span />
+                )}
                 <span className="text-[10px] text-aree-dim font-mono">
                   {clock ?? "—"}
                 </span>
@@ -239,12 +248,25 @@ export default function Sidebar({
               </div>
             </div>
           ) : (
-            <div className="flex justify-center py-1" title={`${indicatorLabel} · ${status ? `${status.active_stations}/${status.known_stations} active` : ""}`}>
-              <span
-                className={`h-2.5 w-2.5 rounded-full ${live && !replay ? "aree-live-dot" : ""}`}
-                style={{ backgroundColor: indicatorColorEffective }}
-                aria-hidden="true"
-              />
+            <div
+              className="flex justify-center py-1"
+              title={
+                stateKnown || replay
+                  ? `${indicatorLabel}${
+                      status ? ` · ${status.active_stations}/${status.known_stations} active` : ""
+                    }`
+                  : undefined
+              }
+            >
+              {/* Collapsed, the dot IS the label — so when nothing is known it is
+                  absent rather than painted a reassuring green. */}
+              {stateKnown || replay ? (
+                <span
+                  className={`h-2.5 w-2.5 rounded-full ${live && !replay ? "aree-live-dot" : ""}`}
+                  style={{ backgroundColor: indicatorColorEffective }}
+                  aria-hidden="true"
+                />
+              ) : null}
             </div>
           )}
 
@@ -256,6 +278,7 @@ export default function Sidebar({
               collapsed ? "justify-center px-0" : "px-3 justify-between"
             }`}
             aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-expanded={!collapsed}
             title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {!collapsed && (

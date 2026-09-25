@@ -10,7 +10,7 @@ export function Card({
   children,
   className = "",
   style,
-  padding = "p-5",
+  padding = "p-4 sm:p-5",
   raised = false,
 }: {
   children: ReactNode;
@@ -21,7 +21,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`bg-white border border-[#e4e0d4] rounded-xl ${padding} ${className}`}
+      className={`bg-aree-card border border-aree-border rounded-xl ${padding} ${className}`}
       style={{
         boxShadow: raised
           ? "0 4px 12px -2px rgba(0, 0, 0, 0.05)"
@@ -44,7 +44,7 @@ export function Panel({
   variant,
   children,
   className = "",
-  padding = "p-5",
+  padding = "p-4 sm:p-5",
   accent,
   bodyClassName = "",
 }: {
@@ -64,14 +64,14 @@ export function Panel({
   const variantClass = variant ? (variant === "default" ? "" : variant) : "";
   return (
     <section
-      className={`bg-white border border-[#e4e0d4] rounded-xl flex min-w-0 flex-col shadow-xs ${variantClass} ${className}`}
+      className={`bg-aree-card border border-aree-border rounded-xl flex min-w-0 flex-col shadow-xs ${variantClass} ${className}`}
     >
       {title ? (
-        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-5 pt-4 pb-3 border-b border-[#f0eee4]">
+        <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 px-4 pt-4 pb-3 border-b border-aree-border sm:px-5">
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex items-center gap-2">
               {icon ? (
-                <span className="shrink-0 text-[#64748b]" aria-hidden>
+                <span className="shrink-0 text-aree-muted" aria-hidden>
                   {icon}
                 </span>
               ) : null}
@@ -82,12 +82,12 @@ export function Panel({
                   aria-hidden
                 />
               ) : null}
-              <h3 className="text-[12px] font-black tracking-wider uppercase text-[#17231c] font-sans">
+              <h3 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
                 {title}
               </h3>
             </div>
             {subtitle ? (
-              <p className="text-[11px] text-[#788796] mt-0.5">{subtitle}</p>
+              <p className="text-[11px] text-aree-dim mt-0.5">{subtitle}</p>
             ) : null}
           </div>
           {actionSlot ? <div className="min-w-0">{actionSlot}</div> : null}
@@ -108,7 +108,7 @@ export function IntelligencePanel({
   variant,
   children,
   className = "",
-  padding = "p-5",
+  padding = "p-4 sm:p-5",
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
@@ -152,7 +152,7 @@ export function CardValue({
 }) {
   return (
     <div
-      className={`aree-num text-[22px] leading-none font-bold tracking-tight text-[#17231c] ${className}`}
+      className={`aree-num text-[22px] leading-none font-bold tracking-tight text-aree-text ${className}`}
       style={color ? { color } : undefined}
     >
       {children}
@@ -161,7 +161,7 @@ export function CardValue({
 }
 
 export function CardSub({ children }: { children: ReactNode }) {
-  return <div className="text-[#788796] mt-1 text-[11px]">{children}</div>;
+  return <div className="text-aree-dim mt-1 text-[11px]">{children}</div>;
 }
 
 /* ── MetricCard ── standalone metric with card chrome */
@@ -172,7 +172,7 @@ export function MetricCard({
   sub,
   center = false,
   valueClassName = "",
-  padding = "p-4",
+  padding = "p-3 sm:p-4",
   children,
 }: {
   label: string;
@@ -186,20 +186,20 @@ export function MetricCard({
 }) {
   return (
     <div
-      className={`bg-[#faf9f4] border border-[#e4e0d4] rounded-lg ${padding} ${
+      className={`bg-aree-surface-2 border border-aree-border rounded-lg ${padding} ${
         center ? "text-center" : ""
       }`}
     >
-      <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1.5">
+      <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1.5">
         {label}
       </div>
       <div
-        className={`aree-num text-[20px] font-bold text-[#17231c] leading-tight ${valueClassName}`}
+        className={`aree-num text-[20px] font-bold text-aree-text leading-tight ${valueClassName}`}
         style={color ? { color } : undefined}
       >
         {value}
       </div>
-      {sub ? <div className="text-[#788796] mt-1 text-[11px]">{sub}</div> : null}
+      {sub ? <div className="text-aree-dim mt-1 text-[11px]">{sub}</div> : null}
       {children}
     </div>
   );
@@ -230,17 +230,17 @@ export function Stat({
     xl: "text-[34px]",
   } as const;
   return (
-    <div className="bg-[#faf9f4] border border-[#e4e0d4] rounded-lg p-3.5" title={title}>
-      <div className="text-[10px] font-bold tracking-wider text-[#788796] uppercase mb-1">
+    <div className="bg-aree-surface-2 border border-aree-border rounded-lg p-2.5 sm:p-3.5" title={title}>
+      <div className="text-[10px] font-bold tracking-wider text-aree-dim uppercase mb-1">
         {label}
       </div>
       <div
-        className={`${mono ? "aree-num" : ""} ${sizes[size]} leading-tight font-extrabold text-[#17231c]`}
+        className={`${mono ? "aree-num" : ""} ${sizes[size]} leading-tight font-extrabold text-aree-text`}
         style={color ? { color } : undefined}
       >
         {value}
       </div>
-      {sub ? <div className="text-[#788796] mt-1 text-[11px] font-medium">{sub}</div> : null}
+      {sub ? <div className="text-aree-dim mt-1 text-[11px] font-medium">{sub}</div> : null}
     </div>
   );
 }
@@ -256,10 +256,10 @@ export function SectionHeader({
   right?: ReactNode;
 }) {
   return (
-    <div className="mt-8 mb-4 flex items-center justify-between gap-4">
-      <h2 className="flex items-center gap-2 text-[12px] font-black tracking-widest text-[#143828] uppercase">
+    <div className="mt-6 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:mt-8">
+      <h2 className="flex items-center gap-2 text-[12px] font-black tracking-widest text-aree-forest uppercase">
         {index ? (
-          <span className="text-[#10b981] font-mono font-bold">
+          <span className="text-aree-accent font-mono font-bold">
             {index}
           </span>
         ) : null}
@@ -273,7 +273,7 @@ export function SectionHeader({
 /* ── ProgressBar ── */
 export function ProgressBar({
   percent,
-  color = "#16a34a",
+  color = "var(--aree-green)",
   height = 6,
   label,
 }: {
@@ -285,7 +285,7 @@ export function ProgressBar({
   const value = Math.max(0, Math.min(100, percent));
   return (
     <div
-      className="mt-2 overflow-hidden bg-[#e4e0d4]"
+      className="mt-2 overflow-hidden bg-aree-border"
       style={{ height, borderRadius: height }}
       role="progressbar"
       aria-valuenow={Math.round(value)}
@@ -304,7 +304,7 @@ export function ProgressBar({
 /* ── Pill ── */
 export function Pill({
   children,
-  color = "#64748b",
+  color = "var(--aree-muted)",
   filled = false,
   className = "",
   title,
@@ -320,7 +320,7 @@ export function Pill({
       title={title}
       className={`inline-flex items-center gap-1 px-2.5 py-0.5 text-[11px] font-bold rounded-md uppercase tracking-wider ${className}`}
       style={{
-        color: filled ? "#ffffff" : color,
+        color: filled ? "var(--aree-on-solid)" : color,
         backgroundColor: filled ? color : `color-mix(in srgb, ${color} 12%, transparent)`,
         border: filled ? "none" : `1px solid color-mix(in srgb, ${color} 30%, transparent)`,
       }}
@@ -343,10 +343,10 @@ export function KeyValue({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-1.5 border-b border-[#f0eee4] last:border-b-0 text-[12px]">
-      <span className="text-[#64748b]">{label}</span>
+    <div className="flex items-center justify-between gap-4 py-1.5 border-b border-aree-border last:border-b-0 text-[12px]">
+      <span className="text-aree-muted">{label}</span>
       <span
-        className={`${mono ? "aree-num" : ""} font-semibold text-[#17231c]`}
+        className={`${mono ? "aree-num" : ""} font-semibold text-aree-text`}
         style={color ? { color } : undefined}
       >
         {value}
@@ -369,19 +369,19 @@ export function Disclosure({
 }) {
   return (
     <details
-      className={`group bg-white border border-[#e4e0d4] rounded-xl ${className}`}
+      className={`group bg-aree-card border border-aree-border rounded-xl ${className}`}
       open={defaultOpen}
     >
-      <summary className="text-[#17231c] hover:text-[#143828] flex cursor-pointer list-none items-center gap-2.5 px-5 py-3 text-[12px] font-bold uppercase tracking-wider transition-colors">
+      <summary className="text-aree-text hover:text-aree-forest flex cursor-pointer list-none items-center gap-2.5 px-4 py-3 sm:px-5 text-[12px] font-bold uppercase tracking-wider transition-colors">
         <span
-          className="inline-block transition-transform duration-200 group-open:rotate-90 text-[#143828]"
+          className="inline-block transition-transform duration-200 group-open:rotate-90 text-aree-forest"
           aria-hidden
         >
           ▸
         </span>
         {summary}
       </summary>
-      <div className="border-t border-[#f0eee4] px-5 py-4">{children}</div>
+      <div className="border-t border-aree-border px-4 py-4 sm:px-5">{children}</div>
     </details>
   );
 }
@@ -390,7 +390,7 @@ export function Disclosure({
 export function Note({ children }: { children: ReactNode }) {
   return (
     <div className="py-1 text-center">
-      <span className="text-[11px] text-[#788796]">{children}</span>
+      <span className="text-[11px] text-aree-dim">{children}</span>
     </div>
   );
 }
@@ -415,9 +415,9 @@ export function StatusBadge({
 }) {
   if (status) {
     const config = {
-      operational: { color: "#16a34a", text: label ?? "OPERATIONAL", dotClass: "aree-live-dot" },
-      degraded: { color: "#ca8a04", text: label ?? "DEGRADED", dotClass: "" },
-      offline: { color: "#dc2626", text: label ?? "OFFLINE", dotClass: "" },
+      operational: { color: "var(--aree-green)", text: label ?? "OPERATIONAL", dotClass: "aree-live-dot" },
+      degraded: { color: "var(--aree-yellow)", text: label ?? "DEGRADED", dotClass: "" },
+      offline: { color: "var(--aree-red)", text: label ?? "OFFLINE", dotClass: "" },
     };
     const c = config[status];
     return (
@@ -434,13 +434,13 @@ export function StatusBadge({
     );
   }
 
-  const badgeColor = color ?? "#16a34a";
+  const badgeColor = color ?? "var(--aree-green)";
   const isSolid = variant === "solid";
   return (
     <span
       className={`inline-flex items-center gap-1.5 px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase rounded ${className}`}
       style={{
-        color: isSolid ? "#ffffff" : badgeColor,
+        color: isSolid ? "var(--aree-on-solid)" : badgeColor,
         background: isSolid ? badgeColor : `color-mix(in srgb, ${badgeColor} 12%, transparent)`,
         border: isSolid ? "none" : `1px solid color-mix(in srgb, ${badgeColor} 30%, transparent)`,
       }}
@@ -448,7 +448,7 @@ export function StatusBadge({
       {pulse !== false ? (
         <span
           className={`inline-block h-1.5 w-1.5 rounded-full ${pulse ? "aree-live-dot" : ""}`}
-          style={{ background: isSolid ? "#ffffff" : badgeColor }}
+          style={{ background: isSolid ? "var(--aree-on-solid)" : badgeColor }}
           aria-hidden
         />
       ) : null}
@@ -460,7 +460,7 @@ export function StatusBadge({
 /* ── LiveIndicator ── */
 export function LiveIndicator({
   label = "LIVE",
-  color = "#16a34a",
+  color = "var(--aree-green)",
   className = "",
 }: {
   label?: string;
@@ -489,7 +489,7 @@ export function TimelineEvent({
   iconColor,
   title,
   description,
-  color = "#64748b",
+  color = "var(--aree-muted)",
   isLast = false,
   children,
 }: {
@@ -522,20 +522,20 @@ export function TimelineEvent({
           )}
         </div>
         {!isLast ? (
-          <div className="w-px flex-1 min-h-4 bg-[#e4e0d4]" />
+          <div className="w-px flex-1 min-h-4 bg-aree-border" />
         ) : null}
       </div>
       <div className="min-w-0 flex-1 pb-3">
         {displayTime ? (
-          <span className="aree-num text-[#788796] text-[10px] font-semibold">{displayTime}</span>
+          <span className="aree-num text-aree-dim text-[10px] font-semibold">{displayTime}</span>
         ) : null}
         {title ? (
-          <div className="text-[12px] font-bold text-[#17231c]">
+          <div className="text-[12px] font-bold text-aree-text">
             {title}
           </div>
         ) : null}
         {description ? (
-          <div className="text-[#64748b] text-[11px]">{description}</div>
+          <div className="text-aree-muted text-[11px]">{description}</div>
         ) : null}
         {children}
       </div>
@@ -563,22 +563,22 @@ export function DataHealthItem({
 }) {
   const displayName = name ?? label ?? "";
   const levelColors: Record<string, string> = {
-    ok: "#16a34a",
-    warn: "#ca8a04",
-    bad: "#dc2626",
-    unknown: "#788796",
+    ok: "var(--aree-green)",
+    warn: "var(--aree-yellow)",
+    bad: "var(--aree-red)",
+    unknown: "var(--aree-dim)",
   };
-  const finalColor = statusColor ?? (level ? levelColors[level] : undefined) ?? "#16a34a";
+  const finalColor = statusColor ?? (level ? levelColors[level] : undefined) ?? "var(--aree-green)";
 
   return (
-    <div className="flex items-center justify-between gap-3 py-2 border-b border-[#f0eee4] last:border-b-0 text-[12px]">
+    <div className="flex items-center justify-between gap-3 py-2 border-b border-aree-border last:border-b-0 text-[12px]">
       <div className="flex items-center gap-2.5 min-w-0">
         {icon ? (
-          <span className="text-[#788796] shrink-0 text-sm">{icon}</span>
+          <span className="text-aree-dim shrink-0 text-sm">{icon}</span>
         ) : null}
         <div className="min-w-0 truncate">
-          <span className="font-semibold text-[#17231c]">{displayName}</span>
-          {detail ? <span className="text-[#788796] text-[10px] ml-2 font-normal">({detail})</span> : null}
+          <span className="font-semibold text-aree-text">{displayName}</span>
+          {detail ? <span className="text-aree-dim text-[10px] ml-2 font-normal">({detail})</span> : null}
         </div>
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
@@ -599,7 +599,7 @@ export function DataHealthItem({
 export function SeverityIndicator({
   value,
   label,
-  color = "#16a34a",
+  color = "var(--aree-green)",
   size = "md",
 }: {
   value: ReactNode;

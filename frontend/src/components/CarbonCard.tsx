@@ -37,24 +37,24 @@ export default function CarbonCard({ carbon }: { carbon?: CarbonResponse | null 
       accent="var(--aree-green)"
       padding="p-5"
     >
-      <div className="grid gap-6 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-5 shadow-[var(--aree-shadow-sm)] sm:grid-cols-3">
+      <div className="grid gap-6 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-5 shadow-[var(--aree-shadow-sm)] grid-cols-[minmax(0,1fr)] sm:grid-cols-3">
         <Stat
           label="Total emissions"
           value={data.total_gco2}
           sub="gCO₂eq"
-          color="#86efac"
+          color="var(--aree-green)"
         />
         <Stat
           label="Decisions processed"
           value={data.decision_count.toLocaleString()}
           sub="closed sliding windows"
-          color="#86efac"
+          color="var(--aree-green)"
         />
         <Stat
           label="Per decision"
           value={data.per_decision_gco2}
           sub="gCO₂eq"
-          color="#86efac"
+          color="var(--aree-green)"
         />
       </div>
       <div className="mt-5">

@@ -34,7 +34,12 @@ export function RankingList({
       {entries.length === 0 ? (
         <div className="px-4 py-4 text-[12.5px] text-aree-muted">No data yet</div>
       ) : (
-        <ol className="divide-y divide-aree-border">
+        <ol
+          className="divide-y divide-aree-border"
+          aria-label={`${title}, highest first, ${entries.length} ${
+            entries.length === 1 ? "station" : "stations"
+          }`}
+        >
           {entries.map((entry) => {
             const isSelected = highlight === entry.station;
             return (
@@ -64,6 +69,12 @@ export function RankingList({
                 >
                   {entry.value ?? "—"}
                 </span>
+                {/* The rank prefix inside the link reads as a bare number out of
+                    context; this names what the number is. Visually hidden because
+                    on screen the column position already says it. */}
+                <span className="sr-only">
+                  Rank {entry.rank} of {entries.length}
+                </span>
               </li>
             );
           })}
@@ -81,7 +92,7 @@ export default function RankingTable({
   highlight?: string | null;
 }) {
   return (
-    <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-5 grid-cols-[minmax(0,1fr)] sm:grid-cols-2 xl:grid-cols-4">
       {rankings.map((group) => (
         <RankingList
           key={group.key}

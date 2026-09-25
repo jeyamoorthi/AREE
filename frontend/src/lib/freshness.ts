@@ -19,14 +19,14 @@ export interface FreshnessPresentation {
 }
 
 const PRESENTATION: Record<FreshnessStatus, FreshnessPresentation> = {
-  current: { marker: "●", label: "Current", badge: "CURRENT", color: "#22c55e" },
-  aging: { marker: "◐", label: "Aging", badge: "AGING DATA", color: "#eab308" },
-  stale: { marker: "⚠", label: "Stale", badge: "UPSTREAM DATA STALE", color: "#f97316" },
+  current: { marker: "●", label: "Current", badge: "CURRENT", color: "var(--aree-accent)" },
+  aging: { marker: "◐", label: "Aging", badge: "AGING DATA", color: "var(--aree-yellow)" },
+  stale: { marker: "⚠", label: "Stale", badge: "UPSTREAM DATA STALE", color: "var(--aree-orange)" },
   unavailable: {
     marker: "×",
     label: "Unavailable",
     badge: "FEED UNAVAILABLE",
-    color: "#94a3b8",
+    color: "var(--aree-faint)",
   },
 };
 

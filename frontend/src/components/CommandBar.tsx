@@ -5,22 +5,55 @@
  * Top navigation and system telemetric control bar for the AREE command center.
  */
 
-import { usePathname } from "next/navigation";
+import Link from "next/link";
 import {
-  Activity,
   Clock,
-  FileText,
   History,
-  LayoutDashboard,
-  MapPin,
   Menu,
+  Moon,
   Search,
-  Wind,
+  Sun,
 } from "lucide-react";
 
+import AreeLogo from "@/components/brand/AreeLogo";
+import EngineModeChip from "@/components/EngineModeChip";
 import { useSystemStatus } from "@/components/providers/LiveDataProvider";
 import { useOutlookMode } from "@/components/providers/OutlookModeProvider";
+import { useTheme } from "@/components/providers/ThemeProvider";
 import { istClock, istDateTime } from "@/lib/clock";
+
+/**
+ * Light / dark switch.
+ *
+ * The icon shows the mode the button will GIVE you, not the one you are in — a sun
+ * to go light, a moon to go dark — which is the convention every operating system
+ * uses and the only one that survives being looked at without reading the tooltip.
+ *
+ * Nothing is drawn until the provider has adopted the stored preference: the server
+ * renders the light markup because it cannot know the preference, so committing to
+ * an icon before hydration means rendering the wrong one and then flipping it.
+ */
+function ThemeToggle() {
+  const { theme, mounted, toggleTheme } = useTheme();
+  const dark = theme === "dark";
+
+  return (
+    <button
+      type="button"
+      onClick={toggleTheme}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-aree-border bg-aree-surface-1 text-aree-muted shadow-2xs transition-colors hover:bg-aree-surface-2 hover:text-aree-text cursor-pointer"
+      aria-label={dark ? "Switch to light theme" : "Switch to dark theme"}
+      title={dark ? "Switch to light theme" : "Switch to dark theme"}
+      aria-pressed={mounted ? dark : undefined}
+    >
+      {!mounted ? null : dark ? (
+        <Sun className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <Moon className="h-4 w-4" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
 
 interface CommandBarProps {
   onOpenSearch?: () => void;
@@ -31,7 +64,6 @@ export default function CommandBar({
   onOpenSearch,
   onOpenMobile,
 }: CommandBarProps) {
-  const pathname = usePathname();
   const statusState = useSystemStatus();
   const status = statusState.data;
   const { mode: pageMode, asOf } = useOutlookMode();
@@ -39,6 +71,11 @@ export default function CommandBar({
   const offline = Boolean(statusState.error) && !status;
   const engineDown = Boolean(status && !status.engine_loaded);
   const live = Boolean(status?.engine_loaded);
+
+  /* Nothing is known yet: no status, and no error either. The dot and its word are
+     omitted until one of the two arrives. The counts and the clock beside them
+     already render their own "—", which states absence without asserting health. */
+  const stateKnown = Boolean(status) || Boolean(statusState.error);
 
   const indicatorColor = offline
     ? "var(--aree-red)"
@@ -59,32 +96,17 @@ export default function CommandBar({
   // only the second one — so a replay of November 2024 carried a green LIVE pill.
   const replayAt = pageMode === "replay" ? asOf : null;
 
-  // Derive current location breadcrumb
-  let pageTitle = "National Overview";
-  let PageIcon = MapPin;
-
-  if (pathname.startsWith("/dashboard") || pathname.startsWith("/stations")) {
-    pageTitle = "Command Center";
-    PageIcon = LayoutDashboard;
-  } else if (pathname.startsWith("/outlook")) {
-    // Was missing entirely, so the demo page announced itself as "National Overview".
-    pageTitle = "Atmospheric Outlook";
-    PageIcon = Activity;
-  } else if (pathname.startsWith("/ventilation")) {
-    pageTitle = "Ventilation Outlook";
-    PageIcon = Wind;
-  } else if (pathname.startsWith("/reports")) {
-    pageTitle = "Reports & Analytics";
-    PageIcon = FileText;
-  }
-
   return (
     <header
-      className="sticky top-0 z-30 flex h-[70px] items-center justify-between border-b border-aree-border bg-aree-bg/85 px-4 sm:px-6 backdrop-blur-md transition-colors"
+      className="sticky top-0 z-30 flex h-20 items-center justify-between gap-2 border-b border-aree-border bg-aree-bg/85 px-4 sm:h-[70px] sm:gap-3 sm:px-6 backdrop-blur-md transition-colors"
       aria-label="Command bar"
     >
-      {/* Left: Mobile Menu Trigger + Page Title & Breadcrumb */}
-      <div className="flex items-center gap-3">
+      {/* Left: Mobile Menu Trigger + compact brand (both below lg only) + Search.
+
+          `flex-1` keeps this half claiming the free space so the controls opposite
+          stay pinned to the right edge; `min-w-0` lets it shrink below its content
+          width rather than shoving them off the screen on a narrow phone. */}
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
         {onOpenMobile && (
           <button
             type="button"
@@ -96,100 +118,134 @@ export default function CommandBar({
           </button>
         )}
 
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-aree-forest/10 text-aree-forest">
-            <PageIcon className="h-4 w-4" aria-hidden="true" />
-          </div>
-          <div>
-            <h1 className="text-sm font-bold tracking-tight text-aree-text leading-tight sm:text-base">
-              {pageTitle}
-            </h1>
-            <span className="text-[10px] font-semibold tracking-wider text-aree-dim uppercase hidden sm:block">
-              AREE Environmental Intel
-            </span>
-          </div>
-        </div>
-      </div>
+        {/* Only below lg: at wider widths the sidebar is on-screen and already shows
+            this, and rendering both would repeat the mark twice on one row. The
+            tagline is dropped — "AREE" alone is the identity; the full phrase needs
+            ~145px it does not have next to a menu button and three controls. */}
+        <Link
+          href="/"
+          className="flex shrink-0 items-center lg:hidden"
+          aria-label="AREE home"
+        >
+          <AreeLogo size={30} tagline={false} />
+        </Link>
 
-      {/* Right: Search Bar Trigger & Live Telemetry Pill */}
-      <div className="flex items-center gap-2 sm:gap-3">
         {/* Search / Command Palette Trigger */}
         {onOpenSearch && (
           <button
             type="button"
             onClick={onOpenSearch}
-            className="flex items-center gap-2.5 rounded-lg border border-aree-border bg-aree-surface-1 px-3 py-1.5 text-xs text-aree-muted shadow-2xs hover:border-aree-border-strong hover:text-aree-text hover:bg-aree-surface-2 transition-all cursor-pointer"
+            className="flex h-8 min-w-0 flex-1 items-center justify-start gap-2.5 rounded-lg border border-aree-border bg-aree-surface-1 px-3 py-1.5 text-xs text-aree-muted shadow-2xs transition-all hover:border-aree-border-strong hover:bg-aree-surface-2 hover:text-aree-text cursor-pointer sm:w-[190px] sm:flex-none md:w-[240px] lg:w-[280px]"
             aria-label="Search station, policy, or event"
           >
             <Search className="h-3.5 w-3.5 text-aree-dim" aria-hidden="true" />
-            <span className="hidden md:inline text-aree-body font-medium">
+            {/* Two labels, one box. Below md the full phrase does not fit, and hiding
+                it outright left the control an empty rounded rectangle with a lone
+                magnifier in it — a search box that looks broken rather than compact.
+                The short word keeps the affordance legible on a phone. */}
+            <span className="ml-auto truncate text-aree-body font-medium sm:ml-0 md:hidden">
+              Search
+            </span>
+            <span className="hidden truncate text-aree-body font-medium md:inline">
               Search station, policy, event…
             </span>
-            <kbd className="hidden sm:inline-flex items-center rounded border border-aree-border bg-aree-surface-3 px-1.5 py-0.5 font-mono text-[10px] text-aree-dim">
+            <kbd className="hidden sm:inline-flex ml-auto shrink-0 items-center rounded border border-aree-border bg-aree-surface-3 px-1.5 py-0.5 font-mono text-[10px] text-aree-dim">
               Ctrl K
             </kbd>
           </button>
         )}
+      </div>
+
+      {/* Right: Theme, Engine & Live Telemetry Pill */}
+      <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+        <ThemeToggle />
+
+        {/* WHICH ENGINE, beside — never inside — the live/replay pill. That pill
+            answers "is the page describing now"; this answers "what is the server
+            running". Folding one into the other would lose whichever question the
+            operator was actually asking. Sits outside the replay branch below so it
+            keeps reporting the live engine during a replay, which is the truth. */}
+        <div className="hidden xl:flex">
+          <EngineModeChip />
+        </div>
 
         {/* Replay takes precedence over engine liveness: what the user is LOOKING AT
             outranks whether the server is up. */}
         {replayAt ? (
           <div
-            className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs shadow-2xs"
-            style={{ borderColor: "#c7c2f0", background: "#f2f1fd" }}
+            className="flex h-8 items-center gap-2 rounded-lg border px-2 py-1.5 text-xs shadow-2xs sm:px-3"
+            style={{
+              borderColor: "color-mix(in srgb, var(--aree-violet) 35%, transparent)",
+              background: "color-mix(in srgb, var(--aree-violet) 10%, transparent)",
+            }}
             role="status"
             aria-live="polite"
           >
-            <History className="h-3.5 w-3.5" style={{ color: "#4338ca" }} aria-hidden />
+            <History
+              className="h-3.5 w-3.5"
+              style={{ color: "var(--aree-violet)" }}
+              aria-hidden
+            />
             <span
               className="text-[11px] font-bold tracking-wider"
-              style={{ color: "#4338ca" }}
+              style={{ color: "var(--aree-violet)" }}
             >
               REPLAY
             </span>
-            <span className="h-3.5 w-px" style={{ background: "#c7c2f0" }} aria-hidden />
-            <span className="aree-num text-[11px] font-semibold" style={{ color: "#4338ca" }}>
+            <span
+              className="hidden h-3.5 w-px sm:block"
+              style={{ background: "color-mix(in srgb, var(--aree-violet) 35%, transparent)" }}
+              aria-hidden
+            />
+            <span
+              className="aree-num hidden text-[11px] font-semibold sm:inline"
+              style={{ color: "var(--aree-violet)" }}
+            >
               {istDateTime(replayAt) ?? replayAt}
             </span>
           </div>
         ) : (
         /* Live Status & Clock Pill */
         <div
-          className="flex items-center gap-3 rounded-lg border border-aree-border bg-aree-surface-1 px-3 py-1.5 shadow-2xs text-xs"
+          className="flex h-8 items-center gap-2 rounded-lg border border-aree-border bg-aree-surface-1 px-2 py-1.5 text-xs shadow-2xs sm:gap-3 sm:px-3"
           role="status"
           aria-live="polite"
         >
           {/* Status Dot + Label */}
-          <span className="flex items-center gap-1.5">
-            <span
-              className={`h-2 w-2 rounded-full ${live ? "aree-live-dot" : ""}`}
-              style={{ backgroundColor: indicatorColor }}
-              aria-hidden="true"
-            />
-            <span
-              className="text-[11px] font-bold tracking-wider"
-              style={{ color: indicatorColor }}
-            >
-              {indicatorLabel}
-            </span>
-          </span>
+          {stateKnown ? (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span
+                  className={`h-2 w-2 rounded-full ${live ? "aree-live-dot" : ""}`}
+                  style={{ backgroundColor: indicatorColor }}
+                  aria-hidden="true"
+                />
+                <span
+                  className="hidden text-[11px] font-bold tracking-wider sm:inline"
+                  style={{ color: indicatorColor }}
+                >
+                  {indicatorLabel}
+                </span>
+                <span className="sr-only">{indicatorLabel}</span>
+              </span>
 
-          <span className="h-3.5 w-px bg-aree-border" aria-hidden="true" />
+              <span className="hidden h-3.5 w-px bg-aree-border sm:block" aria-hidden="true" />
+            </>
+          ) : null}
 
           {/* Active / Known stations count */}
           <span
             className="aree-num text-aree-body text-[11px] font-semibold"
             title="Active stations / Known stations"
           >
-            {status
-              ? `${status.active_stations}/${status.known_stations} ONLINE`
-              : "—/— ONLINE"}
+            {status ? `${status.active_stations}/${status.known_stations}` : "—/—"}
+            <span className="hidden sm:inline"> ONLINE</span>
           </span>
 
           {/* IST Server Clock */}
-          <span className="hidden h-3.5 w-px bg-aree-border md:block" aria-hidden="true" />
+          <span className="hidden h-3.5 w-px bg-aree-border xl:block" aria-hidden="true" />
 
-          <span className="aree-num text-aree-muted text-[11px] font-medium hidden md:flex items-center gap-1">
+          <span className="aree-num text-aree-muted text-[11px] font-medium hidden xl:flex items-center gap-1">
             <Clock className="h-3 w-3 text-aree-dim" aria-hidden="true" />
             {clock ?? "—"}
           </span>

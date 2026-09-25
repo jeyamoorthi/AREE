@@ -167,18 +167,18 @@ jobs:
 
       - name: Lint
         working-directory: frontend
-        # There are 3 known react-hooks errors predating this pipeline. They are
-        # not suppressed and not silently tolerated: the count is asserted, so a
-        # FOURTH fails the build and fixing one of the three also fails it, which
-        # forces the number here to be updated in the same commit.
+        # The known react-hooks errors that predated this pipeline have been fixed,
+        # so the expected count is now zero and any new error fails the build. The
+        # count is still asserted rather than relying on eslint's exit code, so the
+        # log states the number explicitly.
         run: |
           set +e
           npx eslint . 2>&1 | tee eslint.log
           set -e
           count=$(grep -cE "^\s+[0-9]+:[0-9]+\s+error" eslint.log || true)
-          echo "eslint errors: $count (expected 3 pre-existing)"
-          if [ "$count" -ne 3 ]; then
-            echo "::error::eslint error count changed (expected 3, got $count)."
+          echo "eslint errors: $count (expected 0)"
+          if [ "$count" -ne 0 ]; then
+            echo "::error::eslint error count changed (expected 0, got $count)."
             echo "If this is an intentional fix, update the expected count in ci.yml."
             exit 1
           fi

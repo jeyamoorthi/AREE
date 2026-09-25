@@ -1,9 +1,17 @@
 "use client";
 
-import { AlertTriangle, Loader2, RefreshCw, SatelliteDish, WifiOff } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
+  SatelliteDish,
+  TimerOff,
+  WifiOff,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
-import { ApiError, NetworkError } from "@/lib/api";
+import { ApiError, NetworkError, TimeoutError } from "@/lib/api";
+import { istDateTime } from "@/lib/clock";
 import { Card } from "./Card";
 
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
@@ -78,7 +86,14 @@ export function SkeletonCard({
   );
 }
 
-export function SkeletonMap({ height = 460 }: { height?: number }) {
+/* Matches StationMap's own default so the skeleton and the map it stands in for
+   occupy the same box — a skeleton of a different height makes the whole page
+   jump the moment Leaflet finishes loading. */
+export function SkeletonMap({
+  height = "clamp(280px, 46vh, 480px)",
+}: {
+  height?: number | string;
+}) {
   return (
     <div
       className="border-aree-border bg-aree-surface-1 flex flex-col items-center justify-center gap-3 border"
@@ -138,21 +153,38 @@ export interface ErrorStateProps {
   error: Error;
   onRetry?: () => void;
   compact?: boolean;
+  /**
+   * When the failure happened, as a backend or client ISO instant.
+   *
+   * An error panel with no time on it is indistinguishable from a stale one still
+   * on screen from ten minutes ago, which is how an operator ends up retrying a
+   * problem that has already cleared. Omitted where the caller genuinely does not
+   * know — nothing is invented here.
+   */
+  occurredAt?: string | null;
 }
 
-export function ErrorState({ error, onRetry, compact = false }: ErrorStateProps) {
+export function ErrorState({
+  error,
+  onRetry,
+  compact = false,
+  occurredAt,
+}: ErrorStateProps) {
   const isNetwork = error instanceof NetworkError;
+  const isTimeout = error instanceof TimeoutError;
   const apiError = error instanceof ApiError ? error : null;
   const warming = apiError?.isWarmingUp ?? false;
   const feedDown = apiError?.isFeedUnavailable ?? false;
 
   const accent = warming
-    ? "#eab308"
+    ? "var(--aree-yellow)"
     : feedDown
-      ? "#8a9bb4"
-      : isNetwork
-        ? "#ef4444"
-        : "#f97316";
+      ? "var(--aree-faint)"
+      : isTimeout
+        ? "var(--aree-amber)"
+        : isNetwork
+          ? "var(--aree-red)"
+          : "var(--aree-orange)";
 
   const title = warming
     ? "AWAITING TELEMETRY"
@@ -160,20 +192,34 @@ export function ErrorState({ error, onRetry, compact = false }: ErrorStateProps)
       ? apiError?.body?.error === "feed_error"
         ? "× FEED ERROR"
         : "× FEED UNAVAILABLE"
-      : isNetwork
-        ? "⚠ BACKEND OFFLINE"
-        : (apiError?.body?.error?.replace(/_/g, " ").toUpperCase() ?? "REQUEST FAILED");
+      : isTimeout
+        ? "REQUEST TIMED OUT"
+        : isNetwork
+          ? "⚠ BACKEND OFFLINE"
+          : (apiError?.body?.error?.replace(/_/g, " ").toUpperCase() ?? "REQUEST FAILED");
 
   const lead = warming
     ? null
     : feedDown
       ? "No usable AQI is available from this feed."
-      : isNetwork
-        ? "AREE intelligence engine is unavailable."
-        : null;
+      : isTimeout
+        ? // A timeout is not an outage: the connection reached the server and the
+          // server is still working. Saying "backend offline" here would send the
+          // operator to check a service that is running.
+          "The request was accepted but did not finish in time."
+        : isNetwork
+          ? "AREE intelligence engine is unavailable."
+          : null;
 
-  const Icon = warming ? Loader2 : isNetwork ? WifiOff : AlertTriangle;
+  const Icon = warming
+    ? Loader2
+    : isTimeout
+      ? TimerOff
+      : isNetwork
+        ? WifiOff
+        : AlertTriangle;
   const showRetry = Boolean(onRetry) && !feedDown;
+  const failedAt = occurredAt ? istDateTime(occurredAt) : null;
 
   return (
     <div
@@ -204,6 +250,11 @@ export function ErrorState({ error, onRetry, compact = false }: ErrorStateProps)
           <div className="text-aree-muted mt-1 text-xs break-words">{error.message}</div>
           {apiError?.hint ? (
             <div className="text-aree-dim mt-1 text-xs">{apiError.hint}</div>
+          ) : null}
+          {failedAt ? (
+            <div className="text-aree-faint aree-num mt-1.5 text-[11px]">
+              Failed at {failedAt}
+            </div>
           ) : null}
         </div>
         {showRetry ? (

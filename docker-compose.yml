@@ -21,6 +21,8 @@ services:
       # args:
       #   INSTALL_STREAMING: "1"   # the Pathway stack. UNVERIFIED pins.
     ports:
+      # Published for direct API access and debugging. The frontend does NOT use this
+      # route — it reaches the backend over the compose network as http://backend:8000.
       - "8000:8000"
     environment:
       PORT: "8000"
@@ -54,8 +56,20 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      # NO NEXT_PUBLIC_API_URL. The browser talks to the frontend's own origin;
-      # the Next server forwards /api and /ws to the backend below.
+      args:
+        # Empty on purpose: the browser talks to this server's own origin and the
+        # rewrite below forwards it. See the note at the top of this file.
+        NEXT_PUBLIC_API_URL: ""
+        # BUILD arg, not just runtime. Next freezes rewrite destinations into
+        # .next/routes-manifest.json during `next build`, so a value supplied only to
+        # the running container is ignored. Service name, not localhost — inside this
+        # container localhost is the frontend itself.
+        AREE_API_ORIGIN: "http://backend:8000"
+        # From the root .env, which compose interpolates automatically. The frontend
+        # still has no env_file — this is one named, public basemap key passed
+        # explicitly, not the secret set. Absent from .env it resolves to empty and
+        # the maps render watermarked instead of failing.
+        NEXT_PUBLIC_CARTO_KEY: "${NEXT_PUBLIC_CARTO_KEY:-}"
     ports:
       - "3000:3000"
     environment:
@@ -65,7 +79,21 @@ services:
       AREE_API_ORIGIN: http://backend:8000
     depends_on:
       backend:
+        # The engine takes a while to load its models, and the frontend prerenders its
+        # static pages on boot. Waiting for healthy means that prerender has an API to
+        # talk to instead of failing and leaving the first paint empty.
         condition: service_healthy
+    healthcheck:
+      # node:22-slim ships neither curl nor wget; Node 22 has global fetch.
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     restart: unless-stopped
 
 volumes:

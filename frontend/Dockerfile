@@ -26,6 +26,29 @@ WORKDIR /app
 # Empty by default: same-origin. See the note above before changing this.
 ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+
+# AREE_API_ORIGIN IS A BUILD-TIME VARIABLE, despite looking like a runtime one.
+# Next resolves rewrites() during `next build` and freezes the destinations into
+# .next/routes-manifest.json; `next start` reads them from there and never calls the
+# config function again. Setting it only in the container's environment therefore did
+# nothing — the manifest still pointed at the 127.0.0.1:8102 default and every proxied
+# request returned 500.
+ARG AREE_API_ORIGIN=http://backend:8000
+ENV AREE_API_ORIGIN=$AREE_API_ORIGIN
+
+# CARTO basemap key. Build-time, like every NEXT_PUBLIC_ value: it is substituted
+# into the client bundle by `next build` below, so supplying it only to the running
+# container leaves the maps watermarked "API KEY REQUIRED".
+#
+# This is the one exception to the "never pass keys to the frontend image" rule at
+# the top of this file, and it is not really an exception: tile requests are made by
+# the BROWSER, so a basemap key is public by construction. Engine credentials
+# (WAQI_TOKEN, GEMINI_API_KEY, FIRMS_API_KEY, ...) are server-side and still must
+# never appear here. Empty default so a build without the key still succeeds, with
+# watermarked tiles rather than a broken map.
+ARG NEXT_PUBLIC_CARTO_KEY=
+ENV NEXT_PUBLIC_CARTO_KEY=$NEXT_PUBLIC_CARTO_KEY
+
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

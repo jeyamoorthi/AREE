@@ -58,11 +58,13 @@ def _fill(conn, now: datetime, hours: int, skip: set[int] | None = None) -> None
 def test_a_hole_behind_the_newest_row_is_invisible_to_the_trailing_gap(store):
     """The exact shape of the bug: healthy trailing gap, unusable store."""
     from backend.api import capture_scheduler as cs
+    from backend.forecast import pm25_forecast as fc
 
     now = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
     # Continuous except for a six-hour hole 12–17 hours back — behind the newest
     # row, and squarely inside the lag window.
-    _fill(store, now, hours=36, skip={12, 13, 14, 15, 16, 17})
+    _fill(store, now, hours=fc.OBSERVATION_WINDOW_HOURS + 2,
+          skip={12, 13, 14, 15, 16, 17})
 
     gap = cs.gap_hours(store, now)
     assert gap is not None and gap <= cs.MAX_TOLERABLE_GAP_HOURS, (

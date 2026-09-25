@@ -16,7 +16,7 @@ export type { MapStation };
 
 export default function StationMapLoader(props: {
   stations: MapStation[];
-  height?: number;
+  height?: number | string;
   selected?: string | null;
   onSelect?: (station: string) => void;
 }) {
@@ -29,10 +29,10 @@ export default function StationMapLoader(props: {
  */
 export function MapLegend({ className = "" }: { className?: string }) {
   const items = [
-    { marker: "●", label: "Current", detail: "0–90 min", color: "#22c55e" },
-    { marker: "◐", label: "Aging", detail: "90–120 min", color: "#eab308" },
-    { marker: "⚠", label: "Stale", detail: "over 120 min", color: "#f97316" },
-    { marker: "×", label: "Unavailable", detail: "no usable AQI", color: "#94a3b8" },
+    { marker: "●", label: "Current", detail: "0–90 min", color: "var(--aree-accent)" },
+    { marker: "◐", label: "Aging", detail: "90–120 min", color: "var(--aree-yellow)" },
+    { marker: "⚠", label: "Stale", detail: "over 120 min", color: "var(--aree-orange)" },
+    { marker: "×", label: "Unavailable", detail: "no usable AQI", color: "var(--aree-faint)" },
   ];
   return (
     <div className={`flex flex-wrap items-center gap-x-4 gap-y-3 rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-surface-1 p-3 shadow-[var(--aree-shadow-sm)] ${className}`}>
