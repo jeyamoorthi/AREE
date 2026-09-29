@@ -162,6 +162,16 @@ Tiles are cached hard by both the browser and CARTO's CDN, so after setting it
 **redeploy and then force-refresh** (Ctrl-F5); an old watermarked tile can
 otherwise linger for a while and look like the key did not work.
 
+#### Functions run in Mumbai (`bom1`)
+
+`frontend/vercel.json` pins the project's functions to `bom1`. CPCB's
+per-pollutant feed (`airquality.cpcb.gov.in`) drops connections from the
+backend on Render and from Vercel's default US region, so the backend reads it
+through the relay at `/relay/cpcb-feed`, and that relay only works from India.
+If you rename the Vercel project, set `AREE_CPCB_RELAY_URL` on the backend to
+`https://<your-app>.vercel.app/relay/cpcb-feed`. `/api/system/status` →
+`pollutant_sources` shows which route answered.
+
 ### 4.2 Do NOT set `NEXT_PUBLIC_API_URL`
 
 This is the single most important line on this page.

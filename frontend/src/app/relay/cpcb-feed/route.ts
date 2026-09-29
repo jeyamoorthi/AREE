@@ -8,6 +8,13 @@
  *   production. The backend (backend/ingestion/cpcb_live.py) reads the feed
  *   directly first and falls back to this route when that fails.
  *
+ * WHY vercel.json PINS FUNCTIONS TO MUMBAI (bom1)
+ *   Measured after the first deploy: Render (Singapore) got a ConnectTimeout and this
+ *   route, running in Vercel's default US region, got "fetch failed". CPCB drops
+ *   connections from those hosts. The relay is only useful from an Indian region, and
+ *   Next 16 no longer lets one route pick its region, so the project's functions run
+ *   in bom1 - which is also the region nearest this app's users and its backend.
+ *
  * WHAT IT CANNOT DO
  *   Fetch anything else. It takes no parameters and the upstream URL is fixed, so
  *   it is not an open proxy.
