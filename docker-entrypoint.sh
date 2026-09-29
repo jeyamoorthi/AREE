@@ -44,7 +44,7 @@ elif [ ! -f "$DB_PATH" ]; then
         echo "entrypoint: no store at $DB_PATH — seeding from the committed fixture"
         if cp "$SEED" "$DB_PATH" 2>/dev/null; then
             echo "entrypoint: seeded ($(wc -c < "$DB_PATH") bytes). Replay works now;"
-            echo "entrypoint: live forecasting needs ~24 h of capture to accumulate."
+            echo "entrypoint: live reads the committed observations imported below."
         else
             echo "entrypoint: ERROR could not copy the seed into $DB_PATH"
         fi
@@ -73,9 +73,15 @@ fi
 #
 #   Failure is non-fatal for the same reason nothing else here is: a store
 #   problem must never stop the API from starting and reporting what is wrong.
+#
+# --remote: the copy in the image is the archive as it stood at the last deploy,
+#   which on a free instance can be days old. The repository has every hour
+#   committed since, so the newest day files are read from there too (about a
+#   second; best effort - an unreachable GitHub just means the image's copy).
+#   Set AREE_OBS_MIRROR_URL=off to import the image's copy alone.
 if [ -d /app/observations ]; then
     echo "entrypoint: importing committed observations"
-    python /app/tools/capture_csv.py import 2>&1 ||         echo "entrypoint: WARNING observation import failed - live may answer 424 until capture accumulates"
+    python /app/tools/capture_csv.py import --remote 2>&1 ||         echo "entrypoint: WARNING observation import failed - live may answer 424 until capture accumulates"
 else
     echo "entrypoint: no committed observations to import"
 fi

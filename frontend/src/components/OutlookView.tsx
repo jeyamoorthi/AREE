@@ -300,7 +300,7 @@ export default function OutlookView() {
      Diagnostics tab renders the SAME object, so the two cannot describe different
      hours. `setTab` is here only for the cross-view link at the foot of section 03,
      which used to be a navigation to another route. */
-  const { data, loading, error, preset, setPreset, reload, setTab } =
+  const { data, loading, error, stale, preset, setPreset, reload, setTab } =
     useOutlookData();
 
   /* Preset 0 is Live; anything else is a reconstruction of a fixed past moment. The
@@ -1339,8 +1339,14 @@ export default function OutlookView() {
               )}
 
               {/* The decision itself. Everything above is a recommendation; this is
-                  where a person accepts or refuses it, and the outcome is persisted. */}
-              {evidence ? (
+                  where a person accepts or refuses it, and the outcome is persisted.
+                  Never against a cached outlook: a decision must be taken on the
+                  forecast the backend holds now, not the one this browser last saw. */}
+              {stale ? (
+                <p className="mt-3 text-[11.5px]" style={{ color: C.muted }}>
+                  Authorisation opens when the live forecast returns.
+                </p>
+              ) : evidence ? (
                 <CaseAuthorisation
                   decision={data.decision}
                   risk={data.risk}

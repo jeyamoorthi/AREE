@@ -9,6 +9,12 @@ name: Keep awake
 #   A request every 10 minutes keeps the instance warm. This is the one job the
 #   free tier cannot do for itself, and a scheduled runner can.
 #
+# THIS IS THE BACKUP, NOT THE PRIMARY
+#   GitHub runs schedules best-effort: measured on 2026-09-28 the hourly capture
+#   fired 7 times of 24, and this job is delayed the same way - often past the
+#   15-minute idle timer. The primary pinger is an external cron (cron-job.org,
+#   every 5 min; DEPLOYMENT.md section 3.2). This stays as a second line.
+#
 # THE COST, STATED
 #   Keeping an instance awake around the clock spends roughly 730 of the 750 free
 #   instance-hours a month. That fits one service and leaves no room for a second.

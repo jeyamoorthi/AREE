@@ -54,31 +54,57 @@ says so rather than inventing data: `DATA_GOV_API_KEY` (CPCB), `OPENAQ_API_KEY`,
    to the string from step 2. The feed keys are optional.
 4. Deploy.
 
-### 3.2 The disk is not optional
+### 3.2 Keeping live mode up on the free tier
 
-`render.yaml` declares a 2 GB disk at `/app/data`. **A persistent disk needs a
-paid instance type.** Without one:
+The free tier has no persistent disk and **spins down after ~15 minutes without
+traffic**. Every wake is a fresh container with an empty store, and the live
+forecast needs an unbroken record of observed PM2.5 at lags 0–24 h. Four pieces
+keep that working; each covers a failure the others cannot:
 
-- the store is wiped on every deploy *and* every restart,
-- so the capture never accumulates the ~24 h of observations the live forecast
-  needs,
-- so live permanently returns 424 while replay keeps working.
+| Piece | Where | What it prevents |
+|---|---|---|
+| External pinger | cron-job.org (below) | the spin-down itself |
+| Hole-filling capture | `capture.yml` → `capture_csv.py export` | an archive with missing hours |
+| Remote import at boot | `docker-entrypoint.sh` → `import --remote` | booting from the image's stale copy |
+| Last-known outlook | frontend, `OutlookDataProvider` | a blank page during the rare cold start |
 
-That is a real, visible failure, not a degradation.
+**Why an external pinger, and not only `keep-awake.yml`.** GitHub runs scheduled
+workflows best-effort. Measured on 2026-09-28, the hourly capture fired 7 times
+out of 24, and the `*/10` keep-awake is subject to the same delays, so it cannot
+be relied on to beat a 15-minute idle timer.
 
-### 3.3 The free tier will break live mode even with a disk
+Set up the pinger once:
 
-Render's free web services **spin down after ~15 minutes of inactivity**. The
-capture is an in-process thread; when the process sleeps, capture stops, and the
-observation series develops exactly the holes that produce:
+1. Create a free account at <https://cron-job.org>.
+2. **Keep-awake job**: URL `https://<your-backend>.onrender.com/api/health`,
+   every **5 minutes**, method GET. This uses about 730 of Render's 750 free
+   instance-hours a month, so it fits one always-on service.
+3. **Capture trigger** (recommended): makes the capture actually run hourly.
+   - Create a fine-grained GitHub token scoped to this repository only, with
+     **Actions: Read and write**.
+   - New cron-job.org job, schedule `10 * * * *` (minute 10 of every hour),
+     method **POST**, URL
+     `https://api.github.com/repos/<owner>/AREE/actions/workflows/capture.yml/dispatches`
+   - Headers: `Authorization: Bearer <token>`,
+     `Accept: application/vnd.github+json`
+   - Body: `{"ref":"main"}`
 
-```
-observed PM2.5 missing at lag(s) [0, 1, 3] h before ...
-```
+   The workflow's `concurrency` group stops this and GitHub's own schedule from
+   overlapping. Even without this trigger the archive now repairs itself: every
+   capture run refills any hour in the last 49 that OpenAQ can supply.
 
-Replay is unaffected — it reads Nov 2024 from the store. If you only need the
-**02 Nov 2024 hero replay** for a demo, free tier is fine. If you want the live
-tab to work, you need an always-on instance.
+**What is still lost without a disk:** case decisions, escalations and uploaded
+policies, which reset on every restart. If this becomes more than a
+demonstration, move to a paid instance with the disk described in
+`render.yaml`.
+
+### 3.3 Capture commits do not redeploy
+
+`render.yaml` sets `buildFilter.ignoredPaths: observations/**`, so the hourly
+capture commits no longer rebuild and restart the backend. A starting container
+reads the newest day files from the repository itself. If the service was
+created by hand rather than from the Blueprint, set the same ignored path under
+**Settings → Build Filters**.
 
 ### 3.4 First boot
 

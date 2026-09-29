@@ -33,11 +33,13 @@ from __future__ import annotations
 
 import argparse
 import csv
+import io
 import json
 import os
 import sys
 import tempfile
-from datetime import datetime, timezone
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -73,6 +75,24 @@ OBS_DIR = _ROOT / "observations"
 # file and a parsed one agree.
 FIELDS = ("station_id", "timestamp", "pm25", "latitude", "longitude",
           "n_stations", "source")
+
+# The history the live forecast reads: pm25_forecast.OBSERVATION_WINDOW_HOURS.
+# Restated rather than imported because that module pulls LightGBM and numpy,
+# which the capture runner does not install; test_capture_csv pins the two.
+ARCHIVE_WINDOW_HOURS = 49
+
+# capture_scheduler.PUBLICATION_DELAY_HOURS: the newest hours are absent because
+# CPCB has not published them yet, not because they were lost.
+PUBLICATION_DELAY_HOURS = 2
+
+# Where a starting container reads the archive as it is NOW, rather than as it
+# was when the image was built. The same repository the met mirror uses
+# (weather_stream.MIRROR_URL). "off" disables it.
+REMOTE_BASE = os.getenv(
+    "AREE_OBS_MIRROR_URL",
+    "https://raw.githubusercontent.com/jeyamoorthi/AREE/main/observations")
+REMOTE_DAYS = 3          # covers ARCHIVE_WINDOW_HOURS from any hour of the day
+REMOTE_TIMEOUT_SECONDS = 8
 
 
 def _emit(key: str, value: str) -> None:
@@ -144,64 +164,208 @@ def _existing_keys(path: Path) -> set[tuple[str, str]]:
                 if r.get("station_id") and r.get("timestamp")}
 
 
-def cmd_export(args) -> int:
-    rows = collect()
-    OBS_DIR.mkdir(parents=True, exist_ok=True)
-    target = _day_file(datetime.now(timezone.utc))
-    new = not target.exists()
+def _append(rows: list[dict]) -> list[dict]:
+    """Append rows to the day file their own timestamp names. Returns what was new.
 
-    # Drop station-hours the file already carries. CPCB republishes the same
-    # hour for as long as it is the newest one, so without this an hourly cron
-    # appends the same ~80 rows repeatedly and every run produces a commit that
-    # adds no information. Skipping them makes "the file changed" mean "an hour
-    # we did not have arrived", which is what the schedule is actually for.
-    have = _existing_keys(target)
-    rows = [r for r in rows if (r["station_id"], r["timestamp"]) not in have]
-    if not rows:
-        print(f"nothing new - {target.relative_to(_ROOT)} already has this hour")
+    Drops station-hours the file already carries. CPCB republishes the same hour
+    for as long as it is the newest one, so without this an hourly cron appends
+    the same ~80 rows repeatedly and every run produces a commit that adds no
+    information. Skipping them makes "the file changed" mean "an hour we did not
+    have arrived", which is what the schedule is actually for.
+    """
+    by_file: dict[Path, list[dict]] = {}
+    for row in rows:
+        stamp = _parse_hour(row["timestamp"])
+        if stamp is None:
+            continue
+        by_file.setdefault(_day_file(stamp), []).append(row)
+
+    OBS_DIR.mkdir(parents=True, exist_ok=True)
+    out: list[dict] = []
+    for target, batch in sorted(by_file.items()):
+        have = _existing_keys(target)
+        batch = [r for r in batch if (r["station_id"], r["timestamp"]) not in have]
+        if not batch:
+            continue
+        new = not target.exists()
+        with target.open("a", encoding="utf-8", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=FIELDS, lineterminator="\n")
+            if new:
+                writer.writeheader()
+            writer.writerows(batch)
+        print(f"wrote {len(batch)} rows to observations/{target.name}")
+        out.extend(batch)
+    return out
+
+
+def _parse_hour(stamp: str) -> datetime | None:
+    try:
+        return datetime.strptime(stamp, "%Y-%m-%dT%H:00:00Z").replace(tzinfo=timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def archive_holes(now: datetime | None = None) -> list[datetime]:
+    """Hours inside the forecast's window that no committed CSV carries.
+
+    WHY THE ARCHIVE HAS HOLES AT ALL
+        GitHub runs scheduled workflows on a best-effort basis. Measured on
+        2026-09-28: the `10 * * * *` capture fired seven times, not twenty-four,
+        and each run records only the hour CPCB is currently publishing. So the
+        archive a cold container imports was missing most hours of the lag
+        window, and every boot had to rebuild them from OpenAQ - the minutes-long
+        "Restoring observation history" screen.
+    """
+    now = (now or datetime.now(timezone.utc)).replace(minute=0, second=0, microsecond=0)
+    since = now - timedelta(hours=ARCHIVE_WINDOW_HOURS)
+    until = now - timedelta(hours=PUBLICATION_DELAY_HOURS)
+
+    days = {since.date() + timedelta(days=d)
+            for d in range((until.date() - since.date()).days + 1)}
+    have: set[datetime] = set()
+    for day in days:
+        path = OBS_DIR / f"{day:%Y-%m-%d}.csv"
+        for _, stamp in _existing_keys(path):
+            hour = _parse_hour(stamp)
+            if hour is not None:
+                have.add(hour)
+
+    out, cursor = [], since
+    while cursor <= until:
+        if cursor not in have:
+            out.append(cursor)
+        cursor += timedelta(hours=1)
+    return out
+
+
+def fill_holes(now: datetime | None = None) -> list[dict]:
+    """Recover the archive's missing hours from OpenAQ history. Returns rows written.
+
+    The same rows, same source tag (openaq:hourly) and same fetch the deployed
+    store's own repair uses - capture.openaq_rows - so a hole filled here is a
+    hole the container no longer has to fill at boot. OpenAQ is itself hours
+    behind for some NCR sensors, so the newest holes may stay open until a later
+    run; that is the reason this runs every time rather than once.
+    """
+    now = now or datetime.now(timezone.utc)
+    holes = archive_holes(now)
+    if not holes:
+        print(f"archive continuous across the last {ARCHIVE_WINDOW_HOURS} h")
+        return []
+
+    import capture                                           # noqa: PLC0415
+
+    wanted = {f"{h:%Y-%m-%dT%H:00:00Z}" for h in holes}
+    # +1 h so the oldest hole sits inside the window rather than on its edge.
+    window = int((now - min(holes)).total_seconds() // 3600) + 1
+    print(f"{len(holes)} hole(s) in the archive, oldest {min(holes):%Y-%m-%d %H:00}Z "
+          f"- filling from OpenAQ ({window} h)")
+    rows = [r for r in capture.openaq_rows(window) if r["timestamp"] in wanted]
+    written = _append(rows)
+    left = len(archive_holes(now))
+    print(f"filled {len({r['timestamp'] for r in written})} hour(s); {left} still open")
+    return written
+
+
+def cmd_export(args) -> int:
+    # The live read and the hole fill are independent. A CAQM outage must not
+    # also stop the archive repairing itself, and an OpenAQ outage must not cost
+    # the hour CAQM just published.
+    live_error: Exception | None = None
+    try:
+        written = _append(collect())
+    except Exception as exc:                                 # noqa: BLE001
+        live_error, written = exc, []
+        print(f"live capture failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+    if not getattr(args, "no_fill", False):
+        try:
+            written += fill_holes()
+        except Exception as exc:                             # noqa: BLE001
+            print(f"hole fill skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
+
+    if not written:
+        print("nothing new - the archive already has every hour available")
         _emit("captured", "false")
         _emit("hour", "")
-        return 0
+    else:
+        hours = sorted({r["timestamp"] for r in written})
+        _emit("captured", "true")
+        # The newest hour actually written, which is what the commit should name.
+        _emit("hour", hours[-1])
+        _emit("rows", str(len(written)))
+        print(f"  hours covered : {hours[0]} .. {hours[-1]} ({len(hours)} distinct)")
 
-    with target.open("a", encoding="utf-8", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=FIELDS, lineterminator="\n")
-        if new:
-            writer.writeheader()
-        writer.writerows(rows)
-
-    hours = sorted({r["timestamp"] for r in rows})
-    _emit("captured", "true")
-    # The newest hour actually written, which is what the commit should name.
-    _emit("hour", hours[-1])
-    _emit("rows", str(len(rows)))
-    print(f"wrote {len(rows)} rows to {target.relative_to(_ROOT)}")
-    print(f"  hours covered : {hours[0]} .. {hours[-1]}")
-    print(f"  source        : {rows[0]['source']}")
+    if live_error is not None:
+        # Still loud: a green job that silently lost the live hour is the failure
+        # mode this file exists to avoid. Anything filled above is kept.
+        raise live_error
     return 0
 
 
-def _read_csvs(paths: list[Path]) -> list[dict]:
+def _fetch_remote(days: int = REMOTE_DAYS) -> list[tuple[str, str]]:
+    """The newest day files as the repository holds them now: (name, text) pairs.
+
+    WHY A STARTING CONTAINER NEEDS THIS
+        observations/ is copied into the image at build time, so a container
+        imports the archive as it stood at its last deploy. Every capture since
+        then - up to days of it, on an instance that only restarts when it wakes
+        - is in the repository and not in the container, and the boot repair had
+        to rebuild those hours from OpenAQ instead.
+
+    Best effort by design. A missing day (404), a timeout or no network at all
+    returns fewer files, never an error: the baked-in copy is still imported and
+    the in-process repair still runs after this.
+    """
+    if REMOTE_BASE.lower() in ("", "off"):
+        return []
+    import requests                                          # noqa: PLC0415
+
+    today = datetime.now(timezone.utc).date()
+    names = [f"{today - timedelta(days=d):%Y-%m-%d}.csv" for d in range(days)]
+
+    def _get(name: str) -> tuple[str, str] | None:
+        try:
+            r = requests.get(f"{REMOTE_BASE}/{name}", timeout=REMOTE_TIMEOUT_SECONDS)
+        except requests.RequestException as exc:
+            print(f"  remote {name}: {type(exc).__name__}")
+            return None
+        if r.status_code != 200:
+            print(f"  remote {name}: HTTP {r.status_code}")
+            return None
+        return name, r.text
+
+    with ThreadPoolExecutor(max_workers=len(names)) as pool:
+        return [got for got in pool.map(_get, names) if got]
+
+
+def _read_csvs(paths: list[Path],
+               remote: list[tuple[str, str]] | None = None) -> list[dict]:
     """Every row from the given files, de-duplicated on (station_id, timestamp).
 
     Later files win, which makes a re-export of a corrected hour authoritative
-    over the original without anyone having to edit history.
+    over the original without anyone having to edit history. Remote copies are
+    read after every local file, so the repository's current version wins over
+    the one baked into the image.
     """
+    sources = [path.read_text(encoding="utf-8") for path in sorted(paths)]
+    sources += [text for _, text in sorted(remote or [])]
+
     merged: dict[tuple[str, str], dict] = {}
-    for path in sorted(paths):
-        with path.open(encoding="utf-8", newline="") as fh:
-            for raw in csv.DictReader(fh):
-                if not raw.get("station_id") or not raw.get("timestamp"):
-                    continue
-                row = {
-                    "station_id": raw["station_id"],
-                    "timestamp": raw["timestamp"],
-                    "pm25": float(raw["pm25"]) if raw.get("pm25") else None,
-                    "latitude": float(raw["latitude"]) if raw.get("latitude") else None,
-                    "longitude": float(raw["longitude"]) if raw.get("longitude") else None,
-                    "n_stations": int(raw["n_stations"] or 1),
-                    "source": raw.get("source") or "csv",
-                }
-                merged[(row["station_id"], row["timestamp"])] = row
+    for text in sources:
+        for raw in csv.DictReader(io.StringIO(text)):
+            if not raw.get("station_id") or not raw.get("timestamp"):
+                continue
+            row = {
+                "station_id": raw["station_id"],
+                "timestamp": raw["timestamp"],
+                "pm25": float(raw["pm25"]) if raw.get("pm25") else None,
+                "latitude": float(raw["latitude"]) if raw.get("latitude") else None,
+                "longitude": float(raw["longitude"]) if raw.get("longitude") else None,
+                "n_stations": int(raw["n_stations"] or 1),
+                "source": raw.get("source") or "csv",
+            }
+            merged[(row["station_id"], row["timestamp"])] = row
     return list(merged.values())
 
 
@@ -209,11 +373,14 @@ def cmd_import(args) -> int:
     from backend.backfill import db                          # noqa: PLC0415
 
     paths = sorted(OBS_DIR.glob("*.csv"))
-    if not paths:
+    remote = _fetch_remote() if args.remote else []
+    if args.remote:
+        print(f"fetched {len(remote)} day file(s) from {REMOTE_BASE}")
+    if not paths and not remote:
         print(f"no CSVs under {OBS_DIR.relative_to(_ROOT)} - nothing to import")
         return 0
 
-    rows = _read_csvs(paths)
+    rows = _read_csvs(paths, remote)
     # db.connect() takes no path: it resolves AREE_DB_PATH itself, so pointing
     # it elsewhere means setting that, not passing an argument.
     if args.db:
@@ -227,7 +394,8 @@ def cmd_import(args) -> int:
         conn.close()
 
     stamps = sorted({r["timestamp"] for r in rows})
-    print(f"imported {written} of {len(rows)} rows from {len(paths)} file(s)")
+    print(f"imported {written} of {len(rows)} rows from {len(paths)} local and "
+          f"{len(remote)} remote file(s)")
     print(f"  span: {stamps[0]} .. {stamps[-1]}")
     return 0
 
@@ -255,9 +423,15 @@ def cmd_met(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[1])
     sub = p.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("export", help="one live capture, appended to today's CSV")
+    exp = sub.add_parser("export", help="one live capture, plus any archive holes "
+                                        "OpenAQ can fill, appended to the day CSVs")
+    exp.add_argument("--no-fill", action="store_true",
+                     help="skip the OpenAQ hole fill; live capture only")
     imp = sub.add_parser("import", help="load the committed CSVs into the store")
     imp.add_argument("--db", default=None, help="store path (default: AREE_DB_PATH)")
+    imp.add_argument("--remote", action="store_true",
+                     help=f"also read the newest {REMOTE_DAYS} day files from the "
+                          "repository (AREE_OBS_MIRROR_URL), which win over local copies")
     sub.add_parser("met", help="mirror the live NCR meteorology forecast")
 
     args = p.parse_args(argv)

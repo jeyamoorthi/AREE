@@ -22,6 +22,15 @@ services:
     plan: free                 # see THE FREE TIER, below
     healthCheckPath: /api/health
 
+    # The hourly capture commits observations/ to main. Without this filter every
+    # one of those commits rebuilt and restarted the backend - a cold boot for a
+    # CSV the running container never reads. A starting container fetches the
+    # archive from the repository itself (capture_csv.py import --remote), so the
+    # image does not need rebuilding to see new hours.
+    buildFilter:
+      ignoredPaths:
+        - observations/**
+
     # THE STORE, AND WHY THERE IS NO DISK HERE ANY MORE.
     #
     # A persistent disk requires a paid instance type. Without one the store is

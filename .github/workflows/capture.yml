@@ -48,6 +48,11 @@ jobs:
       - name: Install
         run: pip install --disable-pip-version-check requests python-dotenv
 
+      # The current hour from CAQM, then any hour of the forecast's 49-hour window
+      # the archive is missing, from OpenAQ history. The second half is what makes
+      # a skipped run harmless: GitHub fires this schedule best-effort (7 of 24
+      # runs measured on 2026-09-28), and every hole it left used to become
+      # minutes of OpenAQ backfill on the next cold boot of the backend.
       - name: Capture
         id: capture
         env:

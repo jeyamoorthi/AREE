@@ -22,9 +22,19 @@
      the page-mode announcement. The views own their rendering and nothing else.
 
    WHAT IT DOES NOT DO
-     No polling. The outlook is fetched when the moment changes and when a decision
-     is recorded, exactly as both pages did before — a 72-hour forecast does not
-     move between renders, and a replay of November 2024 never moves at all.
+     No polling while things work. The outlook is fetched when the moment changes
+     and when a decision is recorded — a 72-hour forecast does not move between
+     renders, and a replay of November 2024 never moves at all.
+
+   WHEN LIVE CANNOT ANSWER
+     The backend sleeps and wakes with an empty store, so live can take a minute to
+     answer or refuse (424) while it restores observations. Two things follow:
+
+       * The last live outlook this browser saw stands in, labelled as stale — after
+         SLOW_MS without an answer, or at once on a failure. See lib/outlookCache.
+       * Live is retried every LIVE_RETRY_MS until it answers. The warm-up notice
+         always promised "the page will load as soon as it completes", and nothing
+         ever re-requested it: the page stayed on the notice until a manual reload.
    ========================================================================== */
 
 import {
@@ -41,7 +51,16 @@ import {
 import { usePublishOutlookMode } from "@/components/providers/OutlookModeProvider";
 import { useSyncPresetToUrl } from "@/hooks/useSyncPresetToUrl";
 import { api, errorMessage } from "@/lib/api";
+import { readLiveOutlook, saveLiveOutlook } from "@/lib/outlookCache";
 import type { OutlookResponse } from "@/types";
+
+/** How long a live request may be silent before the cached outlook is shown. A warm
+    backend answers well inside this, so a working page never flashes stale data. */
+const SLOW_MS = 3000;
+
+/** Retry cadence while live is unavailable or stale. A restore takes a minute or
+    two; this catches its end within one tick without hammering a waking server. */
+const LIVE_RETRY_MS = 15000;
 
 /**
  * The moments the workspace can describe.
@@ -59,10 +78,22 @@ export const OUTLOOK_PRESETS: readonly { label: string; at?: string }[] = [
 
 export type OutlookTab = "summary" | "diagnostics";
 
+/** Set while the workspace is showing a cached live outlook instead of a fresh one. */
+export interface StaleOutlook {
+  /** When this browser received the payload on screen, epoch ms. */
+  savedAt: number;
+  /** Why live is not on screen: still waiting, or the error it answered with. */
+  reason: string;
+  /** True once live has actually failed, rather than merely being slow. */
+  failed: boolean;
+}
+
 export interface OutlookDataState {
   data: OutlookResponse | null;
   loading: boolean;
   error: string | null;
+  /** Non-null when `data` is the last cached live outlook, not a fresh answer. */
+  stale: StaleOutlook | null;
   /** Index into OUTLOOK_PRESETS. */
   preset: number;
   setPreset: (index: number) => void;
@@ -116,9 +147,15 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
   const [tab, setTab] = useState<OutlookTab>("summary");
   const [data, setData] = useState<OutlookResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState<StaleOutlook | null>(null);
   const [loading, setLoading] = useState(true);
   // Bumped by reload() to re-run the fetch effect for the same preset.
   const [generation, setGeneration] = useState(0);
+  // The request (preset + generation) that has finished, either way. A retry waits
+  // for it: a cold start can take longer than LIVE_RETRY_MS, and a retry fired over a
+  // request still in flight would cancel the one about to succeed.
+  const [settled, setSettled] = useState<string | null>(null);
+  const requestKey = `${preset}:${generation}`;
 
   /* The loading state is entered where the change is made, not inside the effect
      that reacts to it: setting state synchronously in an effect body costs an
@@ -127,6 +164,7 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
     setPresetState(index);
     setLoading(true);
     setError(null);
+    setStale(null);
   }, []);
 
   const reload = useCallback(() => {
@@ -139,6 +177,29 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
      left from overwriting the one they switched to. */
   useEffect(() => {
     let cancelled = false;
+    const live = OUTLOOK_PRESETS[preset].at === undefined;
+
+    /* Stand the cached outlook in, if there is one. Returns whether it did. */
+    const showCached = (reason: string, failed: boolean): boolean => {
+      const cached = live ? readLiveOutlook() : null;
+      if (!cached) return false;
+      setData(cached.payload);
+      setError(null);
+      setStale({ savedAt: cached.savedAt, reason, failed });
+      setLoading(false);
+      return true;
+    };
+
+    /* Only on a live request that is taking cold-start long. A retry behind a stale
+       banner already has the cached outlook on screen. */
+    const slow = live
+      ? window.setTimeout(() => {
+          if (!cancelled && stale === null) {
+            showCached("Waiting for the live backend to respond.", false);
+          }
+        }, SLOW_MS)
+      : undefined;
+
     api
       .outlook(OUTLOOK_PRESETS[preset].at)
       .then(
@@ -146,20 +207,44 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
           if (cancelled) return;
           setData(next);
           setError(null);
+          setStale(null);
+          if (live) saveLiveOutlook(next);
         },
         (err) => {
           if (cancelled) return;
-          setData(null);
-          setError(errorMessage(err));
+          const message = errorMessage(err);
+          if (!showCached(message, true)) {
+            setData(null);
+            setStale(null);
+            setError(message);
+          }
         },
       )
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        window.clearTimeout(slow);
+        if (!cancelled) {
+          setLoading(false);
+          setSettled(`${preset}:${generation}`);
+        }
       });
     return () => {
       cancelled = true;
+      window.clearTimeout(slow);
     };
+    // `stale` is read, not reacted to: a change in it must not refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [preset, generation]);
+
+  /* Keep asking live until it answers. Only for live, and only once the current
+     request has settled. Replay failures are permanent (there are no observations
+     for that date), so retrying them would only repeat the refusal. */
+  const retrying =
+    preset === 0 && settled === requestKey && (error !== null || stale !== null);
+  useEffect(() => {
+    if (!retrying) return;
+    const timer = window.setTimeout(() => setGeneration((g) => g + 1), LIVE_RETRY_MS);
+    return () => window.clearTimeout(timer);
+  }, [retrying]);
 
   useSyncPresetToUrl(OUTLOOK_PRESETS, preset, setPreset);
   useSyncTabToUrl(tab, setTab);
@@ -170,8 +255,8 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
   usePublishOutlookMode(data?.mode, data?.as_of);
 
   const value = useMemo<OutlookDataState>(
-    () => ({ data, loading, error, preset, setPreset, reload, tab, setTab }),
-    [data, loading, error, preset, setPreset, reload, tab],
+    () => ({ data, loading, error, stale, preset, setPreset, reload, tab, setTab }),
+    [data, loading, error, stale, preset, setPreset, reload, tab],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -205,20 +205,40 @@ def cmd_bootstrap(conn, args) -> int:
         settled that: today's sensors post-date them (1-3 sensors span the
         audited Novembers). It only fills the recent window.
     """
-    now = datetime.now(timezone.utc)
+    # `hours` bounds the pull to the hole that actually needs filling; `days`
+    # remains the CLI's unit and the default. They are the same knob at two
+    # granularities, and the finer one matters: the location filter keys off
+    # this window, so asking for three days when four hours are missing admits
+    # every location that reported in three days rather than the handful that
+    # can reach into the last four.
+    window_hours = int(getattr(args, "hours", None) or args.days * 24)
     try:
-        stations = aq.discover_stations()
+        rows = openaq_rows(window_hours)
     except aq.AuthFailed as exc:
         print(f"  {exc}\n", file=sys.stderr)
         return 2
 
-    # `hours` bounds the pull to the hole that actually needs filling; `days`
-    # remains the CLI's unit and the default. They are the same knob at two
-    # granularities, and the finer one matters: the location filter below keys
-    # off this window, so asking for three days when four hours are missing
-    # admits every location that reported in three days rather than the handful
-    # that can reach into the last four.
-    window_hours = int(getattr(args, "hours", None) or args.days * 24)
+    # One writer, on this thread, after every read has finished. SQLite is
+    # perfectly happy with that and unhappy with the alternative.
+    written = db.upsert(conn, "station_readings",
+                        ("station_id", "timestamp"), rows)
+    hours = len({r["timestamp"] for r in rows})
+    print(f"  {written} station-hours written across {hours} distinct hours")
+    if rows and not written:
+        print("  BUG — sensors returned data but nothing was written.")
+    print()
+    return 0
+
+
+def openaq_rows(window_hours: int) -> list[dict]:
+    """The last `window_hours` of NCR hourly PM2.5 from OpenAQ, as station rows.
+
+    Split out of cmd_bootstrap so the CSV archive (tools/capture_csv.py) can fill
+    its own holes with exactly the rows the store's repair would write. Raises
+    openaq_history.AuthFailed when the key is missing or rejected.
+    """
+    now = datetime.now(timezone.utc)
+    stations = aq.discover_stations()
     lo = now - timedelta(hours=window_hours)
 
     # Only locations that CAN contribute to the requested window, and only their
@@ -290,17 +310,8 @@ def cmd_bootstrap(conn, args) -> int:
                 reached += 1
                 rows.extend(got)
 
-    # One writer, on this thread, after every read has finished. SQLite is
-    # perfectly happy with that and unhappy with the alternative.
-    written = db.upsert(conn, "station_readings",
-                        ("station_id", "timestamp"), rows)
-    hours = len({r["timestamp"] for r in rows})
     print(f"  {reached} sensors returned data")
-    print(f"  {written} station-hours written across {hours} distinct hours")
-    if reached and not written:
-        print("  BUG — sensors returned data but nothing was written.")
-    print()
-    return 0
+    return rows
 
 
 def cmd_status(conn, args) -> int:

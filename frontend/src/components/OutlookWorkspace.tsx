@@ -15,6 +15,7 @@
    ========================================================================== */
 
 import OutlookView from "@/components/OutlookView";
+import StaleOutlookBanner from "@/components/StaleOutlookBanner";
 import VentilationOutlook from "@/components/VentilationOutlook";
 import {
   OUTLOOK_PRESETS,
@@ -48,7 +49,7 @@ const TABS: { id: OutlookTab; label: string; hint: string }[] = [
 ];
 
 function Workspace() {
-  const { preset, setPreset, tab, setTab } = useOutlookData();
+  const { data, stale, preset, setPreset, tab, setTab } = useOutlookData();
 
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
 
@@ -136,6 +137,9 @@ function Workspace() {
           );
         })}
       </div>
+
+      {/* Above both tabs, because both are rendering the same cached payload. */}
+      {stale && data ? <StaleOutlookBanner stale={stale} issuedAt={data.generated_at} /> : null}
 
       {/* Both panel ELEMENTS stay in the DOM so each tab's aria-controls resolves to
           something, but only the active one is populated.
