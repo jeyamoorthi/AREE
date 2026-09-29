@@ -187,7 +187,11 @@ export default function StationIntelligencePreview({
         {data.pollutant_source ? (
           <div className="flex flex-wrap items-baseline gap-x-2 sm:col-span-2">
             <dt className="text-aree-dim">
-              {data.pollutant_quantity === "sub_index" ? "Sub-indices from" : "Concentrations from"}
+              {data.pollutant_quantity === "us_sub_index"
+                ? "US EPA-scale sub-indices from"
+                : data.pollutant_quantity === "sub_index"
+                  ? "Sub-indices from"
+                  : "Concentrations from"}
             </dt>
             <dd className="font-semibold text-aree-body">
               {data.pollutant_source}

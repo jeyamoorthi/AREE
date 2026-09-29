@@ -55,7 +55,7 @@ import logging
 import threading
 import time
 from collections import deque
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import numpy as np
@@ -166,6 +166,50 @@ def _short_term_forecast(history: deque) -> dict | None:
     }
 
 
+# How long a station keeps its last per-pollutant readings while a cycle's
+# enrichment has not (yet) supplied new ones.
+POLLUTANT_CARRY_HOURS = 6
+
+_POLLUTANT_STATE_KEYS = ("pollutants_available", "pollutant_source",
+                         "pollutant_quantity", "pollutant_observed_at")
+
+
+def _pollutant_fields(station: dict, prev: dict, pm25, now: datetime) -> dict:
+    """The per-pollutant half of a station's state.
+
+    WHY THE PREVIOUS READINGS ARE CARRIED FORWARD
+        Every cycle rebuilds the station from the CAQM row, which carries no
+        per-pollutant values; enrichment patches them in afterwards. Where the
+        sources are slow - on the hosted backend CPCB is unreachable and
+        data.gov.in spends minutes in retries before WAQI is asked - that left
+        the tiles blank for most of every cycle, then full, then blank again.
+
+        So until this cycle's enrichment lands, the station keeps the readings
+        it already had. Their age is recomputed from when they were MEASURED,
+        not copied, so a carried value is shown as exactly as old as it is -
+        and after POLLUTANT_CARRY_HOURS it is dropped rather than shown.
+    """
+    if station.get("pollutant_source") is None and prev.get("pollutant_source"):
+        observed = prev.get("pollutant_observed_at")
+        if observed and now - observed <= timedelta(hours=POLLUTANT_CARRY_HOURS):
+            carried = {raw: prev.get(raw) for _, raw in _POLLUTANT_KEYS}
+            carried.update({k: prev.get(k) for k in _POLLUTANT_STATE_KEYS})
+            carried["pollutant_age_minutes"] = round(
+                (now - observed).total_seconds() / 60.0)
+            return carried
+
+    fields = {raw: station.get(raw) for _, raw in _POLLUTANT_KEYS}
+    # raw_pm25 prefers the value the enrichment step attached; `pm25` is
+    # whatever the station table itself carried, which is None for CAQM rows.
+    fields["raw_pm25"] = station.get("raw_pm25", pm25)
+    fields["pollutants_available"] = station.get("pollutants_available", 0)
+    fields.update({k: station.get(k) for k in _POLLUTANT_STATE_KEYS[1:]})
+    # Concentrations come from a slower feed than the AQI above them. Both
+    # ages are published so neither can be read as the other's.
+    fields["pollutant_age_minutes"] = station.get("pollutant_age_minutes")
+    return fields
+
+
 def _build_state(station: dict, engine, now: datetime) -> dict:
     """
     Assemble one station's state.
@@ -225,25 +269,10 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         "persistence_triggered": computed.get("persistence_triggered", False),
         "projected_trigger_time": None,
 
-        # Ground truth, straight from the monitor. raw_pm25 prefers the
-        # concentration the enrichment step attached; `pm25` is whatever the
-        # station table itself carried, which is None for CAQM rows.
-        "raw_pm25": station.get("raw_pm25", pm25),
-        "raw_pm10": station.get("raw_pm10"),
-        "raw_no2": station.get("raw_no2"),
-        "raw_so2": station.get("raw_so2"),
-        "raw_o3": station.get("raw_o3"),
-        "raw_co": station.get("raw_co"),
-        "raw_nh3": station.get("raw_nh3"),
+        # Ground truth, straight from the monitor: raw_*, pollutant_source,
+        # pollutant_quantity and the readings' own age. See _pollutant_fields.
+        **_pollutant_fields(station, prev, pm25, now),
         "dominant_pollutant": station.get("dominant_pollutant") or "pm25",
-        "pollutants_available": station.get("pollutants_available", 0),
-        # Concentrations come from a slower feed than the AQI above them. Both
-        # ages are published so neither can be read as the other's.
-        "pollutant_source": station.get("pollutant_source"),
-        "pollutant_age_minutes": station.get("pollutant_age_minutes"),
-        # "sub_index" or "concentration": CPCB's own feed publishes the first,
-        # OpenAQ the second, and the raw_* numbers mean nothing without it.
-        "pollutant_quantity": station.get("pollutant_quantity"),
         "wind_speed": station.get("wind_speed"),
         "wind_direction": station.get("wind_direction"),
 
@@ -347,6 +376,11 @@ def _from_data_gov_in(now: datetime) -> list[dict]:
     return cpcb_stream.fetch_ncr()
 
 
+def _from_waqi(now: datetime) -> list[dict]:
+    from ingestion import waqi_pollutants
+    return waqi_pollutants.fetch_ncr(now)
+
+
 def _from_openaq(now: datetime) -> list[dict]:
     from ingestion import ncr_observations
     return ncr_observations.fetch_ncr_pollutants(now)
@@ -384,6 +418,9 @@ _POLLUTANT_SOURCES = (
     ("CPCB CAAQMS (airquality.cpcb.gov.in)", "sub_index", _from_cpcb_live,
      _cpcb_live_route),
     ("CPCB CAAQMS via data.gov.in", "concentration", _from_data_gov_in, None),
+    # Reachable from any host, unlike the two CPCB copies above, but on the US
+    # EPA scale and current only for Delhi's DPCC stations. See waqi_pollutants.
+    ("WAQI (aqicn.org)", "us_sub_index", _from_waqi, None),
     ("OpenAQ v3 (CPCB mirror)", "concentration", _from_openaq, None),
 )
 
@@ -458,6 +495,7 @@ def _join_pollutants(stations: list[dict], rows: list[dict], source: str,
         st["pollutant_source"] = source
         st["pollutant_quantity"] = quantity
         observed = src.get("observed_at")
+        st["pollutant_observed_at"] = observed
         st["pollutant_age_minutes"] = (
             round((now - observed).total_seconds() / 60.0) if observed else None
         )
@@ -524,6 +562,7 @@ def _enrich_published_pollutants(stations: list[dict]) -> int:
             updated["pollutant_source"] = st.get("pollutant_source")
             updated["pollutant_age_minutes"] = st.get("pollutant_age_minutes")
             updated["pollutant_quantity"] = st.get("pollutant_quantity")
+            updated["pollutant_observed_at"] = st.get("pollutant_observed_at")
             if st.get("dominant_pollutant"):
                 updated["dominant_pollutant"] = st["dominant_pollutant"]
             latest_state[st["station"]] = updated

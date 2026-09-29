@@ -281,8 +281,9 @@ class AQIResponse(BaseModel):
     #: above them. Both are published so neither is read as the other's age.
     pollutant_source: Optional[str] = None
     pollutant_age_minutes: Optional[int] = None
-    #: "sub_index" or "concentration" - what the pollutant values measure.
-    #: CPCB's own feed publishes sub-indices; OpenAQ publishes concentrations.
+    #: "sub_index", "us_sub_index" or "concentration" - what the pollutant
+    #: values measure. CPCB's own feed publishes sub-indices on India's scale,
+    #: WAQI on the US EPA scale; OpenAQ publishes concentrations.
     pollutant_quantity: Optional[str] = None
     ingestion_status: Optional[str] = None
     ingestion_error: Optional[str] = None

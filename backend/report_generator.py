@@ -538,8 +538,10 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None,
         f'Dominant Pollutant: {dom_txt}  |  '
         f'Pollutants reported: {reported} of {len(_POLLUTANTS)}  |  '
         f'Source: {_show(s.get("pollutant_source"), missing="not reported")}'
-        + ('  |  Values are CPCB sub-indices, not concentrations'
-           if s.get("pollutant_quantity") == "sub_index" else '')
+        + ({"sub_index": '  |  Values are CPCB sub-indices, not concentrations',
+            "us_sub_index": '  |  Values are US EPA-scale sub-indices (WAQI), '
+                            'not CPCB values and not concentrations',
+            }.get(s.get("pollutant_quantity"), ''))
         + (f'  |  Age: {s.get("pollutant_age_minutes")} min'
            if s.get("pollutant_age_minutes") is not None else ''), sty["note"]))
 

@@ -262,9 +262,10 @@ export interface StationDetail {
   pollutant_age_minutes?: number | null;
   /**
    * What the raw_* numbers measure. CPCB's own feed publishes per-pollutant
-   * SUB-INDICES (unitless, on the AQI scale); OpenAQ publishes concentrations.
+   * SUB-INDICES on India's AQI scale ("sub_index"); WAQI publishes sub-indices on
+   * the US EPA scale ("us_sub_index"); OpenAQ publishes concentrations.
    */
-  pollutant_quantity?: "sub_index" | "concentration" | null;
+  pollutant_quantity?: "sub_index" | "us_sub_index" | "concentration" | null;
 
   wind_speed?: number | null;
   wind_direction?: number | null;

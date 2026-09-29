@@ -30,6 +30,8 @@ import type { EngineConfig, StationDetail } from "@/types";
 //   EXCEPT when pollutant_quantity is "sub_index": CPCB's own feed publishes
 //   per-pollutant sub-indices (see backend/ingestion/cpcb_live.py), which are
 //   unitless and must not be printed as, or compared against, a µg/m³ limit.
+//   "us_sub_index" is the same kind of number on the US EPA scale, from WAQI
+//   (backend/ingestion/waqi_pollutants.py), and is labelled as such.
 const POLLUTANTS: { name: string; key: keyof StationDetail; waqiKey: string }[] = [
   { name: "PM2.5", key: "raw_pm25", waqiKey: "pm25" },
   { name: "PM10", key: "raw_pm10", waqiKey: "pm10" },
@@ -185,8 +187,10 @@ export function PollutantGrid({
   // say which feed and how old, so a backup source is never mistaken for CPCB.
   const age =
     data.pollutant_age_minutes != null ? formatDuration(data.pollutant_age_minutes * 60) : null;
-  const isIndex = data.pollutant_quantity === "sub_index";
-  const unitFor = (name: string) => (isIndex ? "sub-index" : name === "CO" ? "mg/m³" : "µg/m³");
+  const isUsIndex = data.pollutant_quantity === "us_sub_index";
+  const isIndex = data.pollutant_quantity === "sub_index" || isUsIndex;
+  const indexLabel = isUsIndex ? "US sub-index" : "sub-index";
+  const unitFor = (name: string) => (isIndex ? indexLabel : name === "CO" ? "mg/m³" : "µg/m³");
   return (
     <div>
       <div
@@ -204,7 +208,9 @@ export function PollutantGrid({
               title={
                 available
                   ? isIndex
-                    ? `${name}: CPCB sub-index ${value} (AQI scale, not a concentration)`
+                    ? isUsIndex
+                      ? `${name}: sub-index ${value} on the US EPA scale (WAQI), not India's AQI scale and not a concentration`
+                      : `${name}: CPCB sub-index ${value} (AQI scale, not a concentration)`
                     : `${name}: ${value} ${unitFor(name)}`
                   : `${name} not reported by this feed`
               }
@@ -258,7 +264,7 @@ export function PollutantGrid({
       </div>
       <p className="mt-1.5 text-[10.5px] text-aree-dim">
         {data.pollutant_source
-          ? `${isIndex ? "Sub-indices" : "Concentrations"}: ${data.pollutant_source}${age ? ` · ${age} old` : ""}`
+          ? `${isUsIndex ? "Sub-indices (US EPA scale)" : isIndex ? "Sub-indices" : "Concentrations"}: ${data.pollutant_source}${age ? ` · ${age} old` : ""}`
           : "Concentrations: no source reported a value for this station"}
       </p>
     </div>

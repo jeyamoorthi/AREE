@@ -378,3 +378,131 @@ def test_published_state_is_patched_before_slower_sources_answer(monkeypatch):
     assert seen_while_data_gov_in_ran["pollutant_quantity"] == "sub_index"
     assert fe.latest_state["B"]["raw_pm25"] == 55.0
     assert fe.latest_state["B"]["pollutant_quantity"] == "concentration"
+
+
+# --- WAQI backup -------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def waqi_offline(monkeypatch):
+    """The engine now asks WAQI too; no test in this module may reach it.
+
+    Returns the real fetch_ncr for the tests that exercise it with a stubbed _get.
+    """
+    from ingestion import waqi_pollutants
+    real = waqi_pollutants.fetch_ncr
+    monkeypatch.setattr(waqi_pollutants, "fetch_ncr", lambda *_a, **_k: [])
+    return real
+
+
+def _caqm(name, lat, lon):
+    return {"station": name, "lat": lat, "lon": lon}
+
+
+def test_waqi_matching_accepts_renamed_sites_and_rejects_neighbours():
+    from ingestion import waqi_pollutants as w
+
+    stations = [
+        _caqm("Teri Gram, Gurugram - HSPCB", 28.4275, 77.1465),
+        _caqm("Jahangirpuri, Delhi - DPCC", 28.7328, 77.1706),
+        _caqm("Vivek Vihar, Delhi - DPCC", 28.6720, 77.3150),
+        _caqm("IIT Delhi, Delhi - IITM", 28.5450, 77.1926),
+        _caqm("Pusa, Delhi - DPCC", 28.6397, 77.1463),
+        _caqm("Pusa, Delhi - IITM", 28.6300, 77.1750),
+    ]
+    candidates = {
+        1: ("Teri Gram, Gurugram, India", 28.4275, 77.1465),              # same name
+        2: ("ITI Jahangirpuri, Delhi, Delhi, India", 28.7339, 77.1704),   # words inside
+        3: ("ITI Shahdra, Jhilmil Industrial Area, Delhi, Delhi, India",  # same site,
+            28.6710, 77.3160),                                            # renamed
+        4: ("Sri Auribindo Marg, Delhi, Delhi, India", 28.5313, 77.1900), # a neighbour
+        5: ("Pusa, Delhi, Delhi, India", 28.6400, 77.1460),               # two claimants
+    }
+    assert w.match_stations(stations, candidates) == {
+        "Teri Gram, Gurugram - HSPCB": 1,
+        "Jahangirpuri, Delhi - DPCC": 2,
+        "Vivek Vihar, Delhi - DPCC": 3,
+        # IIT Delhi is 1.5 km from Sri Aurobindo Marg: a different site, no match.
+        # WAQI's one "Pusa" goes to the closer of the two CAQM stations only.
+        "Pusa, Delhi - DPCC": 5,
+    }
+
+
+def test_waqi_readings_older_than_the_freshness_window_are_dropped(monkeypatch,
+                                                                    waqi_offline):
+    from ingestion import waqi_pollutants as w
+
+    now = datetime(2026, 9, 29, 15, 0, tzinfo=timezone.utc)
+    monkeypatch.setenv("WAQI_TOKEN", "test-token")
+    monkeypatch.setitem(w._reading_cache, "value", None)
+    monkeypatch.setattr(w, "_station_map", lambda stations, now: {"A": 1, "B": 2})
+    feeds = {
+        # 20:00 IST is 14:30 UTC: fresh.
+        "feed/@1/": {"time": {"iso": "2026-09-29T20:00:00+05:30"},
+                     "iaqi": {"pm25": {"v": 99}, "no2": {"v": 7.9}, "t": {"v": 27}}},
+        # What WAQI actually serves for most HSPCB/UPPCB stations: months old.
+        "feed/@2/": {"time": {"iso": "2026-06-23T10:00:00+05:30"},
+                     "iaqi": {"pm25": {"v": 188}}},
+    }
+    monkeypatch.setattr(w, "_get", lambda path, **_: feeds[path])
+
+    assert waqi_offline(now, stations=[]) == [{
+        "station": "A",
+        "observed_at": datetime(2026, 9, 29, 14, 30, tzinfo=timezone.utc),
+        "pm25": 99.0, "no2": 7.9,
+    }]
+
+
+def test_waqi_without_a_token_fails_visibly(monkeypatch, waqi_offline):
+    monkeypatch.delenv("WAQI_TOKEN", raising=False)
+    with pytest.raises(RuntimeError, match="WAQI_TOKEN not set"):
+        waqi_offline(stations=[])
+
+
+def test_waqi_fills_after_both_cpcb_copies_fail_and_names_its_scale(monkeypatch):
+    import fallback_engine as fe
+    from ingestion import cpcb_live, cpcb_stream, ncr_observations, waqi_pollutants
+
+    def down(*_a, **_k):
+        raise RuntimeError("ConnectTimeout")
+
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(cpcb_live, "fetch_ncr", down)
+    monkeypatch.setattr(cpcb_stream, "fetch_ncr", down)
+    monkeypatch.setattr(waqi_pollutants, "fetch_ncr", lambda *_a, **_k: [
+        {"station": "A", "pm25": 99.0, "observed_at": now}])
+    monkeypatch.setattr(ncr_observations, "fetch_ncr_pollutants", lambda _now=None: [
+        {"station": "A", "pm25": 1.0, "observed_at": now}])
+
+    stations = [{"station": "A"}]
+    assert fe._attach_pollutants(stations) == 1
+    assert stations[0]["raw_pm25"] == 99.0
+    assert stations[0]["pollutant_quantity"] == "us_sub_index"
+    assert stations[0]["pollutant_source"].startswith("WAQI")
+
+
+def test_last_readings_are_carried_with_their_true_age_until_new_ones_land():
+    import fallback_engine as fe
+
+    now = datetime(2026, 9, 29, 15, 0, tzinfo=timezone.utc)
+    prev = {
+        "raw_pm25": 99.0, "raw_pm10": 81.0, "pollutants_available": 2,
+        "pollutant_source": "WAQI (aqicn.org)", "pollutant_quantity": "us_sub_index",
+        "pollutant_observed_at": now - timedelta(minutes=50),
+        "pollutant_age_minutes": 45,
+    }
+    carried = fe._pollutant_fields({"station": "A"}, prev, None, now)
+    assert carried["raw_pm25"] == 99.0
+    assert carried["pollutant_source"] == "WAQI (aqicn.org)"
+    # Recomputed from when it was measured, not copied from the last cycle.
+    assert carried["pollutant_age_minutes"] == 50
+
+    # Past the carry window the tile goes blank rather than show an old number.
+    old = dict(prev, pollutant_observed_at=now - timedelta(
+        hours=fe.POLLUTANT_CARRY_HOURS, minutes=1))
+    assert fe._pollutant_fields({"station": "A"}, old, None, now)["raw_pm25"] is None
+
+    # New readings always replace carried ones.
+    fresh = fe._pollutant_fields(
+        {"station": "A", "raw_pm25": 60.0, "pollutants_available": 1,
+         "pollutant_source": "CPCB"}, prev, None, now)
+    assert fresh["raw_pm25"] == 60.0 and fresh["pollutant_source"] == "CPCB"
