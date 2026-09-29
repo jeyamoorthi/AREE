@@ -119,7 +119,16 @@ export function PolicyRetrievalCard({ advisory }: { advisory: AdvisoryResponse }
             size="sm"
             sub={advisory.rag_embed_model ?? undefined}
           />
-          <Stat label="Similarity" value={score} color={scoreColor} />
+          <Stat
+            label="Similarity"
+            value={
+              advisory.rag_similarity_score === null ||
+              advisory.rag_similarity_score === undefined
+                ? "—"
+                : `${Math.round(score * 100)}% match`
+            }
+            color={scoreColor}
+          />
           <Stat
             label="Documents indexed"
             value={advisory.rag_docs_indexed ?? 0}

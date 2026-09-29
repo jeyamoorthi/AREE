@@ -139,7 +139,13 @@ REQUEST_HEADERS = {
 
 
 
-def _get_with_backoff(params: dict, retries: int = 4) -> list[dict] | None:
+def _remaining(deadline: float | None) -> float | None:
+    """Seconds left before a time.monotonic() deadline; None when unbounded."""
+    return None if deadline is None else deadline - time.monotonic()
+
+
+def _get_with_backoff(params: dict, retries: int = 4,
+                      deadline: float | None = None) -> list[dict] | None:
     """
     One paged GET, tolerant of data.gov.in's behaviour under load.
 
@@ -148,30 +154,42 @@ def _get_with_backoff(params: dict, retries: int = 4) -> list[dict] | None:
     body after ~60 s rather than a 429. So the retry has to treat "5xx with no
     body" as rate limiting, and back off generously. Without this the poller
     silently loses whole states.
+
+    `deadline` (time.monotonic()) caps the whole retry loop, sleeps included.
+    Without it one page could spend 4 x 75 s plus backoff - fine for the
+    background poller, not for an HTTP request someone is waiting on.
     """
     delay = 5
+
+    def _backoff() -> None:
+        nonlocal delay
+        left = _remaining(deadline)
+        time.sleep(delay if left is None else max(0.0, min(delay, left)))
+        delay *= 2
+
     for _ in range(retries):
+        left = _remaining(deadline)
+        if left is not None and left <= 1:
+            return None
         try:
             r = requests.get(BASE, params=params, headers=REQUEST_HEADERS,
-                             timeout=75)
+                             timeout=75 if left is None else min(75, left))
         except requests.RequestException:
-            time.sleep(delay)
-            delay *= 2
+            _backoff()
             continue
         if r.status_code >= 500 or not r.text:
-            time.sleep(delay)
-            delay *= 2
+            _backoff()
             continue
         r.raise_for_status()
         try:
             return r.json().get("records", []) or []
         except ValueError:
-            time.sleep(delay)
-            delay *= 2
+            _backoff()
     return None
 
 
-def fetch_records(state: str = "Delhi") -> list[dict]:
+def fetch_records(state: str = "Delhi",
+                  deadline: float | None = None) -> list[dict]:
     """
     Pull the raw (station, pollutant) rows for one state, paging by offset.
 
@@ -188,7 +206,7 @@ def fetch_records(state: str = "Delhi") -> list[dict]:
             "offset": page * PAGE_SIZE,
             "filters[state]": state,
         }
-        recs = _get_with_backoff(params)
+        recs = _get_with_backoff(params, deadline=deadline)
         if recs is None:
             break
         out.extend(recs)
@@ -272,13 +290,18 @@ _ncr_lock = threading.Lock()
 _ncr_cache: dict[str, Any] = {"value": None, "fetched_at": None}
 
 
-def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9)) -> list[dict]:
+def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9),
+              deadline: float | None = None) -> list[dict]:
     """
     Every CPCB station inside the NCR bounding box.
 
     Queries the three states the NCR spans rather than filtering nationally:
     the API's state filter is indexed, a national pull is not, and NCR
     genuinely crosses Delhi / Haryana / Uttar Pradesh boundaries.
+
+    `deadline` is a time.monotonic() bound on the whole call, including the
+    wait for another caller's pull. Request paths pass one; the background
+    engine and the capture job do not, and keep the patient behaviour.
     """
     def _fresh(ref: datetime) -> list[dict] | None:
         cached, at = _ncr_cache["value"], _ncr_cache["fetched_at"]
@@ -290,7 +313,11 @@ def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9)) -> list[dict]:
     if hit is not None:
         return hit
 
-    with _ncr_lock:
+    left = _remaining(deadline)
+    if not _ncr_lock.acquire(timeout=-1 if left is None else max(0.0, left)):
+        log.warning("data.gov.in: gave up waiting for an in-flight NCR pull")
+        return []
+    try:
         # Re-check inside the lock: while waiting, the caller that held it has
         # very likely just stored a fresh result. Without this second check
         # every queued caller would still run its own pull the moment it
@@ -299,7 +326,9 @@ def fetch_ncr(lat_range=(27.9, 29.3), lon_range=(76.5, 77.9)) -> list[dict]:
         hit = _fresh(now)
         if hit is not None:
             return hit
-        return _fetch_ncr_uncached(now, lat_range, lon_range)
+        return _fetch_ncr_uncached(now, lat_range, lon_range, deadline)
+    finally:
+        _ncr_lock.release()
 
 
 # Exact strings the API indexes on. "Uttar_Pradesh" silently returns zero rows
@@ -327,11 +356,12 @@ NCR_STATES = ("Delhi", "Haryana", "Uttar Pradesh", "Rajasthan")
 STATE_WORKERS = 4
 
 
-def _fetch_ncr_uncached(now: datetime, lat_range, lon_range) -> list[dict]:
+def _fetch_ncr_uncached(now: datetime, lat_range, lon_range,
+                        deadline: float | None = None) -> list[dict]:
     """The actual four-state pull. Only ever called holding _ncr_lock."""
     def _one(state: str) -> list[dict]:
         try:
-            return pivot_stations(fetch_records(state=state))
+            return pivot_stations(fetch_records(state=state, deadline=deadline))
         except Exception:                                   # noqa: BLE001
             # One state failing must not cost the other three. NCR spans all
             # four, but three quarters of the airshed is still a usable pull,
@@ -354,8 +384,11 @@ def _fetch_ncr_uncached(now: datetime, lat_range, lon_range) -> list[dict]:
             inside.append(st)
 
     # Only cache a non-empty result: caching a failed pull would suppress
-    # retries for 90 s and turn a transient outage into a visible gap.
-    if inside:
+    # retries for 90 s and turn a transient outage into a visible gap. A pull
+    # that ran out of budget may be missing whole states, so it is served
+    # once but not cached.
+    timed_out = deadline is not None and time.monotonic() >= deadline
+    if inside and not timed_out:
         _ncr_cache["value"], _ncr_cache["fetched_at"] = inside, now
     return inside
 

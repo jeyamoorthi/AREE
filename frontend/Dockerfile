@@ -31,7 +31,7 @@ ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 # Next resolves rewrites() during `next build` and freezes the destinations into
 # .next/routes-manifest.json; `next start` reads them from there and never calls the
 # config function again. Setting it only in the container's environment therefore did
-# nothing — the manifest still pointed at the 127.0.0.1:8102 default and every proxied
+# nothing — the manifest still pointed at the localhost default and every proxied
 # request returned 500.
 ARG AREE_API_ORIGIN=http://backend:8000
 ENV AREE_API_ORIGIN=$AREE_API_ORIGIN

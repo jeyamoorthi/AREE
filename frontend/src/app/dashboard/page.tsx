@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Command Center. Station-centric: pick a node and the whole page becomes that
+ * Command Center. Station-centric: pick a station and the whole page becomes that
  * station. The choice is reflected in ?station= so the view is shareable and
  * survives a reload.
  */
@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback } from "react";
 import { Crosshair } from "lucide-react";
 
+import { useShortcutLabel } from "@/components/CommandBar";
 import EscalationHistory from "@/components/EscalationHistory";
 import PolicyConsole from "@/components/PolicyConsole";
 import StationDashboard from "@/components/StationDashboard";
@@ -21,6 +22,7 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const station = searchParams.get("station");
+  const shortcut = useShortcutLabel();
 
   const handleChange = useCallback(
     (next: string | null) => {
@@ -38,21 +40,22 @@ function DashboardContent() {
       <div className="mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-aree-text mb-2">Command Center</h1>
         <p className="text-sm text-aree-muted max-w-2xl leading-relaxed">
-          Select a monitoring node to open its full regulatory intelligence view.
+          Select a station to open its full regulatory intelligence view.
         </p>
       </div>
 
       <IntelligencePanel
         title="Monitoring control"
         variant="default"
+        headingLevel={2}
       >
         <div className="p-4 sm:p-6">
           <div className="flex items-start gap-4 mb-6">
             <div className="w-10 h-10 rounded-full bg-aree-forest/10 flex items-center justify-center shrink-0">
-              <Crosshair className="text-aree-forest w-5 h-5" />
+              <Crosshair className="text-aree-forest w-5 h-5" aria-hidden />
             </div>
             <div>
-              <h3 className="text-base font-medium text-aree-text">Target Node</h3>
+              <h3 className="text-base font-medium text-aree-text">Station</h3>
               <p className="text-sm text-aree-muted mt-1">Select a specific environmental station to view its live telemetry and regulatory state.</p>
             </div>
           </div>
@@ -61,9 +64,9 @@ function DashboardContent() {
           
           <div className="mt-6 p-4 bg-aree-surface-2 border border-aree-border rounded-lg flex items-center gap-3">
             <p className="text-xs text-aree-muted leading-relaxed flex-1">
-              No node is currently targeted. Press{" "}
+              No station is selected. Press{" "}
               <kbd className="bg-aree-surface-1 border border-aree-border text-aree-text rounded px-1.5 py-0.5 font-mono text-[10px] mx-1">
-                Ctrl K
+                {shortcut}
               </kbd>{" "}
               to search the network for stations, active policies, and recent escalation events.
             </p>

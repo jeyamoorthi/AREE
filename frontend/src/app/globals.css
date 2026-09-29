@@ -23,17 +23,25 @@
   --aree-border: #e4e0d4;
   --aree-border-strong: #cfcaba;
 
-  /* ── Text ramp ── */
+  /* ── Text ramp ──
+     muted / dim / faint all carry small text (10-11px labels), so each clears WCAG
+     AA 4.5:1 on the page background #f5f4ed and on every lighter surface (dim 5.0,
+     faint 4.55 on --aree-bg; 5.5 / 5.0 on white). Same slate hue as before, only
+     darker; the steps are closer together because 4.5:1 leaves little room. */
   --aree-text: #17231c;
   --aree-body: #2d3748;
-  --aree-muted: #64748b;
-  --aree-dim: #788796;
-  --aree-faint: #9ba8b5;
+  --aree-muted: #556377;
+  --aree-dim: #5d6a78;
+  --aree-faint: #607182;
 
   /* ── Environmental Brand Accent — Deep Forest Green & Sage ── */
   --aree-forest: #143828;
   --aree-forest-hover: #1b4733;
   --aree-accent: #22c55e;
+  /* The accent as TEXT. #22c55e is about 2:1 on these surfaces — fine for a dot or
+     a ring fill, illegible as a section index. This is the same green darkened to
+     4.5:1 on --aree-bg; in dark mode the accent itself is already the legible one. */
+  --aree-accent-strong: #157b3b;
   --aree-accent-soft: rgba(34, 197, 94, 0.12);
   --aree-accent-glow: rgba(34, 197, 94, 0.25);
   --aree-teal: #0d9488;
@@ -71,6 +79,8 @@
   /* ── Layout Dimensions ── */
   --aree-sidebar-width: 230px;
   --aree-sidebar-collapsed: 68px;
+  /* 80px below sm, where the command bar wraps its controls taller; 70px above.
+     The critical alert sticks at this offset, so it must match the bar exactly. */
   --aree-commandbar-height: 70px;
 
   /* ── Map ── Leaflet paints its own furniture and cannot read Tailwind. ── */
@@ -91,6 +101,12 @@
      the deep forest instead. In dark mode the accent IS the high-contrast choice
      and the token resolves to it there. One token, no component branching. */
   --aree-focus: var(--aree-forest);
+}
+
+@media (max-width: 639px) {
+  :root {
+    --aree-commandbar-height: 80px;
+  }
 }
 
 /* ==========================================================================
@@ -120,18 +136,20 @@
   --aree-border: #2e2a24;
   --aree-border-strong: #443e35;
 
-  /* ── Text ramp — the light ramp inverted, keeping the same five steps ── */
+  /* ── Text ramp — the light ramp inverted, keeping the same five steps. dim and
+       faint are lifted to clear 4.5:1 on --aree-surface-2, as in the light ramp. ── */
   --aree-text: #f0ece3;
   --aree-body: #cdc7bb;
   --aree-muted: #9a9287;
-  --aree-dim: #7a736a;
-  --aree-faint: #625c54;
+  --aree-dim: #918a81;
+  --aree-faint: #8c8479;
 
   /* ── Brand. Forest stays a FILL that carries white text (the active nav item),
        so it lightens only enough to separate from the surface behind it. ── */
   --aree-forest: #2f7d5a;
   --aree-forest-hover: #38946a;
   --aree-accent: #34d399;
+  --aree-accent-strong: #34d399;
   --aree-accent-soft: rgba(52, 211, 153, 0.14);
   --aree-accent-glow: rgba(52, 211, 153, 0.28);
   --aree-teal: #2dd4bf;
@@ -195,6 +213,7 @@
   --color-aree-faint: var(--aree-faint);
   --color-aree-forest: var(--aree-forest);
   --color-aree-accent: var(--aree-accent);
+  --color-aree-accent-strong: var(--aree-accent-strong);
   --color-aree-green: var(--aree-green);
   --color-aree-lime: var(--aree-lime);
   --color-aree-yellow: var(--aree-yellow);
@@ -400,7 +419,14 @@ body {
        no page visible behind it reads as a navigation PAGE rather than as a panel
        over the one you were on, and there is then nothing to tap to dismiss it. */
     width: min(var(--aree-sidebar-width), 78vw);
-    transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
+    /* A closed drawer is off-screen but was still in the tab order and the
+       accessibility tree: Tab walked through invisible links. visibility:hidden
+       removes both. It flips only AFTER the slide-out (the 200ms delay), and
+       immediately on open (below), so the animation is kept either way. */
+    visibility: hidden;
+    transition:
+      transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+      visibility 0s linear 200ms;
   }
   /* Belt and braces for the rule above: `.aree-sidebar.collapsed` is two classes and
      would otherwise win on specificity, since a media query adds none. */
@@ -409,6 +435,10 @@ body {
   }
   .aree-sidebar.mobile-open {
     transform: translateX(0);
+    visibility: visible;
+    transition:
+      transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+      visibility 0s;
   }
   .aree-main,
   .aree-main.sidebar-collapsed {
@@ -592,6 +622,7 @@ body {
        a mid-tone that reads on a lit screen prints as pale wash. */
     --aree-forest: #0d2a1c;
     --aree-accent: #0f7a3d;
+    --aree-accent-strong: #0f7a3d;
     --aree-green: #0f7a3d;
     --aree-lime: #4a6b12;
     --aree-yellow: #8a6206;

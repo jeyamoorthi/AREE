@@ -8,6 +8,7 @@
  */
 
 import { KeyValue, Panel, Pill, Stat } from "@/components/ui/Card";
+import { engineTime } from "@/lib/clock";
 import { aqiColor, eriColor, grapColor, grapRank, modeColor, modeLabel, orDash } from "@/lib/theme";
 import type { EngineConfig, StationDetail } from "@/types";
 import { CheckCircle2, Circle } from "lucide-react";
@@ -234,7 +235,7 @@ export function RegulatoryContext({
         value="Hourly observation, age reported per station"
         mono={false}
       />
-      <KeyValue label="Last API poll" value={`${orDash(data.api_time)} UTC`} />
+      <KeyValue label="Last API poll" value={orDash(engineTime(data.api_time))} />
       <KeyValue
         label="High-AQI threshold"
         value={config ? `≥ ${config.high_aqi_threshold}` : "Not available"}

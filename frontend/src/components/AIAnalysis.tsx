@@ -12,6 +12,7 @@
 import { Sparkles } from "lucide-react";
 
 import { IntelligencePanel, Pill } from "@/components/ui/Card";
+import { EmptyState } from "@/components/ui/States";
 import { llmValueColor } from "@/lib/theme";
 import type { AdvisoryResponse, AIResponse, StationDetail } from "@/types";
 
@@ -28,6 +29,14 @@ function Factor({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+/** No model ran and nothing was written: direct mode has no language model at all. */
+export function aiUnavailable(ai: AIResponse | null | undefined): boolean {
+  return !ai || (!ai.model && !ai.summary);
+}
+
+export const AI_UNAVAILABLE_MESSAGE =
+  "AI interpretation unavailable — no language model is running on this engine.";
 
 /** Which upstream sources actually contributed to this station's state. */
 function sourceRows(
@@ -79,6 +88,18 @@ export default function AIAnalysis({
 }) {
   const usingFallback = Boolean(ai.model && ai.model.startsWith("deterministic"));
   const sources = sourceRows(data, advisory);
+
+  /* Nothing ran. The schema still fills temperature, mode and "unknown" factors
+     with defaults, and showing those would present a model that does not exist. */
+  if (aiUnavailable(ai)) {
+    return (
+      <IntelligencePanel title="AI risk interpretation" icon={<Sparkles className="h-4 w-4" />}>
+        <div className="p-4 sm:p-6">
+          <EmptyState>{AI_UNAVAILABLE_MESSAGE}</EmptyState>
+        </div>
+      </IntelligencePanel>
+    );
+  }
 
   return (
     <IntelligencePanel
@@ -172,9 +193,8 @@ export default function AIAnalysis({
 
       <div className="border-aree-border text-aree-dim flex flex-wrap gap-x-6 gap-y-2 border-t bg-aree-surface-2/30 px-6 py-3 text-[11px] font-medium">
         <span>Model: {ai.model ?? "N/A"}</span>
-        <span>Temp: {ai.temperature}</span>
-        <span>Mode: {ai.mode}</span>
-        <span>Cooldown: 10s / station</span>
+        {ai.model ? <span>Temp: {ai.temperature}</span> : null}
+        {ai.model ? <span>Mode: {ai.mode}</span> : null}
       </div>
     </IntelligencePanel>
   );

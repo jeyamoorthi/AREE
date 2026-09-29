@@ -1,16 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import { Flame, Globe, Server, Shield, Sparkles } from "lucide-react";
 
 import { usePolling } from "@/hooks/usePolling";
 import { api } from "@/lib/api";
 import { istDateTime } from "@/lib/clock";
+import { newestFirst } from "@/lib/escalation";
 import { stationLabel } from "@/lib/station";
 import { freshness } from "@/lib/freshness";
-import { grapColor, grapRank } from "@/lib/theme";
+import { AQI_BANDS, aqiColor, grapColor, grapRank } from "@/lib/theme";
 import type {
   EscalationsResponse,
   StationListResponse,
@@ -64,15 +65,22 @@ export function useNetworkFacts(data: StationListResponse | null): NetworkFacts 
   }, [data]);
 }
 
-/* ── Top Right: National Summary (6 Metric Cards + Pathway status) ── */
+/* ── Top Right: NCR Summary (6 Metric Cards + engine status) ── */
 export function NationalSummaryPanel({
   facts,
   status,
   stations,
+  loading = false,
 }: {
   facts: NetworkFacts;
   status: SystemStatus | null;
   stations: StationListResponse | null;
+  /**
+   * True until the first /api/stations response. Every verdict card holds a dash
+   * until then: "Within limits" and "No escalations" before anything has been
+   * read would be an all-clear the page has not earned.
+   */
+  loading?: boolean;
 }) {
   const stale = status?.stale_stations ?? stations?.stale ?? 0;
   const aging = status?.aging_stations ?? stations?.aging ?? 0;
@@ -89,12 +97,36 @@ export function NationalSummaryPanel({
     ? stationLabel(facts.worstStation.station)
     : null;
   const grapStage = facts.worstStage ?? "None";
+  const stageInForce = grapRank(facts.worstStage) > 0;
+  // "Stage II (Very Poor)" -> "Stage II": the band is already on the GRAP card.
+  const stageShort = /Stage\s+[IV]+/i.exec(grapStage)?.[0] ?? grapStage;
+
+  /* One verdict, consistent with the GRAP card beside it. "Within limits" is kept
+     for the case that actually is: no station triggered AND no stage in force. A
+     stage in force (including one held by hysteresis) is named as such, so the
+     summary never reads green next to "Stage II". */
+  const regulatory = loading
+    ? { label: "—", caption: "Awaiting first station response", color: "var(--aree-dim)" }
+    : facts.triggered > 0
+      ? { label: "Triggered", caption: "Active escalation", color: "var(--aree-red)" }
+      : stageInForce
+        ? {
+            label: `GRAP ${stageShort} in force`,
+            caption: "No station triggered",
+            color: grapColor(grapStage),
+          }
+        : {
+            label: "Within limits",
+            caption: "No stage in force · no escalation",
+            color: "var(--aree-green)",
+          };
+  const dash = (value: number) => (loading ? "—" : value);
 
   return (
     <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs flex flex-col justify-between h-full">
       <div>
         <h2 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans mb-4">
-          NATIONAL SUMMARY
+          NCR SUMMARY
         </h2>
 
         {/* 2 columns x 3 rows grid of metrics */}
@@ -136,16 +168,13 @@ export function NationalSummaryPanel({
               REGULATORY STATE
             </div>
             <div
-              className={`text-[17px] font-extrabold ${
-                facts.triggered > 0 ? "text-aree-red" : "text-aree-green"
-              }`}
+              className="text-[17px] font-extrabold leading-tight"
+              style={{ color: regulatory.color }}
             >
-              {facts.triggered > 0 ? "Triggered" : "Within Limits"}
+              {regulatory.label}
             </div>
             <div className="text-[11px] text-aree-dim mt-0.5">
-              {facts.triggered > 0
-                ? "Active escalation"
-                : "No immediate escalation"}
+              {regulatory.caption}
             </div>
           </div>
 
@@ -155,13 +184,14 @@ export function NationalSummaryPanel({
               GRAP STATUS
             </div>
             <div className="text-[18px] font-bold text-aree-text">
-              {grapStage}
+              {loading ? "—" : grapStage}
             </div>
             {/* "(Watch & Advise)" was hardcoded and describes Stage I regardless of the
                 stage shown. The distinction that matters more: AREE COMPUTES a stage
-                from the highest observed AQI; only CAQM INVOKES one. */}
+                per station (with hysteresis); only CAQM INVOKES one. This is the
+                highest of those per-station stages, not a function of the peak AQI. */}
             <div className="text-[11px] text-aree-dim mt-0.5">
-              Computed from highest station AQI · not a CAQM invocation
+              Highest GRAP stage in force across stations · not a CAQM invocation
             </div>
           </div>
 
@@ -171,12 +201,14 @@ export function NationalSummaryPanel({
               ACTIVE ESCALATIONS
             </div>
             <div className="text-[20px] font-bold font-mono text-aree-text">
-              {facts.triggered}
+              {dash(facts.triggered)}
             </div>
             {/* The caption used to read "No escalations at this time" even when the
                 count beside it was non-zero. */}
             <div className="text-[11px] text-aree-dim mt-0.5">
-              {facts.triggered > 0
+              {loading
+                ? "Awaiting first station response"
+                : facts.triggered > 0
                 ? `${facts.triggered} station${facts.triggered === 1 ? "" : "s"} in a triggered state`
                 : "No escalations at this time"}
             </div>
@@ -190,19 +222,19 @@ export function NationalSummaryPanel({
             <div className="space-y-1 text-[11px] font-semibold">
               <div className="flex items-center gap-1.5 text-aree-text">
                 <span className="h-2 w-2 rounded-full bg-aree-green" />
-                <span>{current} Current</span>
+                <span>{dash(current)} Current</span>
               </div>
               <div className="flex items-center gap-1.5 text-aree-text">
                 <span className="h-2 w-2 rounded-full bg-aree-yellow" />
-                <span>{aging} Aging</span>
+                <span>{dash(aging)} Aging</span>
               </div>
               <div className="flex items-center gap-1.5 text-aree-text">
                 <span className="h-2 w-2 rounded-full bg-aree-orange" />
-                <span>{stale} Stale</span>
+                <span>{dash(stale)} Stale</span>
               </div>
               <div className="flex items-center gap-1.5 text-aree-text">
                 <span className="text-[10px] text-aree-dim">⊗</span>
-                <span>{unavailable} Unavailable</span>
+                <span>{dash(unavailable)} Unavailable</span>
               </div>
             </div>
           </div>
@@ -232,7 +264,7 @@ export function NationalSummaryPanel({
           className="font-bold"
           style={{ color: status?.engine_loaded ? "var(--aree-green)" : "var(--aree-red)" }}
         >
-          {status ? (status.engine_loaded ? "Running" : "Offline") : "—"}
+          {status ? (status.engine_loaded ? "Running" : "Engine offline") : "—"}
         </span>
       </div>
       {status?.degraded ? (
@@ -247,14 +279,13 @@ export function NationalSummaryPanel({
 
 /* ── Middle Col 1: AQI Distribution Donut Chart ── */
 export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
-  const bands = [
-    { label: "Good (0-50)", count: 0, color: "var(--aree-green)" },
-    { label: "Satisfactory (51-100)", count: 0, color: "var(--aree-lime)" },
-    { label: "Moderate (101-200)", count: 0, color: "var(--aree-yellow)" },
-    { label: "Poor (201-300)", count: 0, color: "var(--aree-orange)" },
-    { label: "Very Poor (301-400)", count: 0, color: "var(--aree-red)" },
-    { label: "Severe (401+)", count: 0, color: "var(--aree-crimson)" },
-  ];
+  // From the shared CPCB table, so the donut, the map legend and every marker
+  // agree on each band's colour.
+  const bands = AQI_BANDS.map((b) => ({
+    label: `${b.label} (${b.range})`,
+    count: 0,
+    color: b.color,
+  }));
 
   for (const s of facts.withData) {
     const a = s.aqi ?? 0;
@@ -307,7 +338,19 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
-                <Tooltip />
+                {/* Recharts' default tooltip is a white box with black text — right
+                    in the light theme, glaring in the dark one. Painted from tokens. */}
+                <Tooltip
+                  contentStyle={{
+                    background: "var(--aree-surface-1)",
+                    border: "1px solid var(--aree-border)",
+                    borderRadius: 8,
+                    boxShadow: "var(--aree-shadow-md)",
+                    fontSize: 11,
+                  }}
+                  labelStyle={{ color: "var(--aree-text)" }}
+                  itemStyle={{ color: "var(--aree-body)" }}
+                />
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
@@ -327,13 +370,13 @@ export function AQIDistributionDonut({ facts }: { facts: NetworkFacts }) {
                 <div
                   key={b.label}
                   /* `justify-between` alone leaves NO gap once the band name fills
-                     the row, which on a phone read as "Satisfactory (51-100)48". */
+                     the row, which on a phone read as "Satisfactory (51–100)48". */
                   className="flex items-start justify-between gap-2 text-aree-body"
                 >
                   {/* The band name WRAPS rather than truncating. This column is a
-                      third of a card, and "Satisfactory (51-100)" does not fit it on
+                      third of a card, and "Satisfactory (51–100)" does not fit it on
                       any screen — truncating turns the legend into "Satisfactory
-                      (51-…", which is precisely the half a reader needs to check a
+                      (51–…", which is precisely the half a reader needs to check a
                       colour against the CPCB scale. Two lines cost nothing here. */}
                   <div className="flex min-w-0 items-start gap-1.5">
                     <span
@@ -361,11 +404,12 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
   // The fallback list (Pooth Khurd 167, Bawana 154, ...) rendered five named Delhi
   // stations with plausible AQI values that no feed had produced. Removed: an empty
   // network must look empty.
-  const topList = useMemo(
+  const [showAll, setShowAll] = useState(false);
+  const total = facts.withData.length;
+  const ranked = useMemo(
     () =>
       [...facts.withData]
         .sort((a, b) => (b.aqi ?? 0) - (a.aqi ?? 0))
-        .slice(0, 5)
         .map((s) => ({
           station: s.station,
           name: stationLabel(s.station),
@@ -376,18 +420,22 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
         })),
     [facts.withData],
   );
+  const topList = showAll ? ranked : ranked.slice(0, 5);
 
   return (
     <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs flex flex-col justify-between">
       <div>
         <h3 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
-          TOP 5 STATIONS BY AQI
+          {showAll ? "STATIONS BY AQI" : "TOP 5 STATIONS BY AQI"}
         </h3>
         <p className="text-[11px] text-aree-dim mt-0.5 mb-3">
-          Highest current AQI
+          {showAll ? `All ${total} reporting stations, highest first` : "Highest current AQI"}
         </p>
 
-        <div className="space-y-2.5">
+        <div
+          id="aree-station-ranking"
+          className={`space-y-2.5 ${showAll ? "max-h-[420px] overflow-y-auto pr-1" : ""}`}
+        >
           {topList.length === 0 ? (
             <p className="py-8 text-center text-[12px] text-aree-dim">
               No station has reported yet.
@@ -402,7 +450,7 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
                 className="flex items-center justify-between text-[12px] py-1 border-b border-aree-border last:border-b-0"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-bold text-aree-dim text-[11px] w-3 shrink-0">
+                  <span className="font-bold text-aree-dim text-[11px] min-w-3 shrink-0">
                     {i + 1}
                   </span>
                   {/* The LINK keeps full contrast — a stale station must stay as easy
@@ -427,8 +475,11 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
                 {/* Only the VALUE is dimmed. It is the number that would otherwise be
                     read as equivalent to a live one; the identity is not in doubt. */}
                 <span
-                  className="font-bold font-mono text-aree-orange shrink-0"
-                  style={provisional ? { opacity: 0.55 } : undefined}
+                  className="font-bold font-mono shrink-0"
+                  style={{
+                    color: aqiColor(st.aqi),
+                    ...(provisional ? { opacity: 0.55 } : null),
+                  }}
                 >
                   {st.aqi}
                 </span>
@@ -438,14 +489,21 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
         </div>
       </div>
 
-      <div className="mt-4 pt-3 border-t border-aree-border text-right">
-        <Link
-          href="/dashboard"
-          className="text-[11px] font-bold text-aree-forest hover:underline inline-flex items-center gap-1"
-        >
-          View All Stations &rarr;
-        </Link>
-      </div>
+      {/* Expands in place. This linked to /dashboard, which has no station list —
+          the full ranking belongs here, beside the five it extends. */}
+      {total > 5 ? (
+        <div className="mt-4 pt-3 border-t border-aree-border text-right">
+          <button
+            type="button"
+            onClick={() => setShowAll((v) => !v)}
+            aria-expanded={showAll}
+            aria-controls="aree-station-ranking"
+            className="text-[11px] font-bold text-aree-forest hover:underline inline-flex items-center gap-1 cursor-pointer"
+          >
+            {showAll ? "Show top 5" : `Show all ${total} stations`}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -460,6 +518,13 @@ export function Top5StationsCard({ facts }: { facts: NetworkFacts }) {
    Now: only subsystems /api/system/status actually reports, each with its real state.
    FIRMS and the meteorological feed are deliberately absent - they belong to the
    forecast layer and are reported on the Atmospheric Outlook, which knows about them. */
+/** "unavailable" -> "Unavailable": a raw backend enum is not a label. */
+function sentenceCase(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const words = value.replace(/_/g, " ").trim();
+  return words ? words.charAt(0).toUpperCase() + words.slice(1) : null;
+}
+
 export function DataHealthOverviewCard({ status }: { status: SystemStatus | null }) {
   const stale = status?.stale_stations ?? 0;
   const aging = status?.aging_stations ?? 0;
@@ -478,7 +543,7 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
   const engineState = !status
     ? unknown
     : !status.engine_loaded
-      ? { label: "Offline", color: "var(--aree-red)" }
+      ? { label: "Engine offline", color: "var(--aree-red)" }
       : status.mode === "streaming"
         ? { label: "Streaming", color: "var(--aree-green)" }
         : { label: "Direct", color: "var(--aree-yellow)" };
@@ -487,7 +552,7 @@ export function DataHealthOverviewCard({ status }: { status: SystemStatus | null
     ? unknown
     : status.rag_status === "active"
       ? { label: "Active", color: "var(--aree-green)" }
-      : { label: status.rag_status ?? "Unavailable", color: "var(--aree-yellow)" };
+      : { label: sentenceCase(status.rag_status) ?? "Unavailable", color: "var(--aree-yellow)" };
 
   const docs = status?.rag_docs_indexed ?? null;
   const policyState =
@@ -619,7 +684,10 @@ export function RecentEventsRow() {
     { intervalMs: 15000 },
   );
 
-  const events = (state.data?.events ?? []).slice(0, 5);
+  const events = useMemo(
+    () => newestFirst(state.data?.events ?? []).slice(0, 5),
+    [state.data],
+  );
 
   return (
     <div className="bg-aree-card border border-aree-border rounded-xl p-5 shadow-xs">

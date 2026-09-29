@@ -82,6 +82,7 @@ def aqi(station: str = Path(...)) -> AQIResponse:
         pollutants=readings,
         pollutant_source=state.get("pollutant_source"),
         pollutant_age_minutes=state.get("pollutant_age_minutes"),
+        pollutant_quantity=state.get("pollutant_quantity"),
         ingestion_status=state.get("ingestion_status"),
         ingestion_error=state.get("ingestion_error"),
         avg_aqi_5min=state.get("avg_aqi_5min"),

@@ -71,3 +71,25 @@ export function escalationSummary(data: StationDetail): EscalationSummary {
      authority is shown confirmed facts or nothing, never a guess dressed as one. */
   return { headline: "", detail: "", color };
 }
+
+/**
+ * Escalation events, newest first.
+ *
+ * The backend is meant to return them in that order, but every "recent events" view
+ * takes a slice off the front, and a list that arrives oldest-first would then show
+ * the five OLDEST transitions under a "recent" heading. Sorting here costs nothing
+ * and makes the order a property of the view rather than an assumption about the
+ * server. An event with no parseable timestamp sorts last; ties keep server order.
+ */
+export function newestFirst<T extends { timestamp?: string | null }>(
+  events: readonly T[],
+): T[] {
+  const at = (e: T) => {
+    const ms = e.timestamp ? Date.parse(e.timestamp) : NaN;
+    return Number.isFinite(ms) ? ms : -Infinity;
+  };
+  return events
+    .map((event, index) => ({ event, index, ms: at(event) }))
+    .sort((a, b) => (b.ms === a.ms ? a.index - b.index : b.ms - a.ms))
+    .map((x) => x.event);
+}

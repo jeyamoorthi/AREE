@@ -14,7 +14,7 @@
 
    Model metrics (hit rate, false-alarm rate, AUC, training episodes) live HERE,
    under Decision basis. They belong to someone auditing why the system drew a
-   line at 466 m2/s, not to someone deciding whether to act this evening.
+   line at 465.9 m2/s, not to someone deciding whether to act this evening.
 
    It reads the SAME /api/aree/outlook contract as the executive page, so both
    share one as_of and replay behaves identically on each. Nothing on this page
@@ -51,6 +51,7 @@ import InterventionTimer, {
 } from "@/components/InterventionTimer";
 import { useOutlookData } from "@/components/providers/OutlookDataProvider";
 import UnavailableNotice from "@/components/UnavailableNotice";
+import { EmptyState } from "@/components/ui/States";
 
 const C = {
   ink: "var(--aree-text)",
@@ -80,6 +81,11 @@ function ist(iso: string, withDate = true): string {
     timeZone: "Asia/Kolkata",
   });
   return `${day} ${t}`;
+}
+
+/** A backend number for display, or an em dash when the payload has none. */
+function num(v: number | null | undefined, digits: number): string {
+  return v === null || v === undefined || !Number.isFinite(v) ? "—" : v.toFixed(digits);
 }
 
 /* ── chart geometry, in ONE place ──────────────────────────────────────────
@@ -186,7 +192,7 @@ function Row({
   );
 }
 
-/** Donut of the last 24 h banded on the calibrated threshold. */
+/** Donut of the next 24 forecast hours banded on the calibrated threshold. */
 function Donut({
   bands,
 }: {
@@ -246,11 +252,11 @@ function Donut({
      this payload at all: `ventilation_profile` is computed from that same forward
      series, so even its "24 h" figures describe the next day, not the last one.
 
-     So an OBSERVED BAND cannot be drawn without inventing one. What is genuinely
-     observed is a single instant — the measured coefficient at as_of — and that is
-     what the neutral anchor to the left of the bar shows. The bar itself covers the
-     forecast horizon and nothing else. A grey band stretching left would be a period
-     this API has never described.
+     So an OBSERVED BAND cannot be drawn without inventing one — and neither can an
+     observed value: `ventilation_profile.components` is series[0], the FIRST FORECAST
+     hour, not a measurement at as_of. The neutral anchor above the bar states it as
+     exactly that. The bar itself covers the forecast horizon and nothing else. A grey
+     band stretching left would be a period this API has never described.
 
    POSITIONS ARE INDICES, NOT TIMES
      The chart below uses a CATEGORY x-axis keyed on the formatted label, so its
@@ -277,19 +283,19 @@ interface CollapseTimeline {
   onsetLabel: string | null;
   startLabel: string;
   endLabel: string;
-  /** The one genuinely OBSERVED quantity: the measured coefficient at as_of. */
-  observed: { value: string | null; at: string } | null;
+  /** The first forecast hour (series[0]) — a forecast value, not an observation. */
+  firstHour: { value: string | null; at: string } | null;
 }
 
 function TimelineBar({ model }: { model: CollapseTimeline }) {
   return (
     <div className="mt-2">
-      {/* OBSERVED — an instant, not a band, and labelled as one.
+      {/* FIRST FORECAST HOUR — an instant, not a band, and labelled as one.
           The forecast series begins an hour after as_of, so there is no observed
-          period inside this chart's domain to shade. What IS observed is the
-          measured coefficient at as_of, and it is stated here in neutral tone
-          rather than implied by a grey rectangle over time nobody forecast. */}
-      {model.observed ? (
+          period inside this chart's domain to shade, and the profile's components
+          are series[0] — a forecast, stated here in neutral tone with its own
+          valid time rather than passed off as a measurement at as_of. */}
+      {model.firstHour ? (
         <p className="flex flex-wrap items-center gap-1.5 text-[9.5px]" style={{ color: C.muted }}>
           <span
             className="h-2 w-2 shrink-0 rounded-full"
@@ -297,11 +303,13 @@ function TimelineBar({ model }: { model: CollapseTimeline }) {
             aria-hidden
           />
           <span className="font-semibold" style={{ color: C.body }}>
-            Observed
+            Forecast
           </span>
           <span>
-            {model.observed.value ? `${model.observed.value} m²/s at ` : "at "}
-            {model.observed.at} IST · forecast begins from here
+            {model.firstHour.value
+              ? `${model.firstHour.value} m²/s for `
+              : "Ventilation data not available for "}
+            {model.firstHour.at} IST (first forecast hour)
           </span>
         </p>
       ) : null}
@@ -425,9 +433,13 @@ export default function VentilationOutlook() {
   /* The window as a clock. Same deadline the executive page counts down, so the
      two screens cannot disagree about how long is left. */
   const countdown = useInterventionCountdown(data?.as_of, windowH, data?.mode);
+  // "Now" here is the FIRST FORECAST HOUR: the profile's components are series[0].
   const ventNow = vp?.components?.ventilation_m2_s ?? null;
   const belowNow =
     ventNow !== null && threshold !== null ? ventNow <= threshold : null;
+  // Same comparison as find_collapse and the caption: at-or-below counts as below.
+  const vsSign = belowNow === null ? null : belowNow ? "≤" : ">";
+  const firstHourAt = data?.forecast.series[0]?.valid_at ?? null;
 
   // "store:ncr_28.63_77.22 (era5)" in replay vs "openmeteo:forecast" live. The backend
   // already names its own feature source; the page just has to stop ignoring it.
@@ -511,16 +523,16 @@ export default function VentilationOutlook() {
     const startLabel = `${ist(series[0].valid_at)} IST`;
     const endLabel = `${ist(series[last].valid_at)} IST`;
 
-    /* Read from the profile the page already renders as "Ventilation (now)", so the
-       anchor and that card cannot disagree. Null stays null. */
-    const observedValue =
+    /* Read from the profile the page already renders as "Ventilation (next hour,
+       forecast)", so the anchor and that card cannot disagree. The profile's
+       components ARE series[0], so its valid_at is the honest time stamp. Null
+       stays null. */
+    const firstValue =
       data?.atmosphere.ventilation_profile.components?.ventilation_m2_s ?? null;
-    const observed = data
-      ? {
-          value: observedValue !== null ? observedValue.toFixed(0) : null,
-          at: ist(data.as_of),
-        }
-      : null;
+    const firstHour = {
+      value: firstValue !== null ? firstValue.toFixed(0) : null,
+      at: ist(series[0].valid_at),
+    };
 
     const collapse = data?.atmosphere.ventilation_forecast.collapse ?? null;
     const onsetIndex = collapse?.onset ? indexAt(collapse.onset) : null;
@@ -545,7 +557,7 @@ export default function VentilationOutlook() {
         onsetLabel: null,
         startLabel,
         endLabel,
-        observed,
+        firstHour,
       };
     }
 
@@ -604,7 +616,7 @@ export default function VentilationOutlook() {
       onsetLabel: `${ist(collapse.onset)} IST`,
       startLabel,
       endLabel,
-      observed,
+      firstHour,
     };
   }, [data]);
 
@@ -620,6 +632,12 @@ export default function VentilationOutlook() {
 
       {error && !loading && (
         <UnavailableNotice title="Ventilation outlook unavailable" detail={error} />
+      )}
+
+      {data && !loading && !vp?.available && (
+        <EmptyState icon={<Wind className="h-5 w-5" />}>
+          Ventilation profile not available — no forecast values or operating point.
+        </EmptyState>
       )}
 
       {data && !loading && vp?.available && (
@@ -645,16 +663,22 @@ export default function VentilationOutlook() {
               <p className="mt-1 text-[10.5px] leading-snug" style={{ color: C.muted }}>
                 {/* Describes the CURRENT measurement, not the collapse clock. */}
                 {belowNow === null
-                  ? "Ventilation not available for this hour"
+                  ? "Ventilation data not available for this hour"
                   : belowNow
-                    ? "Below the operating point — dispersion capacity is poor now"
-                    : "Above the operating point — dispersion capacity is adequate now"}
+                    ? "At or below the operating point — dispersion capacity is forecast to be poor next hour"
+                    : "Above the operating point — dispersion capacity is forecast to be adequate next hour"}
               </p>
               <p
                 className="mt-1 flex flex-wrap items-baseline gap-1.5 text-[10.5px] font-semibold"
                 style={{ color: C.body }}
               >
-                {countdown.available ? (
+                {countdown.available && countdown.elapsed ? (
+                  /* No "remaining" beside an elapsed clock — there is nothing left. */
+                  <span style={{ color: C.red }}>
+                    Poor ventilation has begun — intervention window elapsed
+                    {countdown.frozen ? " at this replayed moment" : ""}
+                  </span>
+                ) : countdown.available ? (
                   <>
                     <InterventionTimer
                       asOf={data.as_of}
@@ -674,16 +698,23 @@ export default function VentilationOutlook() {
               </p>
             </div>
 
+            {/* Values only for BLH and wind: nothing on this page computes a status,
+                so they carry their forecast hour rather than an invented class. */}
             {[
-              [Gauge, "Ventilation (now)", `${vp.components?.ventilation_m2_s?.toFixed(1)}`, "m²/s",
-               (vp.components?.ventilation_m2_s ?? 0) <= (threshold ?? 0) ? "Poor dispersion" : "Adequate dispersion", C.body],
-              [Cloud, "Boundary layer", `${vp.components?.blh_m?.toFixed(0)}`, "m",
-               (vp.components?.blh_m ?? 0) < 400 ? "Very low" : "Moderate", (vp.components?.blh_m ?? 0) < 400 ? C.red : C.body],
-              [Wind, "Wind speed (10 m)", `${vp.components?.wind_ms?.toFixed(2)}`, "m/s",
-               (vp.components?.wind_ms ?? 0) < 2 ? "Light" : "Moderate", C.body],
-              [ShieldCheck, "Operating point", `${threshold?.toFixed(1)}`, "m²/s", "Threshold", C.body],
-              [History, "Hours below threshold (24 h)", `${vp.hours_below_24h}`, "h",
-               `${Math.round((vp.share_below_24h ?? 0) * 100)}% of last 24 h`, C.body],
+              [Gauge, "Ventilation (next hour, forecast)", num(ventNow, 1), "m²/s",
+               belowNow === null
+                 ? "Ventilation data not available for this hour"
+                 : belowNow ? "Poor dispersion forecast" : "Adequate dispersion forecast",
+               C.body],
+              [Cloud, "Boundary layer", num(vp.components?.blh_m, 0), "m",
+               firstHourAt ? `Forecast for ${ist(firstHourAt)} IST` : "", C.muted],
+              [Wind, "Wind speed (10 m)", num(vp.components?.wind_ms, 2), "m/s",
+               firstHourAt ? `Forecast for ${ist(firstHourAt)} IST` : "", C.muted],
+              [ShieldCheck, "Operating point", num(threshold, 1), "m²/s", "Threshold", C.body],
+              [History, "Hours below threshold (24 h)", `${vp.hours_below_24h ?? "—"}`, "h",
+               vp.share_below_24h !== undefined
+                 ? `${Math.round(vp.share_below_24h * 100)}% of next 24 h`
+                 : "", C.body],
             ].map(([Icon, label, value, unit, caption, tone]) => {
               const I = Icon as typeof Gauge;
               return (
@@ -827,11 +858,11 @@ export default function VentilationOutlook() {
                 </span>
                 <span className="text-[10px]" style={{ color: C.muted }}>
                   <span className="mr-1 inline-block h-[2px] w-3 align-middle" style={{ background: C.red }} />
-                  Operating point ({threshold?.toFixed(1)} m²/s)
+                  Operating point ({num(threshold, 1)} m²/s)
                 </span>
                 <span className="text-[10px]" style={{ color: C.muted }}>
                   <span className="mr-1 inline-block h-2 w-3 rounded-sm align-middle" style={{ background: "color-mix(in srgb, var(--aree-red) 25%, transparent)" }} />
-                  Collapse zone
+                  Below operating point
                 </span>
               </div>
 
@@ -866,7 +897,14 @@ export default function VentilationOutlook() {
                       width={VC_Y_AXIS_WIDTH}
                     />
                     <Tooltip
-                      contentStyle={{ fontSize: 11, borderRadius: 6, border: `1px solid ${C.line}` }}
+                      contentStyle={{
+                        background: "var(--aree-surface-2)",
+                        border: "1px solid var(--aree-border-strong)",
+                        borderRadius: 6,
+                        fontSize: 11,
+                      }}
+                      labelStyle={{ color: "var(--aree-muted)" }}
+                      itemStyle={{ color: "var(--aree-text)" }}
                       formatter={(v) => [`${v} m²/s`, "Ventilation"]}
                     />
                     {threshold !== null && (
@@ -914,14 +952,14 @@ export default function VentilationOutlook() {
 
             <div className="space-y-3">
               <Card>
-                <Eyebrow>Ventilation components (now)</Eyebrow>
+                <Eyebrow>Ventilation components (next hour, forecast)</Eyebrow>
                 <div className="mt-1.5">
-                  <Row label="Boundary layer height" value={`${vp.components?.blh_m?.toFixed(0)} m`} />
-                  <Row label="Wind speed (10 m)" value={`${vp.components?.wind_ms?.toFixed(2)} m/s`} />
+                  <Row label="Boundary layer height" value={`${num(vp.components?.blh_m, 0)} m`} />
+                  <Row label="Wind speed (10 m)" value={`${num(vp.components?.wind_ms, 2)} m/s`} />
                   <Row
                     label="Ventilation (PBLH × wind)"
-                    value={`${vp.components?.ventilation_m2_s?.toFixed(1)} m²/s`}
-                    tone={collapsed ? C.red : C.ink}
+                    value={`${num(ventNow, 1)} m²/s`}
+                    tone={belowNow ? C.red : C.ink}
                   />
                 </div>
               </Card>
@@ -971,14 +1009,16 @@ export default function VentilationOutlook() {
                   <div className="absolute left-0 right-0 top-[6px] h-[2px]" style={{ background: C.line }} />
                   <div className="relative flex justify-between">
                     {data.timeline.map((m) => {
+                      // Collapse is red, as on the bar and the chart above. "Now" is
+                      // a position, not a severity, so it stays neutral.
                       const tone =
                         m.kind === "now"
-                          ? C.red
-                          : m.kind === "collapse"
-                            ? C.amber
-                            : m.kind === "minimum" || m.kind === "peak_risk"
-                              ? C.red
-                              : C.green;
+                          ? C.dim
+                          : m.kind === "collapse" ||
+                              m.kind === "minimum" ||
+                              m.kind === "peak_risk"
+                            ? C.red
+                            : C.green;
                       return (
                         <div key={m.kind + m.at} className="flex w-[19%] flex-col items-start">
                           <span
@@ -991,13 +1031,18 @@ export default function VentilationOutlook() {
                           <p className="text-[9.5px] font-semibold" style={{ color: C.muted }}>
                             {m.kind === "now"
                               ? countdown.available
-                                ? `${countdown.elapsed ? "elapsed" : countdown.hhmm} remaining`
+                                ? countdown.elapsed
+                                  ? "window elapsed"
+                                  : `${countdown.hhmm} remaining`
                                 : "no window"
                               : `${m.hours_from_now > 0 ? "+" : ""}${m.hours_from_now.toFixed(0)} h`}
                           </p>
-                          <p className="mt-1 text-[9.5px] leading-snug" style={{ color: C.body }}>
-                            {m.state}
-                          </p>
+                          {/* The heading already says "Now"; don't print it twice. */}
+                          {m.kind === "now" && /^now$/i.test(m.state.trim()) ? null : (
+                            <p className="mt-1 text-[9.5px] leading-snug" style={{ color: C.body }}>
+                              {m.state}
+                            </p>
+                          )}
                         </div>
                       );
                     })}
@@ -1007,8 +1052,8 @@ export default function VentilationOutlook() {
 
               <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 border-t pt-2" style={{ borderColor: C.line }}>
                 {[
-                  ["Critical", C.red],
-                  ["Warning", C.amber],
+                  ["Now", C.dim],
+                  ["Collapse / critical", C.red],
                   ["Recovery", C.green],
                 ].map(([l, c]) => (
                   <span key={l} className="text-[9.5px]" style={{ color: C.muted }}>
@@ -1027,15 +1072,15 @@ export default function VentilationOutlook() {
               <div className="mt-1.5">
                 <Row
                   label="Operating point (threshold)"
-                  value={`${threshold?.toFixed(1)} m²/s`}
+                  value={`${num(threshold, 1)} m²/s`}
                   small={op?.mode ? `${op.mode}${op.calibrated ? " (calibrated)" : ""}` : undefined}
                 />
                 <Row
-                  label="Current ventilation vs threshold"
-                  value={`${vp.components?.ventilation_m2_s?.toFixed(1)} ${
-                    (vp.components?.ventilation_m2_s ?? 0) < (threshold ?? 0) ? "<" : ">"
-                  } ${threshold?.toFixed(1)}`}
-                  tone={(vp.components?.ventilation_m2_s ?? 0) < (threshold ?? 0) ? C.red : C.green}
+                  label="Next-hour ventilation vs threshold"
+                  value={
+                    vsSign === null ? "—" : `${num(ventNow, 1)} ${vsSign} ${num(threshold, 1)}`
+                  }
+                  tone={belowNow === null ? C.ink : belowNow ? C.red : C.green}
                 />
                 {/* These two rows were labelled "Hit rate (validation)" and
                     "False-alarm rate" and carried the TRAINING figures — 0.61 / 0.19 on
@@ -1090,9 +1135,13 @@ export default function VentilationOutlook() {
               <p className="mt-2 flex-1 text-[11.5px] leading-relaxed" style={{ color: C.body }}>
                 {/* Keyed on the measurement, so this can no longer contradict the number
                     in the card immediately above it. */}
-                {belowNow
-                  ? `Ventilation is ${ventNow?.toFixed(0)} m²/s, below the ${threshold?.toFixed(0)} m²/s operating point, and ${vp.hours_below_24h} of the last 24 hours were below it. Dispersion capacity is poor and pollutants are accumulating faster than the atmosphere clears them.`
-                  : `Ventilation is ${ventNow?.toFixed(0)} m²/s, above the ${threshold?.toFixed(0)} m²/s operating point. ${vp.hours_below_24h} of the last 24 hours fell below it, so conditions remain worth watching.`}
+                {/* The profile covers the NEXT 24 forecast hours (values[:24] of a
+                    series starting at as_of + 1 h), so this reads as a forecast. */}
+                {belowNow === null
+                  ? "Ventilation data not available for this hour."
+                  : belowNow
+                    ? `Ventilation is forecast at ${num(ventNow, 0)} m²/s next hour, at or below the ${num(threshold, 1)} m²/s operating point, and ${vp.hours_below_24h ?? "—"} of the next 24 forecast hours are expected to be below it. Dispersion capacity is forecast to be poor, with pollutants accumulating faster than the atmosphere clears them.`
+                    : `Ventilation is forecast at ${num(ventNow, 0)} m²/s next hour, above the ${num(threshold, 1)} m²/s operating point. ${vp.hours_below_24h ?? "—"} of the next 24 forecast hours are expected to be below it, so conditions remain worth watching.`}
               </p>
               <p className="mt-2 text-[11px] leading-relaxed" style={{ color: C.muted }}>
                 {data.mechanism.consequence}.

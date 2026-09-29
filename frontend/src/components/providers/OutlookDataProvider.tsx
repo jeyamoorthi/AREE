@@ -50,7 +50,7 @@ import {
 
 import { usePublishOutlookMode } from "@/components/providers/OutlookModeProvider";
 import { useSyncPresetToUrl } from "@/hooks/useSyncPresetToUrl";
-import { api, errorMessage } from "@/lib/api";
+import { ApiError, api, errorMessage } from "@/lib/api";
 import { readLiveOutlook, saveLiveOutlook } from "@/lib/outlookCache";
 import type { OutlookResponse } from "@/types";
 
@@ -88,19 +88,45 @@ export interface StaleOutlook {
   failed: boolean;
 }
 
+/**
+ * What kind of failure `error` is.
+ *
+ * "no_data" is the backend's 424 forecast_unavailable: the observation store holds
+ * nothing for that moment, and retrying cannot change it. Everything else — the
+ * network, a timeout, a 5xx — is "transient" and worth another attempt.
+ */
+export type OutlookErrorKind = "no_data" | "transient";
+
+function errorKindOf(err: unknown): OutlookErrorKind {
+  return err instanceof ApiError &&
+    (err.status === 424 || err.body?.error === "forecast_unavailable")
+    ? "no_data"
+    : "transient";
+}
+
 export interface OutlookDataState {
   data: OutlookResponse | null;
   loading: boolean;
+  /** True while `data` is being refetched in the background (after a decision). */
+  refreshing: boolean;
   error: string | null;
+  errorKind: OutlookErrorKind | null;
   /** Non-null when `data` is the last cached live outlook, not a fresh answer. */
   stale: StaleOutlook | null;
   /** Index into OUTLOOK_PRESETS. */
   preset: number;
   setPreset: (index: number) => void;
-  /** Refetch the current moment — used after a case decision is recorded. */
+  /** Refetch the current moment, showing the loading state (e.g. a Retry button). */
   reload: () => void;
+  /**
+   * Refetch the current moment behind the payload already on screen — used after a
+   * case decision is recorded, so the page neither blanks nor loses its scroll.
+   */
+  refresh: () => void;
   tab: OutlookTab;
   setTab: (tab: OutlookTab) => void;
+  /** A `?at=` in the URL that matches no preset; the page is showing live instead. */
+  unknownAt: string | null;
 }
 
 const Ctx = createContext<OutlookDataState | null>(null);
@@ -147,6 +173,8 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
   const [tab, setTab] = useState<OutlookTab>("summary");
   const [data, setData] = useState<OutlookResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorKind, setErrorKind] = useState<OutlookErrorKind | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [stale, setStale] = useState<StaleOutlook | null>(null);
   const [loading, setLoading] = useState(true);
   // Bumped by reload() to re-run the fetch effect for the same preset.
@@ -164,12 +192,19 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
     setPresetState(index);
     setLoading(true);
     setError(null);
+    setErrorKind(null);
     setStale(null);
   }, []);
 
   const reload = useCallback(() => {
     setLoading(true);
     setError(null);
+    setErrorKind(null);
+    setGeneration((g) => g + 1);
+  }, []);
+
+  const refresh = useCallback(() => {
+    setRefreshing(true);
     setGeneration((g) => g + 1);
   }, []);
 
@@ -185,6 +220,7 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
       if (!cached) return false;
       setData(cached.payload);
       setError(null);
+      setErrorKind(null);
       setStale({ savedAt: cached.savedAt, reason, failed });
       setLoading(false);
       return true;
@@ -207,6 +243,7 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
           if (cancelled) return;
           setData(next);
           setError(null);
+          setErrorKind(null);
           setStale(null);
           if (live) saveLiveOutlook(next);
         },
@@ -217,6 +254,7 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
             setData(null);
             setStale(null);
             setError(message);
+            setErrorKind(errorKindOf(err));
           }
         },
       )
@@ -224,6 +262,7 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
         window.clearTimeout(slow);
         if (!cancelled) {
           setLoading(false);
+          setRefreshing(false);
           setSettled(`${preset}:${generation}`);
         }
       });
@@ -246,7 +285,7 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, [retrying]);
 
-  useSyncPresetToUrl(OUTLOOK_PRESETS, preset, setPreset);
+  const unknownAt = useSyncPresetToUrl(OUTLOOK_PRESETS, preset, setPreset);
   useSyncTabToUrl(tab, setTab);
 
   /* Announced once for the workspace rather than once per view. The header and
@@ -255,8 +294,35 @@ export function OutlookDataProvider({ children }: { children: ReactNode }) {
   usePublishOutlookMode(data?.mode, data?.as_of);
 
   const value = useMemo<OutlookDataState>(
-    () => ({ data, loading, error, stale, preset, setPreset, reload, tab, setTab }),
-    [data, loading, error, stale, preset, setPreset, reload, tab],
+    () => ({
+      data,
+      loading,
+      refreshing,
+      error,
+      errorKind,
+      stale,
+      preset,
+      setPreset,
+      reload,
+      refresh,
+      tab,
+      setTab,
+      unknownAt,
+    }),
+    [
+      data,
+      loading,
+      refreshing,
+      error,
+      errorKind,
+      stale,
+      preset,
+      setPreset,
+      reload,
+      refresh,
+      tab,
+      unknownAt,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

@@ -5,15 +5,16 @@
  */
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
-import { ArrowLeft, MapPin, ChevronRight } from "lucide-react";
+import { ArrowLeft, MapPin, ChevronRight, SearchX } from "lucide-react";
 
 import AdvisoryCard, {
   DecisionTraceCard,
   MethodologyCard,
   PolicyRetrievalCard,
 } from "@/components/AdvisoryCard";
-import AIAnalysis from "@/components/AIAnalysis";
+import AIAnalysis, { AI_UNAVAILABLE_MESSAGE, aiUnavailable } from "@/components/AIAnalysis";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import {
   DataSourceTransparency,
@@ -34,6 +35,7 @@ import ReportDownload from "@/components/ReportDownload";
 import RiskChart from "@/components/RiskChart";
 import SatelliteCard from "@/components/SatelliteCard";
 import StationMapLoader from "@/components/StationMapLoader";
+import StationSelector from "@/components/StationSelector";
 import AQIHero from "@/components/station/AQIHero";
 import StationHeader from "@/components/station/StationHeader";
 import { RecommendedAction, RiskExplain } from "@/components/station/RiskIntelligence";
@@ -64,6 +66,7 @@ const POLL_MS = 5000;
 
 export default function StationDashboard({ station }: { station: string }) {
   const config = useEngineConfig();
+  const router = useRouter();
 
   // Names the printed brief. The label, not the key: the paper is read by people.
   usePrintSubject(stationLabel(station));
@@ -76,26 +79,40 @@ export default function StationDashboard({ station }: { station: string }) {
     deps: [station],
     refreshKey,
   });
+
+  /* The engine answers 404 only for a key it has never heard of. Every other
+     section would fail the same way, so they are switched off rather than left to
+     poll eleven copies of one error. */
+  const notFound =
+    !detail.data && detail.error instanceof ApiError && detail.error.status === 404;
+  const enabled = !notFound;
+
   const advisory = usePolling<AdvisoryResponse>(
     (signal) => api.advisory(station, signal),
-    { intervalMs: POLL_MS, deps: [station], refreshKey },
+    { intervalMs: POLL_MS, deps: [station], refreshKey, enabled },
   );
   const forecast = usePolling<ForecastResponse>(
     (signal) => api.forecast(station, signal),
-    { intervalMs: POLL_MS, deps: [station], refreshKey },
+    { intervalMs: POLL_MS, deps: [station], refreshKey, enabled },
   );
   const health = usePolling<HealthImpactResponse>(
     (signal) => api.healthImpact(station, signal),
-    { intervalMs: POLL_MS, deps: [station], refreshKey },
+    { intervalMs: POLL_MS, deps: [station], refreshKey, enabled },
   );
   const ai = usePolling<AIResponse>((signal) => api.ai(station, signal), {
     intervalMs: POLL_MS,
     deps: [station],
     refreshKey,
+    enabled,
   });
   const overview = usePolling<DashboardResponse>((signal) => api.dashboard(signal), {
     intervalMs: 15000,
+    enabled,
   });
+
+  /* A response with no model and no text is "nothing ran", not an interpretation.
+     Treating it as no data lets the section's empty state say so. */
+  const aiState = aiUnavailable(ai.data) ? { ...ai, data: null } : ai;
 
   const data = detail.data;
 
@@ -109,7 +126,8 @@ export default function StationDashboard({ station }: { station: string }) {
      The name comes from the station key the page was already given. stationLabel()
      only strips the feed suffix, so it cannot invent a name; if the key is somehow
      empty it returns "—", and the fallback below keeps the crumb readable. */
-  const stationName = stationLabel(station) || "Station";
+  const label = stationLabel(station);
+  const stationName = label && label !== "—" ? label : "Station";
   const crumbs = useMemo(
     () => [
       { label: "AREE", href: "/" },
@@ -143,6 +161,44 @@ export default function StationDashboard({ station }: { station: string }) {
     detail.error instanceof ApiError && detail.error.isFeedUnavailable
       ? detail.error
       : null;
+
+  if (notFound) {
+    return (
+      <div className="flex flex-col max-w-[1400px] mx-auto pb-12">
+        <Breadcrumbs items={crumbs} className="mb-3" />
+        <IntelligencePanel title="Station not found">
+          <div className="p-6 sm:p-8 flex flex-col items-start gap-4">
+            <div className="flex items-center gap-3">
+              <SearchX className="h-6 w-6 text-aree-dim" aria-hidden />
+              <p className="text-aree-text text-[15px] font-semibold">
+                The engine does not monitor a station called “{station}”.
+              </p>
+            </div>
+            <p className="text-aree-muted text-[13px] leading-relaxed">
+              The link may be out of date or mistyped. Choose a station from the list, or
+              return to the NCR overview.
+            </p>
+            <div className="w-full sm:w-[320px]">
+              <StationSelector
+                id="station-not-found-switcher"
+                value={null}
+                onChange={(next) => {
+                  if (next) router.push(`/stations/${encodeURIComponent(next)}`);
+                }}
+              />
+            </div>
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-aree-forest text-sm font-semibold hover:underline"
+            >
+              <ArrowLeft className="h-4 w-4" aria-hidden />
+              NCR Overview
+            </Link>
+          </div>
+        </IntelligencePanel>
+      </div>
+    );
+  }
 
   if (feedDown) {
     return (
@@ -308,9 +364,9 @@ export default function StationDashboard({ station }: { station: string }) {
       <div className="space-y-6">
         <SectionHeader index="08">AI risk interpretation</SectionHeader>
         <SectionState
-          state={ai}
+          state={aiState}
           skeleton={<AnalysisSkeleton />}
-          emptyMessage="No interpretation available for this station yet."
+          emptyMessage={AI_UNAVAILABLE_MESSAGE}
         >
           {(a) => <AIAnalysis ai={a} data={detail.data} advisory={advisory.data} />}
         </SectionState>

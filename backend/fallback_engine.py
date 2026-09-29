@@ -196,9 +196,12 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
 
     prev = latest_state.get(name, {})
     if computed.get("grap_transitioned"):
-        escalation_log.append({
+        # Newest first, matching app.py's appendleft - the API and the WS
+        # broadcaster both read the head of this list as "most recent".
+        escalation_log.insert(0, {
             "timestamp": now,
             "station": name,
+            "city": name,           # app.py's key for the same field
             "from_stage": computed.get("previous_stage"),
             "to_stage": computed.get("grap_stage"),
             "aqi": aqi,
@@ -238,6 +241,9 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         # ages are published so neither can be read as the other's.
         "pollutant_source": station.get("pollutant_source"),
         "pollutant_age_minutes": station.get("pollutant_age_minutes"),
+        # "sub_index" or "concentration": CPCB's own feed publishes the first,
+        # OpenAQ the second, and the raw_* numbers mean nothing without it.
+        "pollutant_quantity": station.get("pollutant_quantity"),
         "wind_speed": station.get("wind_speed"),
         "wind_direction": station.get("wind_direction"),
 
@@ -249,7 +255,11 @@ def _build_state(station: dict, engine, now: datetime) -> dict:
         # stations view.
         "waqi_timestamp": _iso(station.get("observed_at")),
         "station_name_api": name,
-        "stale_seconds": station.get("age_minutes", 0) * 60,
+        # None when the source gave no age: 0 would read as "just observed".
+        "stale_seconds": (station["age_minutes"] * 60
+                          if station.get("age_minutes") is not None else None),
+        # Which network produced this row; the PDF footer cites it.
+        "observation_source": station.get("source"),
         "ingestion_status": "ok",
         "ingestion_error": None,
         "feed_id": str(station.get("location_id", "")),
@@ -327,32 +337,81 @@ _POLLUTANT_KEYS = (
 )
 
 
-def _attach_pollutants(stations: list[dict]) -> int:
-    """Join per-pollutant concentrations onto the CAQM station table.
+def _from_cpcb_live(now: datetime) -> list[dict]:
+    from ingestion import cpcb_live
+    return cpcb_live.fetch_ncr(now)
 
-    CAQM publishes sub-indices only - there is no concentration anywhere in its
-    payloads - so the seven pollutant values come from CPCB via data.gov.in,
-    which pivot_stations() already extracts and which nothing was reading.
-    Measured: 54 of 55 CAQM stations match a data.gov.in station by exact name.
 
-    The two halves have DIFFERENT AGES: the AQI is ~80 min old, the
-    concentrations ~5 h. That is recorded per station as pollutant_age_minutes
-    rather than smoothed over, because presenting a five-hour-old NO2 beside a
-    fresh AQI as though they were one observation is the kind of quiet
-    conflation that makes a dashboard untrustworthy.
+def _from_data_gov_in(now: datetime) -> list[dict]:
+    from ingestion import cpcb_stream
+    return cpcb_stream.fetch_ncr()
+
+
+def _from_openaq(now: datetime) -> list[dict]:
+    from ingestion import ncr_observations
+    return ncr_observations.fetch_ncr_pollutants(now)
+
+
+# Tried in order; each fills only the stations the ones before it left empty.
+#
+# data.gov.in's quantity is recorded as "concentration" because that is what
+# this code has always taken it to be. cpcb_live's docstring shows the feed it
+# republishes carries sub-indices, so the two very likely agree - but that was
+# measured on CPCB's copy while data.gov.in was down, and a unit is not
+# relabelled on inference alone.
+_POLLUTANT_SOURCES = (
+    ("CPCB CAAQMS (airquality.cpcb.gov.in)", "sub_index", _from_cpcb_live),
+    ("CPCB CAAQMS via data.gov.in", "concentration", _from_data_gov_in),
+    ("OpenAQ v3 (CPCB mirror)", "concentration", _from_openaq),
+)
+
+
+def _attach_pollutants(stations: list[dict], on_progress=None) -> int:
+    """Join per-pollutant readings onto the CAQM station table.
+
+    CAQM publishes the leading pollutant's sub-index and nothing else, so the
+    seven per-pollutant values come from another feed. _POLLUTANT_SOURCES
+    lists them fastest and freshest first; each one fills only the stations
+    the sources before it left empty.
+
+    The halves can have DIFFERENT AGES: the AQI is ~80 min old, data.gov.in's
+    readings ~5 h. That is recorded per station as pollutant_age_minutes rather
+    than smoothed over, because presenting a five-hour-old NO2 beside a fresh
+    AQI as though they were one observation is the kind of quiet conflation
+    that makes a dashboard untrustworthy.
+
+    `on_progress` runs after every source that matched something, so a caller
+    can publish those stations without waiting on the slower sources behind it.
 
     Returns the number of stations enriched. Failure is non-fatal: the station
     table is already complete without it.
     """
-    try:
-        from ingestion.cpcb_stream import fetch_ncr as _cpcb_ncr
-        rows = _cpcb_ncr()
-    except Exception as exc:                                # noqa: BLE001
-        log.warning("pollutant enrichment unavailable: %s", exc)
-        return 0
-
-    by_name = {r["station"]: r for r in rows if r.get("station")}
     now = datetime.now(timezone.utc)
+    matched = 0
+    for source, quantity, fetch in _POLLUTANT_SOURCES:
+        pending = [st for st in stations if not st.get("pollutants_available")]
+        if not pending:
+            break
+        try:
+            found = _join_pollutants(pending, fetch(now), source, now,
+                                     quantity=quantity)
+        except Exception as exc:                            # noqa: BLE001
+            log.warning("pollutants from %s unavailable: %s", source, exc)
+            continue
+        if found:
+            log.info("pollutants: %d stations filled from %s", found, source)
+            matched += found
+            if on_progress:
+                on_progress()
+
+    log.info("pollutants: %d/%d stations enriched", matched, len(stations))
+    return matched
+
+
+def _join_pollutants(stations: list[dict], rows: list[dict], source: str,
+                     now: datetime, quantity: str = "concentration") -> int:
+    """Copy per-pollutant values from `rows` onto stations with the same name."""
+    by_name = {r["station"]: r for r in rows if r.get("station")}
     matched = 0
 
     for st in stations:
@@ -369,7 +428,8 @@ def _attach_pollutants(stations: list[dict]) -> int:
             continue
         matched += 1
         st["pollutants_available"] = found
-        st["pollutant_source"] = "CPCB CAAQMS via data.gov.in"
+        st["pollutant_source"] = source
+        st["pollutant_quantity"] = quantity
         observed = src.get("observed_at")
         st["pollutant_age_minutes"] = (
             round((now - observed).total_seconds() / 60.0) if observed else None
@@ -379,8 +439,6 @@ def _attach_pollutants(stations: list[dict]) -> int:
         if not st.get("dominant_pollutant") and src.get("pm25") is not None:
             st["dominant_pollutant"] = "pm25"
 
-    log.info("pollutants: %d/%d stations enriched from data.gov.in",
-             matched, len(stations))
     return matched
 
 
@@ -414,32 +472,39 @@ def _enrich_published_pollutants(stations: list[dict]) -> int:
         assignment. latest_state is read by request threads without a lock, and
         dict item assignment is atomic under the GIL, so a reader sees either
         the un-enriched state or the enriched one, never a half-written mix.
+
+    WHY IT PATCHES AFTER EVERY SOURCE
+        Each cycle republishes the station table without pollutants, so the
+        tiles stay blank until this patch lands. Patching only at the end made
+        the fast CPCB feed wait on data.gov.in, which spends 140 s in retries
+        when it is down - blank tiles for most of every cycle.
     """
-    if not _attach_pollutants(stations):
-        return 0
+    patched: set[str] = set()
 
-    patched = 0
-    for st in stations:
-        current = latest_state.get(st["station"])
-        # A station whose enrichment found nothing keeps its published state
-        # untouched: pollutant_source is set only when a match supplied at
-        # least one value, so it is the flag for "this row was enriched".
-        if current is None or st.get("pollutant_source") is None:
-            continue
-        updated = dict(current)
-        for _, raw_key in _POLLUTANT_KEYS:
-            if st.get(raw_key) is not None:
-                updated[raw_key] = st[raw_key]
-        updated["pollutants_available"] = st.get("pollutants_available", 0)
-        updated["pollutant_source"] = st.get("pollutant_source")
-        updated["pollutant_age_minutes"] = st.get("pollutant_age_minutes")
-        if st.get("dominant_pollutant"):
-            updated["dominant_pollutant"] = st["dominant_pollutant"]
-        latest_state[st["station"]] = updated
-        patched += 1
+    def _patch() -> None:
+        for st in stations:
+            current = latest_state.get(st["station"])
+            # A station whose enrichment found nothing keeps its published
+            # state untouched: pollutant_source is set only when a match
+            # supplied at least one value, so it is the flag for "enriched".
+            if current is None or st.get("pollutant_source") is None:
+                continue
+            updated = dict(current)
+            for _, raw_key in _POLLUTANT_KEYS:
+                if st.get(raw_key) is not None:
+                    updated[raw_key] = st[raw_key]
+            updated["pollutants_available"] = st.get("pollutants_available", 0)
+            updated["pollutant_source"] = st.get("pollutant_source")
+            updated["pollutant_age_minutes"] = st.get("pollutant_age_minutes")
+            updated["pollutant_quantity"] = st.get("pollutant_quantity")
+            if st.get("dominant_pollutant"):
+                updated["dominant_pollutant"] = st["dominant_pollutant"]
+            latest_state[st["station"]] = updated
+            patched.add(st["station"])
 
-    log.info("pollutants: %d station states patched after publish", patched)
-    return patched
+    _attach_pollutants(stations, on_progress=_patch)
+    log.info("pollutants: %d station states patched after publish", len(patched))
+    return len(patched)
 
 
 def _poll_once() -> int:
@@ -472,7 +537,8 @@ def _poll_once() -> int:
             log.warning("direct engine: no ground observations (%s)",
                         composite.get("reason"))
             return 0
-        stations = composite.get("stations", [])
+        stations = [dict(st, source=st.get("source") or composite.get("source"))
+                    for st in composite.get("stations", [])]
 
     engine = _engines_for_cycle()
     now = datetime.now(timezone.utc)

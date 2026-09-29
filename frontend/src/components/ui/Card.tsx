@@ -47,6 +47,7 @@ export function Panel({
   padding = "p-4 sm:p-5",
   accent,
   bodyClassName = "",
+  headingLevel = 3,
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
@@ -59,7 +60,14 @@ export function Panel({
   padding?: string;
   accent?: string;
   bodyClassName?: string;
+  /**
+   * Level of the title element. Visual style is identical at every level; this
+   * only keeps the document outline correct where a panel sits directly under
+   * the page's h1 rather than under an h2 section.
+   */
+  headingLevel?: 2 | 3 | 4;
 }) {
+  const Heading = `h${headingLevel}` as const;
   const actionSlot = right ?? headerAction;
   const variantClass = variant ? (variant === "default" ? "" : variant) : "";
   return (
@@ -82,9 +90,9 @@ export function Panel({
                   aria-hidden
                 />
               ) : null}
-              <h3 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
+              <Heading className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
                 {title}
-              </h3>
+              </Heading>
             </div>
             {subtitle ? (
               <p className="text-[11px] text-aree-dim mt-0.5">{subtitle}</p>
@@ -109,6 +117,7 @@ export function IntelligencePanel({
   children,
   className = "",
   padding = "p-4 sm:p-5",
+  headingLevel,
 }: {
   title?: ReactNode;
   subtitle?: ReactNode;
@@ -119,9 +128,11 @@ export function IntelligencePanel({
   children: ReactNode;
   className?: string;
   padding?: string;
+  headingLevel?: 2 | 3 | 4;
 }) {
   return (
     <Panel
+      headingLevel={headingLevel}
       title={title}
       subtitle={subtitle}
       icon={icon}
@@ -259,7 +270,7 @@ export function SectionHeader({
     <div className="mt-6 mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 sm:mt-8">
       <h2 className="flex items-center gap-2 text-[12px] font-black tracking-widest text-aree-forest uppercase">
         {index ? (
-          <span className="text-aree-accent font-mono font-bold">
+          <span className="text-aree-accent-strong font-mono font-bold">
             {index}
           </span>
         ) : null}

@@ -257,10 +257,13 @@ export default function EscalationHistory({
                   }
 
                   const event = entry.event;
+                  // The two engines name the station under different keys (see
+                  // EscalationEvent); a row with neither is shown but not linked.
+                  const eventStation = event.city ?? event.station ?? null;
 
                   return (
                     <TimelineEvent
-                      key={`esc-${event.timestamp}-${event.city}-${index}`}
+                      key={`esc-${event.timestamp}-${eventStation}-${index}`}
                       icon={<TrendingUp className="h-4 w-4" />}
                       iconColor={grapColor(event.to_stage)}
                       /* IST, through the existing helper — the raw value is kept as a
@@ -270,13 +273,17 @@ export default function EscalationHistory({
                     >
                       <div className="flex flex-col gap-1.5">
                         <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                          {station ? null : (
+                          {station ? null : eventStation ? (
                             <Link
-                              href={`/stations/${encodeURIComponent(event.city ?? "")}`}
+                              href={`/stations/${encodeURIComponent(eventStation)}`}
                               className="text-aree-text hover:text-aree-accent text-[14px] font-bold transition-colors"
                             >
-                              {stationLabel(event.city)}
+                              {stationLabel(eventStation)}
                             </Link>
+                          ) : (
+                            <span className="text-aree-muted text-[14px] font-bold">
+                              Station not recorded
+                            </span>
                           )}
                         </div>
                         

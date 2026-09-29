@@ -3,13 +3,12 @@
 /**
  * National Regulatory Overview — Environmental Intelligence Command Center.
  * Layout strictly matching the provided reference system design:
- * Row 1: National Environmental Map + National Summary Grid
+ * Row 1: NCR Environmental Map + NCR Summary Grid
  * Row 2: AQI Distribution Donut + Top 5 Stations by AQI + Data Health Overview
  * Row 3: Recent Events Stream
  */
 
 import { useMemo, useState } from "react";
-import { Layers } from "lucide-react";
 
 import StationMapLoader from "@/components/StationMapLoader";
 import {
@@ -22,6 +21,7 @@ import {
 } from "@/components/national/NationalPanels";
 import { useStations, useSystemStatus } from "@/components/providers/LiveDataProvider";
 import { EmptyState, ErrorState, SkeletonMap } from "@/components/ui/States";
+import { AQI_BANDS } from "@/lib/theme";
 import type { MapStation } from "@/components/StationMap";
 
 /* One value for the map, its skeleton and the box that holds them, so the three
@@ -68,22 +68,18 @@ export default function HomePage() {
         <div className="grid gap-4 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.85fr)_minmax(340px,1.15fr)]">
           {/* Left Panel: National Environmental Map */}
           <div className="bg-aree-card border border-aree-border rounded-xl p-3 sm:p-5 shadow-xs flex flex-col justify-between">
+            {/* The page's one h1, styled as the card title it sits in. A "Layers"
+                button used to sit beside it with no handler — there is no layer
+                feature, so the control is gone rather than left inert. */}
             <div className="flex items-start justify-between gap-3 mb-3">
               <div className="min-w-0">
-                <h2 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
+                <h1 className="text-[12px] font-black tracking-wider uppercase text-aree-text font-sans">
                   DELHI NCR MONITORING NETWORK
-                </h2>
+                </h1>
                 <p className="text-[11px] text-aree-dim mt-0.5">
                   Observed air quality and regulatory status across the NCR airshed
                 </p>
               </div>
-              <button
-                type="button"
-                className="shrink-0 p-1.5 rounded-lg border border-aree-border bg-aree-surface-2 hover:bg-aree-border text-aree-muted transition-colors"
-                title="Layers"
-              >
-                <Layers className="w-4 h-4" />
-              </button>
             </div>
 
             <div className="relative isolate rounded-lg overflow-hidden flex-1 min-h-[280px]">
@@ -91,7 +87,7 @@ export default function HomePage() {
                 <SkeletonMap height={MAP_HEIGHT} />
               ) : mapStations.length === 0 ? (
                 <EmptyState>
-                  No station coordinates available yet. Markers appear as nodes come online.
+                  No station coordinates available yet. Markers appear as stations come online.
                 </EmptyState>
               ) : (
                 <StationMapLoader
@@ -111,19 +107,16 @@ export default function HomePage() {
                   rather than pushing the card sideways. On a phone the two rows
                   become several; the alternative — a legend that overflows its own
                   map — is what the reader would have to scroll horizontally to read. */}
-              <div className="absolute bottom-3 left-3 right-3 z-[1000] max-w-fit bg-aree-card/95 backdrop-blur-xs border border-aree-border px-3 py-2 rounded-lg shadow-sm text-[10px] sm:text-[10.5px] text-aree-text">
+              {/* Only over a drawn map: over the skeleton or the empty state it
+                  covered the very message explaining why there is no map. It sits
+                  above the bottom edge so it never hides the tile attribution. */}
+              {!stationsState.initialLoading && mapStations.length > 0 ? (
+              <div className="absolute bottom-7 left-3 right-3 z-[1000] max-w-fit bg-aree-card/95 backdrop-blur-xs border border-aree-border px-3 py-2 rounded-lg shadow-sm text-[10px] sm:text-[10.5px] text-aree-text">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                   <span className="font-bold uppercase tracking-wide text-[9px] text-aree-dim w-[52px]">
                     AQI
                   </span>
-                  {[
-                    ["0–50", "var(--aree-green)"],
-                    ["51–100", "var(--aree-lime)"],
-                    ["101–200", "var(--aree-amber)"],
-                    ["201–300", "var(--aree-orange)"],
-                    ["301–400", "var(--aree-red)"],
-                    ["401+", "var(--aree-crimson)"],
-                  ].map(([range, colour]) => (
+                  {AQI_BANDS.map(({ range, color: colour }) => (
                     <span key={range} className="flex items-center gap-1">
                       <span
                         className="h-2.5 w-2.5 rounded-full"
@@ -151,6 +144,7 @@ export default function HomePage() {
                   </span>
                 </div>
               </div>
+              ) : null}
             </div>
           </div>
 
@@ -159,6 +153,7 @@ export default function HomePage() {
             facts={facts}
             status={status}
             stations={stations}
+            loading={stationsState.initialLoading && !stations}
           />
         </div>
       )}

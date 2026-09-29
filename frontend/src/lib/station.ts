@@ -21,6 +21,23 @@ export function feedLabel(feedId: string | null | undefined): string | null {
   return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
 }
 
+/**
+ * Who published the station's AQI, for labels.
+ *
+ * The station payload has no single provenance field: the Pathway engine reads the
+ * index from WAQI and fills `waqi_aqi`, while direct mode reads CAQM and leaves
+ * `waqi_aqi` null (fallback_engine). An explicit `source`, if a payload ever
+ * carries one, wins; otherwise CAQM is the default because it is the path the
+ * deployed engine runs.
+ */
+export function aqiSourceLabel(
+  data: { waqi_aqi?: number | null; source?: string | null } | null | undefined,
+): string {
+  if (data?.source) return data.source;
+  if (data?.waqi_aqi !== null && data?.waqi_aqi !== undefined) return "WAQI";
+  return "CAQM";
+}
+
 /** Pollutant keys as WAQI reports them, rendered the way regulators write them. */
 const POLLUTANT_LABELS: Record<string, string> = {
   pm25: "PM2.5",

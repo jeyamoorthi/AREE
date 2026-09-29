@@ -123,7 +123,13 @@ class SystemStatus(BaseModel):
     stale_stations: int = 0
     unavailable_stations: int = 0
     rag_status: Optional[str] = None
+    #: Policy documents present on disk (both engines fill it this way). It is
+    #: NOT an embedding count - see rag_chunks_indexed for that.
     rag_docs_indexed: Optional[int] = None
+    #: Same count as rag_docs_indexed, under a name that says what it is.
+    rag_files_on_disk: Optional[int] = None
+    #: Chunks actually embedded in the retrieval index; 0 in direct mode.
+    rag_chunks_indexed: Optional[int] = None
     llm_ready: Optional[bool] = None
     llm_model: Optional[str] = None
     llm_error: Optional[str] = None
@@ -271,6 +277,9 @@ class AQIResponse(BaseModel):
     #: above them. Both are published so neither is read as the other's age.
     pollutant_source: Optional[str] = None
     pollutant_age_minutes: Optional[int] = None
+    #: "sub_index" or "concentration" - what the pollutant values measure.
+    #: CPCB's own feed publishes sub-indices; OpenAQ publishes concentrations.
+    pollutant_quantity: Optional[str] = None
     ingestion_status: Optional[str] = None
     ingestion_error: Optional[str] = None
     avg_aqi_5min: Optional[float] = None
@@ -435,6 +444,8 @@ class EscalationEvent(BaseModel):
 
     timestamp: Optional[str] = None
     city: Optional[str] = None
+    #: Same value as ``city``; the direct engine's native key for it.
+    station: Optional[str] = None
     aqi: Optional[int] = None
     from_stage: Optional[str] = None
     to_stage: Optional[str] = None
@@ -466,8 +477,14 @@ class PolicyParseError(BaseModel):
 
 class PolicyResponse(BaseModel):
     index_type: Optional[str] = None
+    #: Policy documents present on disk (historical name; not an embedding count).
     docs_indexed: int = 0
+    #: Same count as docs_indexed, under an unambiguous name.
+    files_on_disk: int = 0
+    #: Chunks actually embedded; 0 whenever retrieval is not running.
     chunks_indexed: int = 0
+    #: Whether the documents are embedded and retrievable in the running engine.
+    indexed: bool = False
     embed_model: Optional[str] = None
     last_reindex: Optional[str] = None
     store_status: Optional[str] = None
@@ -480,7 +497,11 @@ class PolicyUploadResponse(BaseModel):
     uploaded: str
     size_bytes: int
     saved_to: str
+    #: Policy documents on disk after this upload (see PolicyResponse).
     docs_indexed: int
+    files_on_disk: int = 0
+    #: True when a document of the same name was overwritten.
+    replaced: bool = False
     message: str
 
 

@@ -50,8 +50,11 @@ import {
   History,
   Info,
   Radio,
+  MoveRight,
+  RefreshCw,
   ShieldCheck,
   TrendingDown,
+  TrendingUp,
   Wind,
 } from "lucide-react";
 
@@ -67,8 +70,8 @@ import {
   OUTLOOK_PRESETS,
   useOutlookData,
 } from "@/components/providers/OutlookDataProvider";
-import { CPCB_PM25_BANDS } from "@/lib/cpcb";
-import type { MechanismLink } from "@/types";
+import { CPCB_PM25_BANDS, bandColour } from "@/lib/cpcb";
+import type { MechanismLink, OutlookDecision } from "@/types";
 
 /* Indian operators read IST. UTC stays in the payload and in provenance so the
    record is unambiguous; the screen speaks local time. */
@@ -86,6 +89,32 @@ function ist(iso: string, withDate = true): string {
     timeZone: "Asia/Kolkata",
   });
   return `${day}, ${time} IST`;
+}
+
+/**
+ * Where the case stands, in words. The persisted status wins over the engine's
+ * proposal (`approval_state`): once an officer has decided, "awaiting approval"
+ * is no longer true.
+ */
+function caseStateLabel(decision: OutlookDecision): string {
+  const status = decision.case_status ?? decision.approval_state;
+  switch (status) {
+    case "APPROVED":
+      return "Approved";
+    case "REJECTED":
+      return "Rejected";
+    case "AWAITING_APPROVAL":
+      return "Awaiting approval";
+    case "NO_CASE":
+    case "":
+      return "No case";
+    default:
+      return status.replace(/_/g, " ").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+  }
+}
+
+function plural(n: number, one: string, many: string): string {
+  return n === 1 ? one : many;
 }
 
 function utc(iso: string): string {
@@ -266,6 +295,8 @@ function Stat({
 function MechanismCell({ link, tone }: { link: MechanismLink; tone: string }) {
   if (!link.available) return null;
   const falling = link.direction === "falling";
+  const rising = link.direction === "rising";
+  const Icon = falling ? TrendingDown : rising ? TrendingUp : MoveRight;
   const word =
     link.label === "Wind"
       ? "Weakening"
@@ -275,7 +306,7 @@ function MechanismCell({ link, tone }: { link: MechanismLink; tone: string }) {
   const ink = falling ? styleFor(tone).ink : C.muted;
   return (
     <div className="flex items-start gap-2">
-      <TrendingDown className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: ink }} />
+      <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: ink }} aria-hidden />
       <div className="min-w-0">
         <Eyebrow>{link.label}</Eyebrow>
         <p className="mt-1 text-[13px] font-bold tabular-nums" style={{ color: C.ink }}>
@@ -285,7 +316,7 @@ function MechanismCell({ link, tone }: { link: MechanismLink; tone: string }) {
           </span>
         </p>
         <p className="text-[10.5px] font-semibold" style={{ color: ink }}>
-          {falling ? word : "Steady"}
+          {falling ? word : rising ? "Rising" : "Steady"}
         </p>
       </div>
     </div>
@@ -300,7 +331,7 @@ export default function OutlookView() {
      Diagnostics tab renders the SAME object, so the two cannot describe different
      hours. `setTab` is here only for the cross-view link at the foot of section 03,
      which used to be a navigation to another route. */
-  const { data, loading, error, stale, preset, setPreset, reload, setTab } =
+  const { data, loading, error, errorKind, stale, preset, setPreset, reload, refresh, setTab } =
     useOutlookData();
 
   /* Preset 0 is Live; anything else is a reconstruction of a fixed past moment. The
@@ -440,7 +471,43 @@ export default function OutlookView() {
           It is demoted beneath a sentence that says what happened and a control that
           gets the reader somewhere useful. */}
       {error && !loading && (
-        onReplayPreset ? (
+        onReplayPreset && errorKind !== "no_data" ? (
+          /* A network failure, a timeout or a 5xx says nothing about whether the
+             replay store has that date; telling the reader it has no observations
+             would send them away from a replay that works on the next attempt. */
+          <div
+            className="rounded-lg border p-4"
+            style={{ background: C.wash, borderColor: C.line }}
+            role="status"
+          >
+            <p className="text-[12.5px] font-bold" style={{ color: C.ink }}>
+              Couldn&apos;t load the replay for {presetLabel} — retry
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={reload}
+                className="flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
+                style={{ background: C.ink, borderColor: C.ink, color: "var(--aree-bg)" }}
+              >
+                <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                Retry
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreset(0)}
+                className="rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
+                style={{ background: C.paper, borderColor: C.line, color: C.body }}
+              >
+                Show the live outlook
+              </button>
+            </div>
+            <p className="mt-3 border-t pt-2 font-mono text-[10.5px] leading-snug"
+               style={{ borderColor: C.line, color: C.dim }}>
+              {error}
+            </p>
+          </div>
+        ) : onReplayPreset ? (
           <div
             className="rounded-lg border p-4"
             style={{
@@ -455,8 +522,9 @@ export default function OutlookView() {
 
             <p className="mt-1 max-w-[70ch] text-[12px] leading-snug" style={{ color: C.body }}>
               A replay reconstructs a past moment from observations recorded at the
-              time. This deployment has none for that date, so there is nothing to
-              reconstruct — switching to Live shows the current airshed.
+              time. This deployment has no stored observations for that date — the
+              replay store has not been seeded with it — so there is nothing to
+              reconstruct. Switching to Live shows the current airshed.
             </p>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -605,11 +673,7 @@ export default function OutlookView() {
                   <span className="text-[11.5px]" style={{ color: C.body }}>
                     <b>{data.decision.priority}</b> priority ·{" "}
                     {data.decision.recommended_measures.length} measures ·{" "}
-                    <b>
-                      {(data.decision.case_status ?? data.decision.approval_state)
-                        .replace(/_/g, " ")
-                        .toLowerCase()}
-                    </b>
+                    <b>{caseStateLabel(data.decision).toLowerCase()}</b>
                   </span>
                 ) : (
                   <span className="text-[11.5px]" style={{ color: C.body }}>
@@ -665,9 +729,11 @@ export default function OutlookView() {
                   style={{ color: C.ink }}
                 >
                   {data.observation.n_stations !== null
-                    ? `${data.observation.n_stations} ${
-                        data.observation.n_stations === 1 ? "monitor" : "stations"
-                      }`
+                    ? `${data.observation.n_stations} ${plural(
+                        data.observation.n_stations,
+                        "station",
+                        "stations",
+                      )}`
                     : "count not recorded"}
                 </p>
                 <p className="text-[10.5px] leading-snug" style={{ color: C.dim }}>
@@ -808,7 +874,8 @@ export default function OutlookView() {
                         </span>
                         <span
                           className="text-[12px] font-bold tabular-nums"
-                          style={{ color: s.pm25 > 100 ? "var(--aree-red)" : C.body }}
+                          // The backend's band, not a threshold picked here.
+                          style={{ color: bandColour(s.band) }}
                         >
                           {s.pm25.toFixed(0)}
                         </span>
@@ -857,7 +924,12 @@ export default function OutlookView() {
                       </span>
                     </p>
                     <p className="mt-1 text-[10.5px]" style={{ color: C.dim }}>
-                      {exposure?.n_monitors ?? data.observation.n_stations ?? "?"} monitor
+                      {(() => {
+                        const n = exposure?.n_monitors ?? data.observation.n_stations;
+                        return typeof n === "number"
+                          ? `${n} ${plural(n, "monitor", "monitors")}`
+                          : "Monitor count not recorded";
+                      })()}{" "}
                       · {data.observation.source}
                     </p>
                   </div>
@@ -885,14 +957,14 @@ export default function OutlookView() {
                     className="mr-1 inline-block h-[2px] w-3 align-middle"
                     style={{ background: C.ink }}
                   />
-                  Median forecast (L1)
+                  Median forecast
                 </span>
                 <span className="text-[10px]" style={{ color: C.muted }}>
                   <span
                     className="mr-1 inline-block h-2 w-3 rounded-sm align-middle"
                     style={{ background: "color-mix(in srgb, var(--aree-orange) 35%, transparent)" }}
                   />
-                  Upper-tail risk (q90) — not a prediction
+                  90th-percentile (upper) forecast — a risk bound, not a prediction
                 </span>
                 <span className="text-[10px]" style={{ color: C.muted }}>
                   <span
@@ -951,8 +1023,12 @@ export default function OutlookView() {
                     contentStyle={{
                       fontSize: 11,
                       borderRadius: 6,
-                      border: `1px solid ${C.line}`,
+                      background: "var(--aree-surface-2)",
+                      border: "1px solid var(--aree-border-strong)",
+                      boxShadow: "var(--aree-shadow-sm)",
                     }}
+                    labelStyle={{ color: "var(--aree-muted)" }}
+                    itemStyle={{ color: "var(--aree-text)", fontWeight: 500 }}
                   />
                   {band && (
                     <ReferenceArea
@@ -964,7 +1040,7 @@ export default function OutlookView() {
                   )}
                   <Area
                     dataKey="upper"
-                    name="Upper-tail risk (q90)"
+                    name="90th-percentile (upper) forecast"
                     stroke={C.orange}
                     fill="color-mix(in srgb, var(--aree-orange) 25%, transparent)"
                     fillOpacity={0.85}
@@ -973,7 +1049,7 @@ export default function OutlookView() {
                   />
                   <Line
                     dataKey="central"
-                    name="Median forecast (L1)"
+                    name="Median forecast"
                     stroke={C.ink}
                     strokeWidth={1.8}
                     dot={false}
@@ -1075,7 +1151,7 @@ export default function OutlookView() {
                       .replace(/^\w/, (c) => c.toUpperCase())}
                   </p>
                   <p className="text-[10.5px] font-semibold" style={{ color: S.ink }}>
-                    vs {data.mechanism.dispersion.threshold_m2_s?.toFixed(0)} m²/s
+                    vs {data.mechanism.dispersion.threshold_m2_s?.toFixed(0) ?? "—"} m²/s
                   </p>
                 </div>
               </div>
@@ -1120,7 +1196,7 @@ export default function OutlookView() {
                 }
                 sub={
                   crossingLabel
-                    ? `${ist(data.risk.first_crossing!)} · q90 ${data.risk.upper_at_crossing?.toFixed(0)} µg/m³`
+                    ? `${ist(data.risk.first_crossing!)} · q90 ${data.risk.upper_at_crossing?.toFixed(0) ?? "—"} µg/m³`
                     : `Upper tail stays below ${data.risk.threshold_ugm3.toFixed(0)} µg/m³`
                 }
               />
@@ -1285,7 +1361,7 @@ export default function OutlookView() {
                         ? `${data.decision.recommended_measures.length} measures ready for approval`
                         : "No measures pending",
                     ],
-                    [Clock, "Review", data.decision.approval_state.replace(/_/g, " ")],
+                    [Clock, "Review", caseStateLabel(data.decision)],
                   ].map(([Icon, title, text]) => {
                     const I = Icon as typeof Eye;
                     return (
@@ -1354,7 +1430,7 @@ export default function OutlookView() {
                   mode={data.mode}
                   evidence={evidence}
                   tone={S}
-                  onDecided={reload}
+                  onDecided={refresh}
                 />
               ) : null}
 

@@ -186,7 +186,9 @@ export default function StationIntelligencePreview({
             the only one of the two the engine actually publishes a source for. */}
         {data.pollutant_source ? (
           <div className="flex flex-wrap items-baseline gap-x-2 sm:col-span-2">
-            <dt className="text-aree-dim">Concentrations from</dt>
+            <dt className="text-aree-dim">
+              {data.pollutant_quantity === "sub_index" ? "Sub-indices from" : "Concentrations from"}
+            </dt>
             <dd className="font-semibold text-aree-body">
               {data.pollutant_source}
               {pollutantAge ? (

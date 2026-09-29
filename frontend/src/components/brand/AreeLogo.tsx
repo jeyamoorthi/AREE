@@ -20,14 +20,19 @@ interface AreeMarkProps {
   /** Rendered width in px; height follows the PNG's own ratio. */
   size?: number;
   className?: string;
+  /**
+   * Alt text. "AREE" when the mark stands alone; "" (decorative) when the word
+   * "AREE" is printed right beside it, so a screen reader does not say it twice.
+   */
+  alt?: string;
 }
 
 /** The glyph alone — sidebar tile, avatar slot. */
-export function AreeMark({ size = 50, className }: AreeMarkProps) {
+export function AreeMark({ size = 50, className, alt = "AREE" }: AreeMarkProps) {
   return (
     <Image
       src="/aree-mark.png"
-      alt="AREE"
+      alt={alt}
       width={size}
       height={Math.round(size * MARK_RATIO)}
       className={className}
@@ -56,7 +61,7 @@ export function AreeLogo({
 }: AreeLogoProps) {
   return (
     <span className={`flex items-center gap-2.5 ${className ?? ""}`}>
-      <AreeMark size={size} className="shrink-0" />
+      <AreeMark size={size} className="shrink-0" alt={wordmark ? "" : "AREE"} />
       {wordmark && (
         <span className="flex min-w-0 flex-col">
           <span className="text-aree-text text-base leading-tight font-black tracking-[0.14em]">

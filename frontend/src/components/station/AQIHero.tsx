@@ -10,22 +10,23 @@
 
 import { formatAgeBehind, formatDuration } from "@/lib/duration";
 import { freshness } from "@/lib/freshness";
-import { feedLabel, pollutantLabel } from "@/lib/station";
+import { aqiSourceLabel, feedLabel, pollutantLabel } from "@/lib/station";
 import { aqiColor, orDash } from "@/lib/theme";
 import type { StationDetail } from "@/types";
 import { SeverityIndicator, LiveIndicator } from "@/components/ui/Card";
 
 const GAUGE_MAX = 500;
 
-/** CPCB band boundaries, matching `aqiColor` exactly. */
+/** CPCB band boundaries. Colours come from `aqiColor` itself (sampled inside each
+    band), so the arc and the number beside it cannot disagree. */
 const BANDS: { from: number; to: number; color: string }[] = [
-  { from: 0, to: 50, color: "var(--aree-accent)" },
-  { from: 50, to: 100, color: "var(--aree-lime)" },
-  { from: 100, to: 200, color: "var(--aree-yellow)" },
-  { from: 200, to: 300, color: "var(--aree-orange)" },
-  { from: 300, to: 400, color: "var(--aree-red)" },
-  { from: 400, to: 500, color: "var(--aree-red)" },
-];
+  [0, 50],
+  [50, 100],
+  [100, 200],
+  [200, 300],
+  [300, 400],
+  [400, 500],
+].map(([from, to]) => ({ from, to, color: aqiColor(from + 1) }));
 
 const CX = 120;
 const CY = 110;
@@ -149,9 +150,11 @@ export default function AQIHero({ data }: { data: StationDetail }) {
   const ageText =
     status === "stale"
       ? formatAgeBehind(data.stale_seconds)
-      : age
-        ? `${age} ago`
-        : null;
+      : age === "0 m"
+        ? "just now"
+        : age
+          ? `${age} ago`
+          : null;
 
   return (
     <section
@@ -175,7 +178,7 @@ export default function AQIHero({ data }: { data: StationDetail }) {
           </div>
           
           <div className="flex items-baseline gap-4 mt-2">
-            <SeverityIndicator value={data.aqi ?? 0} color={color} size="xl" />
+            <SeverityIndicator value={data.aqi ?? "—"} color={color} size="xl" />
             <div
               className="text-[18px] font-bold tracking-[0.15em] uppercase bg-aree-surface-2 px-3 py-1 rounded-lg border border-aree-border shadow-sm"
               style={{ color }}
@@ -190,7 +193,7 @@ export default function AQIHero({ data }: { data: StationDetail }) {
               style={{ color: look.color }}
             >
               <span className="flex h-2 w-2 rounded-full" style={{ background: look.color }} aria-hidden />
-              WAQI · {look.badge}
+              {aqiSourceLabel(data)} · {look.badge}
             </div>
             {ageText ? (
               <span className="aree-num text-aree-muted text-[13px] font-medium flex items-center gap-1.5">

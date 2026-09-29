@@ -70,8 +70,8 @@ def operating_point(mode: Optional[str] = Query(None)) -> dict[str, Any]:
 
 @router.get("/ventilation/current",
             summary="Observed ventilation over recent hours")
-def current(lat: float = Query(vent.weather_stream.DEFAULT_LAT),
-            lon: float = Query(vent.weather_stream.DEFAULT_LON)) -> dict[str, Any]:
+def current(lat: float = Query(vent.weather_stream.DEFAULT_LAT, ge=-90, le=90),
+            lon: float = Query(vent.weather_stream.DEFAULT_LON, ge=-180, le=180)) -> dict[str, Any]:
     """Analysis values only. Never mixed with forecast values."""
     out = vent.recent_ventilation(lat, lon)
     if not out.get("available"):
@@ -85,8 +85,8 @@ def current(lat: float = Query(vent.weather_stream.DEFAULT_LAT),
 
 @router.get("/ventilation/forecast",
             summary="72-hour ventilation outlook and intervention window")
-def forecast(lat: float = Query(vent.weather_stream.DEFAULT_LAT),
-             lon: float = Query(vent.weather_stream.DEFAULT_LON),
+def forecast(lat: float = Query(vent.weather_stream.DEFAULT_LAT, ge=-90, le=90),
+             lon: float = Query(vent.weather_stream.DEFAULT_LON, ge=-180, le=180),
              hours: int = Query(72, ge=6, le=168),
              mode: Optional[str] = Query(None)) -> dict[str, Any]:
     """
@@ -117,7 +117,7 @@ def observed() -> dict[str, Any]:
     ground truth from the CPCB/DPCC network. Conflating them on one endpoint
     would make it impossible to tell which half failed when something breaks.
     """
-    return obs.composite_pm25()
+    return obs.composite_pm25(budget_s=obs.REQUEST_CPCB_BUDGET_SECONDS)
 
 
 @router.get("/ventilation/stations",
@@ -132,7 +132,7 @@ def stations() -> dict[str, Any]:
     an airshed-wide episode; a regulator reviewing an escalation needs the
     station names that appear in GRAP orders.
     """
-    out = obs.composite_pm25()
+    out = obs.composite_pm25(budget_s=obs.REQUEST_CPCB_BUDGET_SECONDS)
     if not out.get("available"):
         raise HTTPException(
             status_code=424,
@@ -150,8 +150,8 @@ def assessment(pm25: Optional[float] = Query(
                                "CPCB/DPCC composite."),
                aqi: Optional[float] = Query(None),
                station: Optional[str] = Query(None),
-               lat: float = Query(vent.weather_stream.DEFAULT_LAT),
-               lon: float = Query(vent.weather_stream.DEFAULT_LON),
+               lat: float = Query(vent.weather_stream.DEFAULT_LAT, ge=-90, le=90),
+               lon: float = Query(vent.weather_stream.DEFAULT_LON, ge=-180, le=180),
                mode: Optional[str] = Query(None)) -> dict[str, Any]:
     """
     Combine an observed PM2.5 reading with the ventilation outlook.
@@ -171,7 +171,8 @@ def assessment(pm25: Optional[float] = Query(
         )
 
     if pm25 is None:
-        live = obs.composite_pm25(include_stations=False)
+        live = obs.composite_pm25(include_stations=False,
+                                  budget_s=obs.REQUEST_CPCB_BUDGET_SECONDS)
         if not live.get("available"):
             raise HTTPException(
                 status_code=424,

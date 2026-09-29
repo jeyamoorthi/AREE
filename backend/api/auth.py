@@ -282,7 +282,11 @@ class LocalHS256Verifier:
         except jwt.ExpiredSignatureError:
             raise _unauthorised("token_expired", "The access token has expired.")
         except jwt.InvalidTokenError as exc:
-            raise _unauthorised("invalid_token", f"Token rejected: {exc}")
+            # The decoder's message can quote the token's bytes and names the
+            # check that failed; that is for the server log, not the caller.
+            log.info("auth: token rejected: %s: %s", type(exc).__name__, exc)
+            raise _unauthorised("invalid_token",
+                                "Token is malformed or its signature is invalid.")
 
         role = claims.get("role", "")
         if role not in ROLE_CAPABILITIES:

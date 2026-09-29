@@ -287,7 +287,8 @@ export default function ReportProgress({
           above it are the shape of the process. */}
       <p className="mt-2.5 text-[11.5px] text-aree-muted">
         {failed
-          ? `Stopped during ${failed.label} — ${failed.detail.toLowerCase()}.`
+          ? /* First letter only, so "PDF" survives the sentence case. */
+            `Stopped during ${failed.label} — ${failed.detail.charAt(0).toLowerCase()}${failed.detail.slice(1)}.`
           : progress.complete
             ? "Report generated and downloaded."
             : active

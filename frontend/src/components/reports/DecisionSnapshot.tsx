@@ -21,7 +21,10 @@
  *   /api/ventilation/forecast, not the station payload — dispersion is a property of
  *   the regional atmosphere and the backend models it for NCR as a whole, not per
  *   monitor. It is polled separately and slowly for that reason, and its own word for
- *   the state is printed rather than remapped onto a second vocabulary.
+ *   the state is printed rather than remapped onto a second vocabulary. Because it
+ *   is NCR-only, it is labelled as such, and a station outside Delhi NCR (the roster
+ *   also carries Coimbatore, Bangalore and Tirupati) says so instead of borrowing
+ *   Delhi's window.
  */
 
 import { MoveRight, TrendingDown, TrendingUp, Wind } from "lucide-react";
@@ -72,6 +75,10 @@ function ventilationColor(state: string | null | undefined): string {
       return "var(--aree-dim)";
   }
 }
+
+/* The cities the NCR ventilation model covers. A null city is unknown, not
+   out-of-region, so it keeps the (explicitly labelled) NCR reading. */
+const NCR_CITY = /delhi|ncr|noida|gurugram|gurgaon|ghaziabad|faridabad/i;
 
 /** "collapsed" -> "Collapsed". The word is the backend's; only the case changes. */
 function titleCase(value: string): string {
@@ -153,6 +160,13 @@ export default function DecisionSnapshot({
 
   const eri = data.eri_score ?? null;
 
+  const outsideNcr = Boolean(data.city) && !NCR_CITY.test(data.city ?? "");
+  // The backend writes "None" when no GRAP stage is in force.
+  const grapStage =
+    data.grap_stage && data.grap_stage.trim().toLowerCase() !== "none"
+      ? data.grap_stage
+      : null;
+
   return (
     <dl
       className="grid gap-x-6 gap-y-4"
@@ -201,25 +215,33 @@ export default function DecisionSnapshot({
         }
       />
 
-      <Field
-        label="Meteorological risk"
-        value={
-          ventilation.initialLoading
-            ? "…"
-            : ventState
-              ? titleCase(ventState)
-              : "—"
-        }
-        color={ventState ? ventilationColor(ventState) : undefined}
-        icon={ventState ? <Wind className="h-4 w-4 shrink-0" aria-hidden /> : null}
-        detail={
-          windowHours !== null && windowHours !== undefined
-            ? `Ventilation · ${windowHours} h intervention window`
-            : ventState
-              ? "Ventilation state, NCR-wide"
-              : null
-        }
-      />
+      {outsideNcr ? (
+        <Field
+          label="Delhi NCR ventilation"
+          value="—"
+          detail="Ventilation outlook covers Delhi NCR only"
+        />
+      ) : (
+        <Field
+          label="Delhi NCR ventilation"
+          value={
+            ventilation.initialLoading
+              ? "…"
+              : ventState
+                ? titleCase(ventState)
+                : "—"
+          }
+          color={ventState ? ventilationColor(ventState) : undefined}
+          icon={ventState ? <Wind className="h-4 w-4 shrink-0" aria-hidden /> : null}
+          detail={
+            windowHours !== null && windowHours !== undefined
+              ? `${windowHours} h intervention window, NCR-wide`
+              : ventState
+                ? "Ventilation state, NCR-wide"
+                : null
+          }
+        />
+      )}
 
       <Field
         label="Exposure risk"
@@ -229,9 +251,9 @@ export default function DecisionSnapshot({
       />
 
       <Field
-        label="Recommended GRAP action"
-        value={orDash(data.grap_stage)}
-        color={grapColor(data.grap_stage)}
+        label="GRAP stage in force"
+        value={orDash(grapStage, "No stage in force")}
+        color={grapStage ? grapColor(grapStage) : undefined}
         detail={data.grap_description ?? null}
       />
     </dl>

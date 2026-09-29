@@ -49,7 +49,7 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / \
 # Fallback if the calibration file is missing. Deliberately the value derived
 # in research/ps26082/scripts/10_calibrate_operating_point.py, not a guess, so
 # behaviour degrades to the measured default rather than to an invention.
-FALLBACK_THRESHOLD_M2S = 466.0
+FALLBACK_THRESHOLD_M2S = 465.9
 FALLBACK_MODE = "balanced"
 
 # Sustained-collapse requirement. A single hour below threshold at 03:00 is

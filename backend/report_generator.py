@@ -2,7 +2,7 @@
 # 4-page PDF via reportlab. Deterministic values only.
 
 import io
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -19,8 +19,14 @@ from config import (
     WINDOW_DURATION_MINUTES, WINDOW_HOP_MINUTES,
     HYSTERESIS_CONFIRMATIONS, VULNERABILITY_MULTIPLIERS,
     DEFAULT_IMPACT_RADIUS_KM, DEFAULT_EST_POPULATION,
-    AQI_POLL_INTERVAL,
+    AQI_POLL_INTERVAL, STALE_DATA_THRESHOLD_SECONDS,
 )
+from streaming.predictive_engine import grap_stage_for
+
+try:
+    from api.serialization import engine_mode
+except ImportError:                                         # pragma: no cover
+    from backend.api.serialization import engine_mode
 
 # colors
 NAVY       = HexColor("#0f172a")
@@ -56,21 +62,111 @@ def _running_engine() -> str:
     return "unknown"
 
 
-def _footer(canvas, doc):
-    canvas.saveState()
-    canvas.setFont("Helvetica", 6)
-    canvas.setFillColor(SLATE_LT)
-    y = 10 * mm
-    engine = _running_engine()
+REPORT_NAME = "Regulatory Escalation Brief"
+
+# One wording for every absent value. `.get(k, default)` does not substitute
+# when the key exists with a None value, which is how "None" and "(None)" used
+# to reach a regulator's page; every display path now goes through _show().
+MISSING = "Not available"
+NO_RANK = "—"   # em dash
+
+IST = timezone(timedelta(hours=5, minutes=30))
+
+NO_PROJECTION = "Not available - the trend projection needs at least 3 readings."
+
+
+def _show(value, suffix: str = "", missing: str = MISSING) -> str:
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return missing
+    return f"{value}{suffix}"
+
+
+def _stage(value) -> str:
+    """GRAP stage for display. The engine's "None" stage is a real state
+    (AQI <= 200, no action) and must not read like a missing value."""
+    if value is None or value == "":
+        return MISSING
+    return "No GRAP stage (AQI 200 or below)" if value == "None" else str(value)
+
+
+def _fmt_time(value) -> str:
+    """ISO / engine timestamp -> "29 Sep 2026, 11:00 IST (05:30 UTC)".
+
+    A timestamp with no zone is printed as received: guessing a zone would
+    shift an observation time on a regulatory document by hours.
+    """
+    if value is None or value == "":
+        return MISSING
+    dt = value if isinstance(value, datetime) else None
+    if dt is None:
+        raw = str(value).strip()
+        for parse in (lambda v: datetime.strptime(v, "%Y-%m-%d %H:%M:%S UTC")
+                      .replace(tzinfo=timezone.utc),
+                      lambda v: datetime.fromisoformat(v.replace("Z", "+00:00"))):
+            try:
+                dt = parse(raw)
+                break
+            except ValueError:
+                continue
+        if dt is None:
+            return raw
+    if dt.tzinfo is None:
+        return str(value)
+    ist, utc = dt.astimezone(IST), dt.astimezone(timezone.utc)
+    utc_fmt = "%H:%M UTC" if ist.date() == utc.date() else "%d %b %H:%M UTC"
+    return f"{ist:%d %b %Y, %H:%M} IST ({utc:{utc_fmt}})"
+
+
+def _freshness(stale_sec) -> str:
+    if stale_sec is None:
+        return "Unknown"
+    if stale_sec < 60:
+        return "<1 min old"
+    mins = int(stale_sec // 60)
+    if mins < 120:
+        return f"{mins} min old"
+    return f"{mins // 60} h {mins % 60} min old"
+
+
+def _is_stale(s: dict) -> bool:
+    if s.get("freshness_status") == "stale":
+        return True
+    age = s.get("stale_seconds")
+    return age is not None and age > STALE_DATA_THRESHOLD_SECONDS
+
+
+# Pollutant display name -> raw_* key, and the spellings feeds use for each.
+_POLLUTANTS = [
+    ("PM2.5", "raw_pm25"), ("PM10", "raw_pm10"), ("NO2", "raw_no2"),
+    ("SO2", "raw_so2"), ("O3", "raw_o3"), ("CO", "raw_co"),
+]
+
+
+def _pollutant_norm(name: str) -> str:
+    return "".join(ch for ch in str(name).lower() if ch.isalnum())
+
+
+def _make_footer(engine: str, source: str):
     label = {
         "streaming": "Pathway streaming engine",
         "direct": "Direct engine (no event-time windowing, no policy retrieval)",
     }.get(engine, "Engine mode unknown")
-    canvas.drawString(MARGIN, y,
-        f"AREE v2.2  |  {label}  |  Observations: CAQM / CPCB  |  Advisory only")
-    canvas.drawRightString(PAGE_W - MARGIN, y,
-        f"Page {doc.page}  |  Deterministic escalation engine - no generative content")
-    canvas.restoreState()
+    line1 = f"AREE v2.2  |  {REPORT_NAME}  |  {label}  |  Advisory only"
+    line2 = (f"Observations: {source}  |  Deterministic escalation engine - "
+             f"no generative content")
+
+    def _footer(canvas, doc):
+        # Two lines, page number on the first at the right. On one line the
+        # left and right strings overran each other ("Advisory onPage 1").
+        canvas.saveState()
+        canvas.setFont("Helvetica", 6)
+        canvas.setFillColor(SLATE_LT)
+        canvas.drawString(MARGIN, 10 * mm, line1)
+        canvas.drawString(MARGIN, 7 * mm, line2)
+        canvas.drawRightString(PAGE_W - MARGIN, 10 * mm, f"Page {doc.page}")
+        canvas.restoreState()
+
+    return _footer
 
 
 def _styles():
@@ -172,8 +268,15 @@ def _engine_latest_state() -> dict:
     return {}
 
 
-def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
+def generate_escalation_report(station_key, state_snapshot, carbon_state=None,
+                               policy_state=None):
+    """
+    `policy_state` is engine.rag_state() - the source /api/policy reads - so the
+    document count here matches the Policy console. Without it the per-station
+    rag_* fields are used.
+    """
     s = state_snapshot
+    policy_state = policy_state or {}
     sty = _styles()
     buf = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -183,29 +286,43 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
     )
 
     els = []
-    now_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
-    aqi = s.get("aqi", 0)
-    band = s.get("cpcb_band", "N/A")
-    consec = s.get("consecutive_windows", 0)
-    remaining = s.get("remaining_windows", 0)
+    now_utc = datetime.now(timezone.utc)
+    generated = _fmt_time(now_utc)
+    engine = s.get("mode") if s.get("mode") in ("direct", "streaming") else _running_engine()
+    direct = engine == "direct"
+    aqi = s.get("aqi")
+    band = s.get("cpcb_band")
+    consec = s.get("consecutive_windows") or 0
+    remaining = s.get("remaining_windows")
     fc = s.get("forecast") or {}
-    proj30 = fc.get("projected_30min", aqi)
+    proj5 = fc.get("projected_5min")
+    proj30 = fc.get("projected_30min")
 
-    if consec >= PERSISTENCE_THRESHOLD:
-        eng_mode = "TRIGGERED"
-    elif consec > 0:
-        eng_mode = "WATCH"
-    else:
-        eng_mode = "NORMAL"
+    # The rule the API and UI use (AQI at/above threshold AND persistence), so
+    # the brief cannot head a page TRIGGERED that the dashboard calls NORMAL.
+    eng_mode = engine_mode(aqi, consec, HIGH_AQI_THRESHOLD, PERSISTENCE_THRESHOLD)
 
-    stale_sec = s.get("stale_seconds")
-    freshness = f"{int(stale_sec / 60)} min" if stale_sec else "Live"
+    def _predicted_stage(key: str, projected) -> str:
+        if fc.get(key):
+            return _stage(fc.get(key))
+        if projected is None:
+            return MISSING
+        # Derived with the engine's own GRAP table rather than left blank beside
+        # a projected AQI that plainly falls in a stage.
+        return f"{_stage(grap_stage_for(projected)[0])} (from projected AQI)"
+
+    freshness = _freshness(s.get("stale_seconds"))
+    stale_note = (f'  <font color="#dc2626"><b>STALE DATA</b> - older than '
+                  f'{STALE_DATA_THRESHOLD_SECONDS // 60} min, not current</font>'
+                  if _is_stale(s) else "")
+    obs_time = _fmt_time(s.get("waqi_timestamp"))
+    source = s.get("observation_source") or "CAQM / CPCB"
 
     # PAGE 1 - Executive Summary
     els.append(Paragraph("AUTONOMOUS REGULATORY ESCALATION ENGINE", sty["title"]))
-    els.append(Paragraph("Municipal Situation Brief", sty["subtitle"]))
+    els.append(Paragraph(REPORT_NAME, sty["subtitle"]))
     els.append(Paragraph("Internal Governance Use", sty["subtitle"]))
-    els.append(Paragraph(f"Generated: {now_utc}", sty["timestamp"]))
+    els.append(Paragraph(f"Generated: {generated}", sty["timestamp"]))
     els.append(HRFlowable(width="100%", thickness=1.5, color=ACCENT, spaceAfter=8))
 
     # A. Decision Snapshot
@@ -217,16 +334,16 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
         # Was "WAQI AQI". The number is CAQM's published sub-index for this station;
         # naming the wrong publisher in a regulatory brief is not a cosmetic error.
         Paragraph(f'<font size="9" color="#475569"><b>AQI (CAQM):</b></font>  '
-                  f'<font size="18" color="#0f172a"><b>{aqi}</b></font>  '
-                  f'<font size="9" color="#475569">({band})</font>', sty["body"]),
+                  f'<font size="18" color="#0f172a"><b>{_show(aqi)}</b></font>  '
+                  f'<font size="9" color="#475569">{f"({band})" if band else ""}</font>', sty["body"]),
         Spacer(1, 1*mm),
         Paragraph(f'<font size="9" color="#475569"><b>GRAP Stage:</b></font>  '
-                  f'<font size="10" color="#0f172a"><b>{s.get("grap_stage", "N/A")}</b></font>', sty["body"]),
+                  f'<font size="10" color="#0f172a"><b>{_stage(s.get("grap_stage"))}</b></font>', sty["body"]),
         Spacer(1, 1*mm),
         Paragraph(f'<font size="9" color="#475569"><b>Data Freshness:</b></font>  '
-                  f'<font size="9" color="#0f172a">{freshness}</font>  |  '
-                  f'<font size="9" color="#475569"><b>Timestamp:</b></font>  '
-                  f'<font size="9" color="#0f172a">{s.get("waqi_timestamp", "N/A")}</font>', sty["body"]),
+                  f'<font size="9" color="#0f172a">{freshness}</font>{stale_note}', sty["body"]),
+        Paragraph(f'<font size="9" color="#475569"><b>Observed:</b></font>  '
+                  f'<font size="9" color="#0f172a">{obs_time}</font>', sty["body"]),
     ])
     els.append(snapshot_box)
 
@@ -236,10 +353,22 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
                   "TRIGGERED": "ESCALATION TRIGGERED"}[eng_mode]
     mode_hex = {"NORMAL": "#16a34a", "WATCH": "#d97706", "TRIGGERED": "#dc2626"}[eng_mode]
 
-    if aqi >= HIGH_AQI_THRESHOLD:
-        reason = f"AQI {aqi} exceeds threshold ({HIGH_AQI_THRESHOLD}). {consec}/{PERSISTENCE_THRESHOLD} qualifying windows sustained."
+    # One sentence per engine_mode outcome, so the reason never contradicts
+    # the heading above it.
+    windows = f"{consec}/{PERSISTENCE_THRESHOLD} qualifying windows"
+    if aqi is None:
+        reason = "No AQI reading is available for this station."
+    elif eng_mode == "TRIGGERED":
+        reason = (f"AQI {aqi} at or above threshold ({HIGH_AQI_THRESHOLD}); "
+                  f"{windows} sustained - persistence rule met.")
+    elif eng_mode == "WATCH":
+        reason = (f"AQI {aqi} at or above threshold ({HIGH_AQI_THRESHOLD}); "
+                  f"{windows} so far, {PERSISTENCE_THRESHOLD} needed to trigger.")
+    elif aqi >= HIGH_AQI_THRESHOLD:
+        reason = (f"AQI {aqi} at or above threshold ({HIGH_AQI_THRESHOLD}), but no "
+                  f"qualifying window has completed yet.")
     else:
-        reason = f"AQI {aqi} below threshold ({HIGH_AQI_THRESHOLD}). No qualifying high windows."
+        reason = f"AQI {aqi} below threshold ({HIGH_AQI_THRESHOLD}). No escalation."
 
     els.append(Paragraph(f'<font size="12" color="{mode_hex}"><b>{mode_label}</b></font>', sty["body"]))
     els.append(Spacer(1, 1*mm))
@@ -248,40 +377,45 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
     # C. Short-Term Outlook
     els.extend(_sec_header("C. Short-Term Risk Outlook (30 Minutes)", sty))
     if fc:
+        eta = fc.get("escalation_eta")
         els.append(_kv_table([
-            ("30-min Projected AQI", str(proj30)),
-            ("Predicted GRAP Stage", fc.get("predicted_grap_30min", "N/A")),
-            ("Trend Direction", fc.get("direction", "N/A").upper()),
-            ("Rate of Change", f'{fc.get("rate_per_min", "N/A")} AQI/min'),
-            ("Escalation ETA", f'{fc.get("escalation_eta", "N/A")} min' if fc.get("escalation_eta") else "No imminent escalation"),
-            ("Exposure Score (30min)", str(fc.get("exposure_score_30min", "N/A"))),
+            ("30-min Projected AQI", _show(proj30)),
+            ("Predicted GRAP Stage", _predicted_stage("predicted_grap_30min", proj30)),
+            ("Trend Direction", fc["direction"].upper() if fc.get("direction") else MISSING),
+            ("Rate of Change", _show(fc.get("rate_per_min"), " AQI/min")),
+            ("Escalation ETA", f"{eta} min" if eta else "No imminent escalation"),
+            ("Exposure Score (30min)", _show(fc.get("exposure_score_30min"))),
             ("Anomaly Flag", "YES" if fc.get("anomaly") else "NO"),
         ]))
         els.append(Paragraph(
-            f'Projection Method: Linear regression over last {fc.get("data_points", "N")} '
-            f'sliding windows (slope: {fc.get("slope", "N/A")}).', sty["note"]))
+            f'Projection Method: Linear regression over the last '
+            f'{_show(fc.get("data_points"), missing="available")} readings '
+            f'(slope: {_show(fc.get("slope"))}).', sty["note"]))
     else:
-        els.append(Paragraph("Insufficient data for projection.", sty["body"]))
+        els.append(Paragraph(NO_PROJECTION, sty["body"]))
 
     # D. Vulnerable Population Risk
     els.extend(_sec_header("D. Vulnerable Population Risk Matrix", sty))
-    vr = s.get("vulnerable_risk", {})
+    vr = s.get("vulnerable_risk") or {}
     if vr:
         group_names = {"general": "General Public", "elderly": "Elderly (60+)",
                        "children": "Children (<14)", "respiratory": "Respiratory/Asthma"}
         vuln_rows = []
         for group, label in group_names.items():
-            v = vr.get(group, {})
-            vuln_rows.append([label, f'x{v.get("multiplier", 1.0)}',
-                              str(v.get("score", 0)), v.get("level", "N/A").upper()])
+            v = vr.get(group) or {}
+            vuln_rows.append([label, f'x{_show(v.get("multiplier"), missing="1.0")}',
+                              _show(v.get("score")), _show(v.get("level")).upper()])
 
         els.append(_data_table(
             ["Population Group", "Multiplier", "Projected Score", "Risk Category"],
             vuln_rows, col_widths=[50*mm, 25*mm, 35*mm, 30*mm],
         ))
         els.append(Spacer(1, 2*mm))
+        # The cut points app.py applies (score >= 100 / 200 / 300), written so
+        # that no score sits in two bands.
         els.append(Paragraph(
-            "Risk Category Rule:  <100 LOW  |  100-200 MODERATE  |  200-300 HIGH  |  >300 SEVERE",
+            "Vulnerable population exposure (VPPE) risk category:  0-99 LOW  |  "
+            "100-199 MODERATE  |  200-299 HIGH  |  300+ SEVERE",
             sty["note"]))
         # The population figure was a configured constant (500,000) shipped with the
         # word "(placeholder)" beside it, inside a municipal brief. A regulator reading
@@ -294,7 +428,11 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
             f'people.',
             sty["note"]))
     else:
-        els.append(Paragraph("VPPE data not available yet.", sty["body"]))
+        els.append(Paragraph(
+            "Vulnerable population exposure (VPPE) was not computed for this "
+            "station." if fc else
+            "Vulnerable population exposure (VPPE) is not available - it is "
+            "scored from the 30-minute projection. " + NO_PROJECTION, sty["body"]))
 
     # E. Satellite Attribution
     els.extend(_sec_header("E. Satellite Transport Attribution", sty))
@@ -339,8 +477,12 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
             ("Fire Hotspots", str(fire_count)),
             ("High Confidence Fires", _or_na("high_conf_fires")),
             ("Transport Score", _or_na("transport_score", "/100")),
-            ("Wind Speed", f'{s.get("wind_speed")} m/s' if s.get("wind_speed") else "N/A"),
-            ("Wind Direction", f'{s.get("wind_direction")}deg' if s.get("wind_direction") else "N/A"),
+            # `is not None`, not truthiness: calm air (0 m/s) and due north
+            # (0 degrees) are readings, not gaps.
+            ("Wind Speed", f'{float(s["wind_speed"]):.1f} m/s'
+                           if s.get("wind_speed") is not None else MISSING),
+            ("Wind Direction", f'{s["wind_direction"]}\u00b0'
+                               if s.get("wind_direction") is not None else MISSING),
             ("Attribution Label", _or_na("transport_label")),
             ("Confidence", _or_na("confidence_score", "%")),
         ]))
@@ -357,11 +499,11 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
             ("FIRMS status", firms_status),
             ("Fire hotspots", "0 (searched)"),
             ("Transport Score", _or_na("transport_score", "/100")),
-            ("FIRMS Dataset", s.get("firms_dataset") or "N/A"),
+            ("FIRMS Dataset", _show(s.get("firms_dataset"))),
         ]))
 
     # Pre-emptive advisory
-    pa = s.get("preemptive_advisory", [])
+    pa = s.get("preemptive_advisory") or []
     if pa:
         els.append(Spacer(1, 3*mm))
         els.append(Paragraph('<font color="#dc2626"><b>PRE-EMPTIVE PUBLIC HEALTH ADVISORY</b></font>', sty["body"]))
@@ -375,22 +517,29 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
 
     # A. Pollutant Snapshot
     els.extend(_sec_header("A. Real-Time Pollutant Snapshot", sty))
-    poll_map = [
-        ("PM2.5", "raw_pm25"), ("PM10", "raw_pm10"), ("NO2", "raw_no2"),
-        ("SO2", "raw_so2"), ("O3", "raw_o3"), ("CO", "raw_co"),
-    ]
     poll_rows = []
-    for name, key in poll_map:
+    reported = 0
+    for name, key in _POLLUTANTS:
         val = s.get(key)
-        poll_rows.append([name, str(val) if val is not None else "--",
-                          "Received" if val is not None else "Not available"])
+        reported += val is not None
+        poll_rows.append([name, str(val) if val is not None else NO_RANK,
+                          "Received" if val is not None else MISSING])
     els.append(_data_table(["Pollutant", "Value", "Status"], poll_rows,
                            col_widths=[40*mm, 40*mm, 50*mm]))
     els.append(Spacer(1, 2*mm))
+    # Dominant only when that pollutant actually has a value here: the direct
+    # engine defaults the field to "pm25", which printed beside "0 of 6".
+    dom_raw = s.get("dominant_pollutant")
+    dom = next(((n, k) for n, k in _POLLUTANTS
+                if dom_raw and _pollutant_norm(n) == _pollutant_norm(dom_raw)), None)
+    dom_txt = (dom[0] if dom and s.get(dom[1]) is not None
+               else "Not determined (no concentration reported)")
     els.append(Paragraph(
-        f'Dominant Pollutant: {s.get("dominant_pollutant", "N/A")}  |  '
-        f'Pollutants reported: {s.get("pollutants_available", 0)} of '
-        f'{len(poll_map)}  |  Source: {s.get("pollutant_source") or "not reported"}'
+        f'Dominant Pollutant: {dom_txt}  |  '
+        f'Pollutants reported: {reported} of {len(_POLLUTANTS)}  |  '
+        f'Source: {_show(s.get("pollutant_source"), missing="not reported")}'
+        + ('  |  Values are CPCB sub-indices, not concentrations'
+           if s.get("pollutant_quantity") == "sub_index" else '')
         + (f'  |  Age: {s.get("pollutant_age_minutes")} min'
            if s.get("pollutant_age_minutes") is not None else ''), sty["note"]))
 
@@ -408,23 +557,23 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
     # C. Persistence
     els.extend(_sec_header("C. Persistence State", sty))
     els.append(_kv_table([
-        ("Current GRAP Stage", s.get("grap_stage", "N/A")),
-        ("GRAP Description", s.get("grap_description", "N/A")),
+        ("Current GRAP Stage", _stage(s.get("grap_stage"))),
+        ("GRAP Description", _show(s.get("grap_description"))),
         ("Consecutive High Windows", f"{consec}/{PERSISTENCE_THRESHOLD}"),
-        ("Remaining to Trigger", str(remaining)),
-        ("Projected Trigger Time", s.get("projected_trigger_time", "N/A")),
+        ("Remaining to Trigger", _show(remaining)),
+        ("Projected Trigger Time", _show(s.get("projected_trigger_time"))),
         ("Engine Mode", eng_mode),
     ]))
 
     # D. Decision Trace
     els.extend(_sec_header("D. Decision Trace", sty))
     trace = (
-        f"Input AQI: {aqi}\n"
+        f"Input AQI: {_show(aqi)}\n"
         f"Threshold: {HIGH_AQI_THRESHOLD}\n"
         f"Persistence: {consec}/{PERSISTENCE_THRESHOLD}\n"
         f"Hysteresis: {HYSTERESIS_CONFIRMATIONS} confirmations required\n"
-        f"Escalation: {'TRIGGERED' if consec >= PERSISTENCE_THRESHOLD else 'Not triggered'}\n"
-        f"Stage: {s.get('grap_stage', 'N/A')}"
+        f"Engine Mode: {eng_mode}\n"
+        f"Stage: {_stage(s.get('grap_stage'))}"
     )
     els.append(_box_block([Paragraph(trace.replace('\n', '<br/>'), sty["mono"])]))
 
@@ -432,27 +581,32 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
     els.extend(_sec_header("E. Predictive Intelligence Detail", sty))
     if fc:
         els.append(_kv_table([
-            ("5-min Projected AQI", str(fc.get("projected_5min", "N/A"))),
-            ("30-min Projected AQI", str(fc.get("projected_30min", "N/A"))),
-            ("Trend Slope", str(fc.get("slope", "N/A"))),
-            ("Trend Direction", fc.get("direction", "N/A").upper()),
-            ("Rate of Change", f'{fc.get("rate_per_min", "N/A")} AQI/min'),
-            ("Predicted GRAP (5min)", fc.get("predicted_grap", "N/A")),
-            ("Predicted GRAP (30min)", fc.get("predicted_grap_30min", "N/A")),
-            ("Exposure Score (30min)", str(fc.get("exposure_score_30min", "N/A"))),
+            ("5-min Projected AQI", _show(proj5)),
+            ("30-min Projected AQI", _show(proj30)),
+            ("Trend Slope", _show(fc.get("slope"))),
+            ("Trend Direction", fc["direction"].upper() if fc.get("direction") else MISSING),
+            ("Rate of Change", _show(fc.get("rate_per_min"), " AQI/min")),
+            ("Predicted GRAP (5min)", _predicted_stage("predicted_grap", proj5)),
+            ("Predicted GRAP (30min)", _predicted_stage("predicted_grap_30min", proj30)),
+            ("Exposure Score (30min)", _show(fc.get("exposure_score_30min"))),
             ("Anomaly Detected", "YES" if fc.get("anomaly") else "NO"),
-            ("Data Points Used", str(fc.get("data_points", 0))),
+            ("Data Points Used", _show(fc.get("data_points"))),
             ("Poll Interval", f"{AQI_POLL_INTERVAL}s"),
         ]))
     else:
-        els.append(Paragraph("Needs 3+ sliding windows.", sty["body"]))
+        els.append(Paragraph(NO_PROJECTION, sty["body"]))
 
     # F. ERI Summary
     els.extend(_sec_header("F. Escalation Readiness Summary", sty))
-    eri = s.get("eri_score", 0)
-    eri_cat = s.get("eri_category", "LOW READINESS")
-    eri_factors = s.get("eri_factors", [])
-    els.append(_kv_table([("ERI Score", f'{eri}/100'), ("Readiness Category", eri_cat)]))
+    # A null ERI is "not computed", never 0/100 - zero is a real, and very
+    # different, readiness reading.
+    eri = s.get("eri_score")
+    eri_factors = s.get("eri_factors") or []
+    els.append(_kv_table([
+        ("ERI Score", f"{eri}/100" if eri is not None else "Not computed"),
+        ("Readiness Category", _show(s.get("eri_category"), missing="Not computed")
+                               if eri is not None else "Not computed"),
+    ]))
     if eri_factors:
         els.append(Spacer(1, 2*mm))
         els.append(Paragraph('<b>Contributing Factors:</b>', sty["body"]))
@@ -481,17 +635,21 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
             if isinstance(v, dict) and v.get("aqi") is not None and v.get("status") != "DATA_INVALID"}
     n_stations = len(_act)
     if n_stations >= 1:
-        aqi_rank = sorted(_act.items(), key=lambda x: x[1].get("aqi", 0), reverse=True)
-        eri_rank = sorted(_act.items(), key=lambda x: x[1].get("eri_score", 0), reverse=True)
-        aqi_pos = next((i+1 for i, (k, _) in enumerate(aqi_rank) if k == station_key), "N/A")
-        eri_pos = next((i+1 for i, (k, _) in enumerate(eri_rank) if k == station_key), "N/A")
+        aqi_rank = sorted(_act.items(), key=lambda x: x[1]["aqi"], reverse=True)
+        # Only stations with a computed ERI are ranked on it; a null ERI used
+        # to rank as 0 and printed e.g. "#53 of 73" for a score that did not exist.
+        eri_rank = sorted(((k, v) for k, v in _act.items() if v.get("eri_score") is not None),
+                          key=lambda x: x[1]["eri_score"], reverse=True)
+        aqi_pos = next((i+1 for i, (k, _) in enumerate(aqi_rank) if k == station_key), None)
+        eri_pos = next((i+1 for i, (k, _) in enumerate(eri_rank) if k == station_key), None)
         els.append(_kv_table([
             ("Total Stations", str(n_stations)),
-            ("AQI Rank", f"#{aqi_pos} of {n_stations}"),
-            ("ERI Rank", f"#{eri_pos} of {n_stations}"),
+            ("AQI Rank", f"#{aqi_pos} of {n_stations}" if aqi_pos else NO_RANK),
+            ("ERI Rank", f"#{eri_pos} of {len(eri_rank)}" if eri_pos else NO_RANK),
         ]))
         top3 = aqi_rank[:3]
-        top_rows = [[stn, str(v.get("aqi", 0)), str(v.get("eri_score", 0))] for stn, v in top3]
+        top_rows = [[stn, str(v["aqi"]), _show(v.get("eri_score"), missing=NO_RANK)]
+                    for stn, v in top3]
         if top_rows:
             els.append(Spacer(1, 3*mm))
             els.append(Paragraph("<b>Top Stations by AQI</b>", sty["body"]))
@@ -505,25 +663,44 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
     els.append(Paragraph("POLICY CONTEXT AND LEGAL BASIS", sty["title"]))
     els.append(HRFlowable(width="100%", thickness=1.5, color=ACCENT, spaceAfter=8))
 
+    # Same count /api/policy reports (policy documents on disk, both engines).
+    docs = policy_state.get("docs_indexed", s.get("rag_docs_indexed"))
     els.extend(_sec_header("A. Policy Retrieval Metadata", sty))
-    els.append(_kv_table([
-        ("Source Document", s.get("rag_policy_file", "N/A")),
-        ("Similarity Score", str(s.get("rag_similarity_score", 0))),
-        ("Documents Indexed", str(s.get("rag_docs_indexed", 0))),
-        ("Index Type", s.get("rag_index_type", "N/A")),
-        ("Embedding Model", s.get("rag_embed_model", "N/A")),
-        ("Last Sync", s.get("rag_last_updated", "N/A")),
-    ]))
+    if direct:
+        els.append(Paragraph(
+            "Policy retrieval is not available in direct mode. Policy documents "
+            "are held on disk but are not embedded or searched, so no document "
+            "was retrieved for this station.", sty["body"]))
+        els.append(Spacer(1, 2*mm))
+        els.append(_kv_table([
+            ("Policy Documents on Disk", _show(docs)),
+            ("Index Type", "Not indexed (direct mode)"),
+            ("Retrieval", "Not performed"),
+        ]))
+    else:
+        els.append(_kv_table([
+            ("Source Document", _show(s.get("rag_policy_file"))),
+            ("Similarity Score", _show(s.get("rag_similarity_score"))),
+            ("Documents Indexed", _show(docs)),
+            ("Index Type", _show(s.get("rag_index_type"))),
+            ("Embedding Model", _show(s.get("rag_embed_model"))),
+            ("Last Sync", _fmt_time(s.get("rag_last_updated"))),
+        ]))
 
     els.extend(_sec_header("B. Governance Protocol", sty))
     els.append(Paragraph(
-        f'<font size="8" color="#0f172a">{s.get("governance_rule", "N/A")}</font>', sty["body"]))
+        f'<font size="8" color="#0f172a">{_show(s.get("governance_rule"))}</font>', sty["body"]))
 
     els.append(Spacer(1, 6*mm))
-    els.append(Paragraph(
-        'This advisory references policy documents retrieved via Pathway DocumentStore '
-        '(live indexed). Similarity scores reflect vector retrieval proximity only and '
-        'do not imply legal enforcement.', sty["note"]))
+    if direct:
+        els.append(Paragraph(
+            'No policy text in this brief was retrieved by AREE. Consult the CAQM '
+            'GRAP schedule directly for the legal basis of any action.', sty["note"]))
+    else:
+        els.append(Paragraph(
+            'This advisory references policy documents retrieved via Pathway DocumentStore '
+            '(live indexed). Similarity scores reflect vector retrieval proximity only and '
+            'do not imply legal enforcement.', sty["note"]))
 
     # PAGE 4 - System Transparency
     els.append(PageBreak())
@@ -532,20 +709,23 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
 
     els.extend(_sec_header("A. Data Source Provenance", sty))
     els.append(_kv_table([
-        ("Station feed ID", s.get("feed_id", "N/A")),
-        ("Observation timestamp", s.get("waqi_timestamp", "N/A")),
-        ("API Response Time", s.get("api_time", "N/A")),
-        ("Data Freshness", freshness),
-        ("Station (API Name)", s.get("station_name_api", "N/A")),
-        ("Ingestion Status", s.get("ingestion_status", "N/A")),
+        ("Observation Source", source),
+        ("Station feed ID", _show(s.get("feed_id"))),
+        ("Observation timestamp", obs_time),
+        ("API Response Time", _fmt_time(s.get("api_time"))),
+        ("Data Freshness", freshness + stale_note),
+        ("Station (API Name)", _show(s.get("station_name_api"))),
+        ("Ingestion Status", _show(s.get("ingestion_status"))),
     ]))
 
     els.extend(_sec_header("B. Model Description", sty))
     els.append(_kv_table([
         ("Predictive Model", "Linear regression (numpy.polyfit, degree 1)"),
-        ("Embedding Model", s.get("rag_embed_model", "all-MiniLM-L6-v2")),
-        ("RAG Pipeline", "Pathway DocumentStore (BruteForceKnnFactory, 384-dim)"),
-        ("Satellite Dataset", s.get("firms_dataset", "VIIRS_SNPP_NRT")),
+        ("Embedding Model", "Not used (direct mode)" if direct
+                            else _show(s.get("rag_embed_model"), missing="all-MiniLM-L6-v2")),
+        ("RAG Pipeline", "Not available in direct mode" if direct
+                         else "Pathway DocumentStore (BruteForceKnnFactory, 384-dim)"),
+        ("Satellite Dataset", _show(s.get("firms_dataset"), missing="Not polled")),
         ("Anomaly Detection", "Z-score threshold (>2 sigma)"),
     ]))
 
@@ -561,19 +741,21 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
     els.extend(_sec_header("D. Carbon Accounting", sty))
     if carbon_state:
         els.append(_kv_table([
-            ("Total Emissions", f'{carbon_state.get("total_gco2", 0)} gCO2eq'),
-            ("Decisions Processed", str(carbon_state.get("decision_count", 0))),
-            ("Per-Decision Emission", f'{carbon_state.get("per_decision_gco2", 0)} gCO2eq'),
+            ("Total Emissions", _show(carbon_state.get("total_gco2"), " gCO2eq")),
+            ("Decisions Processed", _show(carbon_state.get("decision_count"))),
+            ("Per-Decision Emission", _show(carbon_state.get("per_decision_gco2"), " gCO2eq")),
         ]))
     else:
         els.append(Paragraph("Carbon data not available.", sty["body"]))
 
     els.extend(_sec_header("E. Report Metadata", sty))
     els.append(_kv_table([
-        ("Report Generated (UTC)", now_utc),
+        ("Report", REPORT_NAME),
+        ("Report Generated", generated),
         ("Engine Version", "AREE v2.2"),
-        ("Architecture", "Pathway xLLM | Single-Process DocumentStore"),
-        ("LLM Content in Report", "NONE - Deterministic only"),
+        ("Architecture", "Direct engine (no streaming runtime, no policy retrieval)"
+                         if direct else "Pathway xLLM | Single-Process DocumentStore"),
+        ("LLM Content in Report", "No generative content - deterministic only"),
     ]))
 
     els.append(Spacer(1, 8*mm))
@@ -584,5 +766,6 @@ def generate_escalation_report(station_key, state_snapshot, carbon_state=None):
         'outputs from live system state.',
         sty["note"]))
 
-    doc.build(els, onFirstPage=_footer, onLaterPages=_footer)
+    footer = _make_footer(engine, source)
+    doc.build(els, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()

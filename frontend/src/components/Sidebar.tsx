@@ -7,6 +7,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
 import {
   Activity,
   ChevronLeft,
@@ -32,7 +33,7 @@ interface SidebarProps {
 const NAV_ITEMS = [
   {
     href: "/",
-    label: "National Overview",
+    label: "NCR Overview",
     shortLabel: "Overview",
     icon: MapPin,
     exact: true,
@@ -94,34 +95,65 @@ export default function Sidebar({
   const status = statusState.data;
   const { mode: pageMode } = useOutlookMode();
 
-  const offline = Boolean(statusState.error) && !status;
-  const engineDown = Boolean(status && !status.engine_loaded);
-  const live = Boolean(status?.engine_loaded);
+  /* Same rule as the command bar: the LATEST poll decides. usePolling keeps the last
+     good payload through later failures, so an error with cached data is a lost
+     connection (cached figures dimmed), not a green LIVE. Before any answer the pill
+     is a neutral CONNECTING. A replay is a statement about the PAGE, not the server,
+     so it is known from the moment the page declares it and outranks all of this. */
+  const failed = Boolean(statusState.error);
+  const offline = failed && !status;
+  const lost = failed && Boolean(status);
+  const connecting = !status && !failed;
+  const engineDown = !failed && Boolean(status && !status.engine_loaded);
+  const live = !failed && Boolean(status?.engine_loaded);
 
-  /* Same rule as the command bar: no status and no error means nothing is known, and
-     the pill says nothing rather than falling through to a green LIVE it has not
-     earned. A replay is a statement about the PAGE, not the server, so it is known
-     from the moment the page declares it and is exempt. */
-  const stateKnown = Boolean(status) || Boolean(statusState.error);
-
-  const indicatorColor = offline
+  const indicatorColor = offline || lost
     ? "var(--aree-red)"
-    : engineDown
-      ? "var(--aree-yellow)"
-      : "var(--aree-green)";
+    : connecting
+      ? "var(--aree-dim)"
+      : engineDown
+        ? "var(--aree-yellow)"
+        : "var(--aree-green)";
 
   // A replay on screen outranks engine liveness here for the same reason it does in the
   // header: the badge is read as "what am I looking at", not "is the server up".
   const replay = pageMode === "replay";
   const indicatorColorEffective = replay ? "var(--aree-violet)" : indicatorColor;
   const indicatorLabel = replay
-    ? "REPLAY"
+    ? "Replay"
     : offline
-      ? "OFFLINE"
-      : engineDown
-        ? "DOWN"
-        : "LIVE";
+      ? "Offline"
+      : lost
+        ? "Connection lost"
+        : connecting
+          ? "Connecting"
+          : engineDown
+            ? "Engine offline"
+            : "Live";
   const clock = istClock(status?.server_time);
+  const reporting = status ? `${status.active_stations}/${status.known_stations}` : "—/—";
+
+  /* THE MOBILE DRAWER BEHAVES LIKE ONE.
+     Opening it moves focus inside (to the close button), Escape closes it, and
+     closing hands focus back to whatever opened it — the menu button. While closed
+     the drawer is visibility:hidden below lg (globals.css), so it is neither
+     tabbable nor read out, though it is still in the DOM. */
+  const closeRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const opener =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const frame = window.requestAnimationFrame(() => closeRef.current?.focus());
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onMobileClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("keydown", onKeyDown);
+      if (opener && document.contains(opener)) opener.focus();
+    };
+  }, [mobileOpen, onMobileClose]);
 
   return (
     <>
@@ -160,6 +192,7 @@ export default function Sidebar({
 
             {/* Mobile close button */}
             <button
+              ref={closeRef}
               type="button"
               onClick={onMobileClose}
               className="lg:hidden p-1.5 rounded-lg text-aree-muted hover:text-aree-text hover:bg-aree-surface-3 transition-colors"
@@ -214,8 +247,10 @@ export default function Sidebar({
           {!collapsed ? (
             <div className="rounded-lg border border-aree-border bg-aree-surface-1 p-2.5 text-xs shadow-xs space-y-1.5">
               <div className="flex items-center justify-between">
-                {stateKnown || replay ? (
-                  <span className="flex items-center gap-1.5">
+                <span
+                  className="flex items-center gap-1.5"
+                  title={lost && !replay ? `Connection lost · last update ${clock ?? "unknown"}` : undefined}
+                >
                     <span
                       className={`h-2 w-2 rounded-full ${
                         live && !replay ? "aree-live-dot" : ""
@@ -229,44 +264,40 @@ export default function Sidebar({
                     >
                       {indicatorLabel}
                     </span>
-                  </span>
-                ) : (
-                  <span />
-                )}
-                <span className="text-[10px] text-aree-dim font-mono">
+                </span>
+                {/* Once the connection is lost this is the time of the last answer,
+                    dimmed, not a clock that is still running. */}
+                <span
+                  className={`text-[10px] text-aree-dim font-mono ${lost ? "opacity-60" : ""}`}
+                  title={lost ? "Last update" : undefined}
+                >
                   {clock ?? "—"}
                 </span>
               </div>
 
               <div className="flex items-center justify-between text-[11px] text-aree-muted pt-1 border-t border-aree-border/60">
-                <span>Active Nodes</span>
-                <span className="font-semibold text-aree-text font-mono">
-                  {status
-                    ? `${status.active_stations}/${status.known_stations}`
-                    : "—/—"}
+                <span>Stations reporting</span>
+                <span
+                  className={`font-semibold text-aree-text font-mono ${lost ? "opacity-50" : ""}`}
+                >
+                  {reporting}
                 </span>
               </div>
             </div>
           ) : (
             <div
               className="flex justify-center py-1"
-              title={
-                stateKnown || replay
-                  ? `${indicatorLabel}${
-                      status ? ` · ${status.active_stations}/${status.known_stations} active` : ""
-                    }`
-                  : undefined
-              }
+              title={`${indicatorLabel}${status ? ` · ${reporting} reporting` : ""}${
+                lost && !replay ? ` · last update ${clock ?? "unknown"}` : ""
+              }`}
             >
-              {/* Collapsed, the dot IS the label — so when nothing is known it is
-                  absent rather than painted a reassuring green. */}
-              {stateKnown || replay ? (
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${live && !replay ? "aree-live-dot" : ""}`}
-                  style={{ backgroundColor: indicatorColorEffective }}
-                  aria-hidden="true"
-                />
-              ) : null}
+              {/* Collapsed, the dot IS the label — neutral while connecting rather
+                  than painted a reassuring green. */}
+              <span
+                className={`h-2.5 w-2.5 rounded-full ${live && !replay ? "aree-live-dot" : ""}`}
+                style={{ backgroundColor: indicatorColorEffective }}
+                aria-hidden="true"
+              />
             </div>
           )}
 

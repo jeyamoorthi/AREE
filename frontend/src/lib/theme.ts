@@ -31,14 +31,32 @@ export const COLORS = {
   blue: "var(--aree-blue)",
 } as const;
 
+/**
+ * The CPCB AQI bands and their colours — the ONE mapping every AQI surface uses.
+ *
+ * The map legend, the donut, the gauge and every band label all derive from this
+ * table, so a band cannot be amber in one place and yellow in another. Severe is
+ * crimson and Very Poor is red, everywhere.
+ */
+export const AQI_BANDS = [
+  { key: "good", label: "Good", min: 0, max: 50, range: "0–50", color: COLORS.green },
+  { key: "satisfactory", label: "Satisfactory", min: 51, max: 100, range: "51–100", color: COLORS.lime },
+  { key: "moderate", label: "Moderate", min: 101, max: 200, range: "101–200", color: COLORS.amber },
+  { key: "poor", label: "Poor", min: 201, max: 300, range: "201–300", color: COLORS.orange },
+  { key: "very poor", label: "Very Poor", min: 301, max: 400, range: "301–400", color: COLORS.red },
+  { key: "severe", label: "Severe", min: 401, max: Infinity, range: "401+", color: COLORS.crimson },
+] as const;
+
+export type AqiBand = (typeof AQI_BANDS)[number];
+
+/** The band an AQI value falls in, or null when there is no value. */
+export function aqiBand(aqi: number | null | undefined): AqiBand | null {
+  if (aqi === null || aqi === undefined || Number.isNaN(aqi)) return null;
+  return AQI_BANDS.find((b) => aqi <= b.max) ?? AQI_BANDS[AQI_BANDS.length - 1];
+}
+
 export function aqiColor(aqi: number | null | undefined): string {
-  if (aqi === null || aqi === undefined) return COLORS.dim;
-  if (aqi <= 50) return COLORS.green;
-  if (aqi <= 100) return COLORS.lime;
-  if (aqi <= 200) return COLORS.amber;
-  if (aqi <= 300) return COLORS.orange;
-  if (aqi <= 400) return COLORS.red;
-  return COLORS.crimson;
+  return aqiBand(aqi)?.color ?? COLORS.dim;
 }
 
 export function grapColor(stage: string | null | undefined): string {
@@ -155,15 +173,14 @@ export function grapRank(stage: string | null | undefined): number {
   return 0;
 }
 
+/** A CPCB band NAME's colour — the same table as aqiColor, looked up by label. */
 export function bandColor(band: string | null | undefined): string {
   const b = String(band ?? "").toLowerCase();
-  if (b.includes("severe")) return COLORS.crimson;
-  if (b.includes("very poor")) return COLORS.red;
-  if (b.includes("poor")) return COLORS.orange;
-  if (b.includes("moderate")) return COLORS.yellow;
-  if (b.includes("satisfactory")) return COLORS.lime;
-  if (b.includes("good")) return COLORS.green;
-  return COLORS.dim;
+  // "very poor" before "poor": the longer name must win the substring match.
+  const match =
+    AQI_BANDS.find((x) => x.key === "very poor" && b.includes(x.key)) ??
+    AQI_BANDS.find((x) => b.includes(x.key));
+  return match?.color ?? COLORS.dim;
 }
 
 export function modeLabel(mode: string | null | undefined): string {

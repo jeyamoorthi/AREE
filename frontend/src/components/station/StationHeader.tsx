@@ -15,7 +15,7 @@ import StationSelector from "@/components/StationSelector";
 import { useStations } from "@/components/providers/LiveDataProvider";
 import { Pill, StatusBadge } from "@/components/ui/Card";
 import { freshness } from "@/lib/freshness";
-import { feedLabel, stationLabel } from "@/lib/station";
+import { aqiSourceLabel, feedLabel, stationLabel } from "@/lib/station";
 import { modeColor, modeLabel, orDash } from "@/lib/theme";
 import type { LiveStatus } from "@/hooks/useLiveChannel";
 import type { StationDetail } from "@/types";
@@ -83,7 +83,7 @@ export default function StationHeader({
             
             <div className="flex items-center gap-2 bg-aree-surface-2 px-2.5 py-1 rounded-full border border-aree-border/50 text-aree-dim">
               <Radio className="h-3.5 w-3.5" />
-              <span className="text-aree-muted font-bold">WAQI Source</span>
+              <span className="text-aree-muted font-bold">{aqiSourceLabel(data)} source</span>
             </div>
 
             <div className="flex items-center gap-2 bg-aree-surface-2 px-2.5 py-1 rounded-full border border-aree-border/50 text-aree-dim">

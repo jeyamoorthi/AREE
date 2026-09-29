@@ -108,7 +108,10 @@ export interface SystemStatus {
   stale_stations: number;
   unavailable_stations: number;
   rag_status: string | null;
+  /** Policy files on disk - NOT an embedding count; see rag_chunks_indexed. */
   rag_docs_indexed: number | null;
+  rag_files_on_disk?: number | null;
+  rag_chunks_indexed?: number | null;
   llm_ready: boolean | null;
   llm_model: string | null;
   llm_error: string | null;
@@ -257,6 +260,11 @@ export interface StationDetail {
   pollutant_source?: string | null;
   /** Age of those concentrations in minutes — separate from the AQI's own age. */
   pollutant_age_minutes?: number | null;
+  /**
+   * What the raw_* numbers measure. CPCB's own feed publishes per-pollutant
+   * SUB-INDICES (unitless, on the AQI scale); OpenAQ publishes concentrations.
+   */
+  pollutant_quantity?: "sub_index" | "concentration" | null;
 
   wind_speed?: number | null;
   wind_direction?: number | null;
@@ -568,7 +576,9 @@ export interface PolicyParseError {
 export interface PolicyResponse {
   index_type: string | null;
   docs_indexed: number;
+  files_on_disk?: number;
   chunks_indexed: number;
+  indexed?: boolean;
   embed_model: string | null;
   last_reindex: string | null;
   store_status: string | null;
@@ -582,7 +592,10 @@ export interface PolicyUploadResponse {
   size_bytes: number;
   saved_to: string;
   docs_indexed: number;
+  files_on_disk?: number;
   message: string;
+  /** True when a file of the same name already existed and was overwritten. */
+  replaced?: boolean;
 }
 
 export interface ReportMetaResponse {

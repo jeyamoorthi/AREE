@@ -80,7 +80,7 @@ export function selectEvidence(data: OutlookResponse): CaseEvidence {
     detail: [
       observation.band,
       observation.n_stations !== null
-        ? `${observation.n_stations} ${observation.n_stations === 1 ? "monitor" : "stations"}`
+        ? `${observation.n_stations} ${observation.n_stations === 1 ? "station" : "stations"}`
         : null,
       istClock(observation.observed_at),
     ]

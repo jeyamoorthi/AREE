@@ -8,10 +8,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { istDateTime } from "@/lib/clock";
+import { applyThemeChromeColor } from "@/lib/themeMode";
 
 import CommandBar from "@/components/CommandBar";
 import CommandPalette from "@/components/CommandPalette";
 import CriticalAlertBanner from "@/components/CriticalAlertBanner";
+import DataFreshnessRibbon from "@/components/DataFreshnessRibbon";
 import ReplayModeBanner from "@/components/ReplayModeBanner";
 import Sidebar from "@/components/Sidebar";
 import {
@@ -19,7 +21,7 @@ import {
   useSystemStatus,
 } from "@/components/providers/LiveDataProvider";
 import { OutlookModeProvider } from "@/components/providers/OutlookModeProvider";
-import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { ThemeProvider, useTheme } from "@/components/providers/ThemeProvider";
 
 /**
  * What the system is actually running, named from /api/system/status.
@@ -101,6 +103,13 @@ function Shell({ children }: { children: ReactNode }) {
      open by itself the moment the window was narrowed past 1024px. */
   const toggleSidebar = useCallback(() => setSidebarCollapsed((c) => !c), []);
   const closeMobile = useCallback(() => setMobileOpen(false), []);
+
+  /* The browser chrome follows the theme in force, not the OS preference. The
+     bootstrap script in layout.tsx covers first paint; this covers every toggle. */
+  const { theme, mounted } = useTheme();
+  useEffect(() => {
+    if (mounted) applyThemeChromeColor(theme);
+  }, [theme, mounted]);
 
   // Ctrl+K / Cmd+K palette toggle
   useEffect(() => {
@@ -190,6 +199,12 @@ function Shell({ children }: { children: ReactNode }) {
               alert must never cover the navigation used to act on it. Renders
               nothing at all when no station is triggered. */}
           <CriticalAlertBanner />
+
+          {/* Is what I am looking at current? Stated once, on every page — the
+              freshness breakdown otherwise lives only on the NCR Overview. Not
+              sticky: the bar and the alert already hold the sticky layers. It
+              stands itself down during a replay. */}
+          <DataFreshnessRibbon />
 
           {/* Page content */}
           <main id="main-content" className="flex flex-1 flex-col p-3 sm:p-4 lg:p-5">

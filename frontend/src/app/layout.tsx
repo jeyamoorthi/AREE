@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 
 import AppShell from "@/components/AppShell";
-import { THEME_STORAGE_KEY } from "@/lib/themeMode";
+import { THEME_CHROME_COLORS, THEME_STORAGE_KEY } from "@/lib/themeMode";
 import "./globals.css";
 
 /**
@@ -15,7 +15,9 @@ import "./globals.css";
  */
 const THEME_BOOTSTRAP = `(function(){try{var t=localStorage.getItem(${JSON.stringify(
   THEME_STORAGE_KEY,
-)});if(t==="dark"){document.documentElement.setAttribute("data-theme","dark");}}catch(e){}})();`;
+)});if(t==="dark"){document.documentElement.setAttribute("data-theme","dark");var m=document.querySelectorAll('meta[name="theme-color"]');for(var i=0;i<m.length;i++){m[i].setAttribute("content",${JSON.stringify(
+  THEME_CHROME_COLORS.dark,
+)});}}}catch(e){}})();`;
 
 const inter = Inter({
   variable: "--font-inter",
@@ -29,20 +31,29 @@ const jetbrainsMono = JetBrains_Mono({
   weight: ["400", "600", "700", "800"],
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL?.trim() || "http://localhost:3000";
+
+const DESCRIPTION =
+  "Autonomous Regulatory Escalation Engine for Delhi NCR — real-time air-quality and " +
+  "ventilation risk, deterministic GRAP escalation, human-authorised decisions.";
+
 export const metadata: Metadata = {
-  title: "AREE | Autonomous Regulatory Escalation Engine",
-  description:
-    "Autonomous Regulatory Escalation Engine — environmental intelligence platform. " +
-    "Pathway streaming, satellite intelligence and policy-grounded regulatory advisories.",
+  // Resolves the relative Open Graph image; without it Next warns at build time.
+  metadataBase: new URL(SITE_URL),
+  // Pages set a short title ("Outlook", "Reports") and inherit the suffix.
+  title: {
+    default: "AREE — Autonomous Regulatory Escalation Engine",
+    template: "%s · AREE",
+  },
+  description: DESCRIPTION,
   applicationName: "AREE",
   // The tab icon comes from app/icon.png via the file convention — declaring
   // `icons` here would replace it, so it is deliberately absent.
   openGraph: {
     type: "website",
     siteName: "AREE",
-    title: "AREE — Environmental Intelligence",
-    description:
-      "Autonomous Regulatory Escalation Engine — environmental intelligence platform.",
+    title: "AREE — Autonomous Regulatory Escalation Engine",
+    description: DESCRIPTION,
     images: [{ url: "/aree-mark.png", width: 1040, height: 706, alt: "AREE" }],
   },
 };
@@ -53,11 +64,11 @@ export const metadata: Metadata = {
  * `width=device-width, initial-scale=1` is Next's default and is restated here only
  * because this export also carries the two things that are not defaults:
  *
- *   themeColor — the colour a phone paints its own status and address bars. Two
- *   entries, matched to --aree-bg in each palette, so the chrome above the page is
- *   the same surface as the page rather than a white strip over a dark command
- *   center. The values are literals because a media query cannot read a custom
- *   property; they must be kept in step with --aree-bg in globals.css.
+ *   themeColor — the colour a phone paints its own status and address bars. ONE
+ *   entry, the light --aree-bg, because the application defaults to light whatever
+ *   the OS prefers; keying it to prefers-color-scheme painted a black status bar
+ *   over a light page. The bootstrap script below and AppShell repoint it at the
+ *   dark value when the dark theme is actually in force.
  *
  *   The page is deliberately NOT zoom-locked. `maximum-scale=1` / `user-scalable=no`
  *   is the usual line here and it is an accessibility failure: this application
@@ -67,10 +78,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f4ed" },
-    { media: "(prefers-color-scheme: dark)", color: "#100f0c" },
-  ],
+  themeColor: THEME_CHROME_COLORS.light,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

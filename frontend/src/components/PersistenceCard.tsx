@@ -11,7 +11,8 @@
 import { MoveRight, TrendingDown, TrendingUp } from "lucide-react";
 
 import { Disclosure, KeyValue, Panel, ProgressBar, Stat } from "@/components/ui/Card";
-import { orDash } from "@/lib/theme";
+import { engineTime } from "@/lib/clock";
+import { modeLabel, orDash } from "@/lib/theme";
 import type { EngineConfig, StationDetail } from "@/types";
 
 export default function PersistenceCard({
@@ -55,8 +56,19 @@ export default function PersistenceCard({
         ? "var(--aree-green)"
         : "var(--aree-muted)";
 
-  const triggered = consecutive >= persistenceThreshold;
-  const watch = aqi >= highThreshold && consecutive > 0 && !triggered;
+  /* The engine's own mode is the source of truth. The window count alone is not:
+     it can sit at the threshold after the AQI has dropped back below it, and this
+     banner must never disagree with the mode chip in the header. The count-based
+     reading is kept only for a payload that carries no mode. */
+  const mode =
+    data.engine_mode ??
+    (aqi >= highThreshold && consecutive >= persistenceThreshold
+      ? "TRIGGERED"
+      : aqi >= highThreshold && consecutive > 0
+        ? "WATCH"
+        : "NORMAL");
+  const triggered = mode === "TRIGGERED";
+  const watch = mode === "WATCH";
 
   const banner = triggered
     ? {
@@ -77,7 +89,7 @@ export default function PersistenceCard({
       : {
           cls: "",
           color: "var(--aree-green)",
-          title: "Normal operations",
+          title: modeLabel("NORMAL"),
           detail: `No sustained readings at or above AQI ${highThreshold}.`,
         };
 
@@ -161,7 +173,7 @@ export default function PersistenceCard({
             value={orDash(projected, "no projection")}
             color={projected === "ACTIVE NOW" ? "var(--aree-red)" : undefined}
           />
-          <KeyValue label="Last data update" value={`${orDash(data.api_time)} UTC`} />
+          <KeyValue label="Last engine poll" value={orDash(engineTime(data.api_time))} />
           <KeyValue
             label="Governance rule"
             value={

@@ -8,12 +8,13 @@
 import "leaflet/dist/leaflet.css";
 
 import L from "leaflet";
+import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { MapContainer, Marker, Popup, TileLayer, Tooltip, useMap } from "react-leaflet";
 import MapResizeSync from "@/components/MapResizeSync";
 import { freshness } from "@/lib/freshness";
 import { feedLabel, stationLabel } from "@/lib/station";
-import { aqiColor, eriColor, modeColor } from "@/lib/theme";
+import { aqiColor, eriColor, modeColor, modeLabel } from "@/lib/theme";
 import type { EngineMode, FreshnessStatus } from "@/types";
 
 /* CARTO raster basemap.
@@ -78,10 +79,11 @@ const NCR_BOUNDS: [[number, number], [number, number]] = [
  */
 function markerSize(station: MapStation): number {
   const aqi = station.aqi ?? 0;
-  if (aqi >= 400) return 22;
-  if (aqi >= 300) return 20;
-  if (aqi >= 200) return 18;
-  if (aqi >= 100) return 16;
+  // CPCB band floors (101 / 201 / 301 / 401), so size steps where colour does.
+  if (aqi >= 401) return 22;
+  if (aqi >= 301) return 20;
+  if (aqi >= 201) return 18;
+  if (aqi >= 101) return 16;
   return 14;
 }
 
@@ -248,7 +250,7 @@ export default function StationMap({
       className="relative overflow-hidden rounded-xl border border-aree-border shadow-xs"
       style={{ height }}
       role="region"
-      aria-label={`Station map — ${stations.length} monitoring node${stations.length === 1 ? "" : "s"}`}
+      aria-label={`Station map — ${stations.length} station${stations.length === 1 ? "" : "s"}`}
     >
       <MapContainer
         center={initialCenter}
@@ -311,13 +313,13 @@ export default function StationMap({
                   <Row label="Band" value={station.cpcb_band ?? "—"} />
                   <Row label="GRAP" value={station.grap_stage ?? "—"} />
                   <Row
-                    label="ERI"
+                    label="Escalation readiness (ERI)"
                     value={station.eri_score ?? "—"}
                     color={eriColor(station.eri_score)}
                   />
                   <Row
                     label="Regulatory"
-                    value={station.engine_mode ?? "—"}
+                    value={modeLabel(station.engine_mode)}
                     color={modeColor(station.engine_mode)}
                   />
                   <Row
@@ -325,7 +327,10 @@ export default function StationMap({
                     value={`${look.marker} ${look.label}`}
                     color={look.color}
                   />
-                  <a
+                  {/* react-leaflet renders popup content through a React portal, so
+                      the router context is present and a client-side Link works —
+                      a plain <a> reloaded the whole application. */}
+                  <Link
                     href={`/stations/${encodeURIComponent(station.station)}`}
                     style={{
                       color: "var(--aree-forest)",
@@ -336,8 +341,8 @@ export default function StationMap({
                       textDecoration: "none"
                     }}
                   >
-                    Open command center →
-                  </a>
+                    Open Command Center →
+                  </Link>
                 </div>
               </Popup>
             </Marker>

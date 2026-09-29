@@ -35,6 +35,8 @@ import {
 } from "@/components/providers/LiveDataProvider";
 import { usePolling } from "@/hooks/usePolling";
 import { api } from "@/lib/api";
+import { istDateTime } from "@/lib/clock";
+import { newestFirst } from "@/lib/escalation";
 import { freshness } from "@/lib/freshness";
 import { rememberRecent, readRecents } from "@/lib/recents";
 import { feedLabel, stationLabel } from "@/lib/station";
@@ -75,7 +77,23 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const listId = useId();
+
+  /* Focus goes back where it came from — the search button, or whatever had focus
+     when Ctrl/⌘K was pressed. Recorded on mount, before autoFocus has moved it,
+     and restored on unmount, which is every way this dialog closes. */
+  const [opener] = useState<HTMLElement | null>(() =>
+    typeof document !== "undefined" && document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null,
+  );
+  useEffect(
+    () => () => {
+      if (opener && document.contains(opener)) opener.focus();
+    },
+    [opener],
+  );
 
   const stationsState = useStations();
   const statusState = useSystemStatus();
@@ -109,10 +127,10 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       {
         id: "nav-/",
         group: "Navigate",
-        label: "National Overview",
+        label: "NCR Overview",
         hint: "Network map, distribution and recent events",
         icon: <MapPin className="h-4 w-4" />,
-        search: "national overview dashboard map network home",
+        search: "ncr national overview dashboard map network home",
         recent: { kind: "nav", id: "/" },
         run: go("/"),
       },
@@ -141,7 +159,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
         id: "nav-/reports",
         group: "Navigate",
         label: "Reports",
-        hint: "Generate a municipal escalation brief",
+        hint: "Generate a regulatory escalation brief",
         icon: <FileText className="h-4 w-4" />,
         search: "reports report centre pdf brief generate",
         recent: { kind: "nav", id: "/reports" },
@@ -214,7 +232,8 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       run: go("/dashboard#policy-intelligence"),
     }));
 
-    const eventItems: Item[] = (escalations.data?.events ?? [])
+    // Newest first regardless of the order the server sent them in.
+    const eventItems: Item[] = newestFirst(escalations.data?.events ?? [])
       .slice(0, 20)
       .map((e, i) => {
         const where = e.city ?? e.station ?? null;
@@ -222,7 +241,10 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
           id: `event-${i}-${e.timestamp ?? ""}`,
           group: "Escalation events",
           label: `${where ? stationLabel(where) : "Unknown station"} → ${e.to_stage ?? "—"}`,
-          hint: [e.timestamp, e.aqi !== null ? `AQI ${e.aqi}` : null]
+          hint: [
+            istDateTime(e.timestamp) ?? e.timestamp,
+            e.aqi !== null && e.aqi !== undefined ? `AQI ${e.aqi}` : null,
+          ]
             .filter(Boolean)
             .join(" · "),
           icon: <AlertTriangle className="h-4 w-4" />,
@@ -324,8 +346,31 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
       role="presentation"
     >
       <div
+        ref={dialogRef}
         className="bg-aree-surface-2 w-full max-w-2xl overflow-hidden rounded-[var(--aree-radius-lg)] border border-aree-border shadow-[var(--aree-shadow-lg)] flex flex-col"
         onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => {
+          /* aria-modal promises the page behind is out of reach, so Tab must not
+             walk into it. Cycles through whatever is tabbable in here — today only
+             the search input, since the options are driven by the arrow keys. */
+          if (e.key !== "Tab") return;
+          const focusable = Array.from(
+            dialogRef.current?.querySelectorAll<HTMLElement>(
+              'input, button:not([tabindex="-1"]), a[href], [tabindex]:not([tabindex="-1"])',
+            ) ?? [],
+          );
+          if (focusable.length === 0) return;
+          const first = focusable[0];
+          const last = focusable[focusable.length - 1];
+          const at = document.activeElement;
+          if (e.shiftKey && (at === first || !dialogRef.current?.contains(at))) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && (at === last || !dialogRef.current?.contains(at))) {
+            e.preventDefault();
+            first.focus();
+          }
+        }}
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
@@ -334,7 +379,7 @@ export default function CommandPalette({ onClose }: { onClose: () => void }) {
           <Search className="text-aree-forest h-5 w-5 shrink-0" aria-hidden />
           {/* Combobox pattern: focus never leaves this input, and the highlighted
               result is announced through aria-activedescendant. That is also why the
-              option buttons below are not tabbable — there is no focus to trap. */}
+              option buttons below are not tabbable; Tab is held in the dialog above. */}
           <input
             autoFocus
             value={query}

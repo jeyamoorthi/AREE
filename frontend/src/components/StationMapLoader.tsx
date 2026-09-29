@@ -7,9 +7,16 @@ import dynamic from "next/dynamic";
 import { SkeletonMap } from "@/components/ui/States";
 import type { MapStation } from "./StationMap";
 
+/* The same default StationMap uses. Repeated rather than imported: importing
+   anything from StationMap here would pull Leaflet into the server bundle. */
+const DEFAULT_HEIGHT = "clamp(280px, 46vh, 480px)";
+
+/* `loading` receives no props, so it cannot know the caller's height. It fills a
+   wrapper that does — which keeps the skeleton the same box as the map it stands
+   in for on every page, instead of the 480px default under a 440px home map. */
 const StationMap = dynamic(() => import("./StationMap"), {
   ssr: false,
-  loading: () => <SkeletonMap />,
+  loading: () => <SkeletonMap height="100%" />,
 });
 
 export type { MapStation };
@@ -20,7 +27,12 @@ export default function StationMapLoader(props: {
   selected?: string | null;
   onSelect?: (station: string) => void;
 }) {
-  return <StationMap {...props} />;
+  const height = props.height ?? DEFAULT_HEIGHT;
+  return (
+    <div style={{ height }}>
+      <StationMap {...props} height="100%" />
+    </div>
+  );
 }
 
 /**

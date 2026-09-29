@@ -11,7 +11,7 @@
  *   panel states what it is. Delete that line the day a real endpoint exists, and
  *   not before.
  *
- * WHAT "DOWNLOAD PDF" ACTUALLY DOES, AND WHY THE ROW SAYS SO
+ * WHAT "DOWNLOAD LATEST" ACTUALLY DOES, AND WHY THE ROW SAYS SO
  *   It asks the engine for a report NOW. The engine generates from current state and
  *   holds no historical documents, so the file that comes back describes today, not
  *   the moment in the row. Presenting it as "download that report again" would hand
@@ -30,6 +30,7 @@ import { istDateTime } from "@/lib/clock";
 import { clearReportHistory, type ReportRecord } from "@/lib/reportHistory";
 import { stationLabel } from "@/lib/station";
 import { aqiColor, eriColor, grapColor, orDash } from "@/lib/theme";
+import type { StationSummary } from "@/types";
 
 /**
  * The stored snapshot, in full.
@@ -155,9 +156,20 @@ function RecordDialog({
   );
 }
 
-export default function ReportHistory() {
+export default function ReportHistory({
+  stationFor,
+  onDownloaded,
+}: {
+  /** The roster's CURRENT summary for a station, so the stale gate arms per row. */
+  stationFor?: (station: string) => StationSummary | null;
+  /** Called with the station key after a row's fresh report downloads. */
+  onDownloaded?: (station: string) => void;
+} = {}) {
   const history = useReportHistory();
   const [viewing, setViewing] = useState<ReportRecord | null>(null);
+  /* Clearing deletes every row with no undo, so it asks once, inline — the same
+     ask-don't-refuse pattern as the stale gate, rather than a browser dialog. */
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   if (history.length === 0) {
     return (
@@ -175,15 +187,45 @@ export default function ReportHistory() {
         subtitle="Stored in this browser only — not an audit trail, and not shared between devices."
         padding="p-0"
         headerAction={
-          <button
-            type="button"
-            onClick={() => clearReportHistory()}
-            className="flex items-center gap-1.5 rounded-[var(--aree-radius-sm)] border border-aree-border px-2.5 py-1.5 text-[11.5px] font-semibold text-aree-muted transition-colors hover:border-aree-border-strong hover:text-aree-body"
-            aria-label={`Clear all ${history.length} report records from this browser`}
-          >
-            <Trash2 className="h-3 w-3" aria-hidden />
-            Clear history
-          </button>
+          confirmingClear ? (
+            <div
+              role="alertdialog"
+              aria-label="Confirm clearing report history"
+              className="flex flex-wrap items-center gap-2"
+            >
+              <span className="text-[11.5px] text-aree-body">
+                Clear {history.length} {history.length === 1 ? "record" : "records"}?
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  clearReportHistory();
+                  setConfirmingClear(false);
+                }}
+                className="rounded-[var(--aree-radius-sm)] px-2.5 py-1.5 text-[11.5px] font-bold text-aree-on-solid transition"
+                style={{ background: "var(--aree-red)" }}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmingClear(false)}
+                className="rounded-[var(--aree-radius-sm)] border border-aree-border px-2.5 py-1.5 text-[11.5px] font-semibold text-aree-body transition-colors hover:border-aree-border-strong"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmingClear(true)}
+              className="flex items-center gap-1.5 rounded-[var(--aree-radius-sm)] border border-aree-border px-2.5 py-1.5 text-[11.5px] font-semibold text-aree-muted transition-colors hover:border-aree-border-strong hover:text-aree-body"
+              aria-label={`Clear all ${history.length} report records from this browser`}
+            >
+              <Trash2 className="h-3 w-3" aria-hidden />
+              Clear history
+            </button>
+          )
         }
       >
         <div className="overflow-x-auto">
@@ -209,7 +251,9 @@ export default function ReportHistory() {
               </tr>
             </thead>
             <tbody className="divide-y divide-aree-border">
-              {history.map((record) => (
+              {history.map((record) => {
+                const current = stationFor?.(record.station) ?? null;
+                return (
                 <tr key={record.id} className="transition-colors hover:bg-aree-surface-2">
                   <td className="aree-num px-4 py-3 text-[11.5px] whitespace-nowrap text-aree-body">
                     {istDateTime(record.generatedAt) ?? record.generatedAt}
@@ -266,12 +310,16 @@ export default function ReportHistory() {
                       <ReportDownload
                         station={record.station}
                         variant="ghost"
-                        label="Download PDF"
+                        label="Download latest"
+                        freshnessStatus={current?.freshness_status ?? null}
+                        staleSeconds={current?.stale_seconds ?? null}
+                        onDownloaded={() => onDownloaded?.(record.station)}
                       />
                     </div>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
         </div>

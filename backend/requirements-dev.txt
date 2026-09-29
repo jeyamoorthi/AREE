@@ -20,3 +20,7 @@ pytest==9.1.1
 # when called directly, and only a real request found it.
 #
 # uvicorn itself is already in the runtime set, so nothing extra is needed here.
+
+# Reads generated escalation briefs back as text, so tests can assert what a
+# regulator would actually see (test_qa_regressions.py). Skipped if absent.
+pypdf==6.19.0

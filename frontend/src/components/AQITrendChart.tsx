@@ -19,6 +19,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { istClock } from "@/lib/clock";
 import { COLORS } from "@/lib/theme";
 import type { ForecastResponse } from "@/types";
 
@@ -28,11 +29,9 @@ interface Point {
   projected: number | null;
 }
 
+/** "22:20" in IST. The zone is stated once, on the axis and in the tooltip. */
 function clockLabel(iso: string | null): string {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toISOString().slice(11, 19);
+  return istClock(iso)?.replace(/ IST$/, "") ?? "—";
 }
 
 export default function AQITrendChart({
@@ -80,7 +79,7 @@ export default function AQITrendChart({
     <div>
       <div style={{ height }} className="w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={points} margin={{ top: 10, right: 14, bottom: 4, left: -14 }}>
+          <ComposedChart data={points} margin={{ top: 10, right: 14, bottom: 14, left: -14 }}>
             <defs>
               <linearGradient id="aree-observed-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={COLORS.accent} stopOpacity={0.28} />
@@ -95,6 +94,13 @@ export default function AQITrendChart({
               tickLine={false}
               axisLine={{ stroke: COLORS.border }}
               minTickGap={18}
+              label={{
+                value: "Time (IST)",
+                position: "insideBottomRight",
+                offset: -10,
+                fill: COLORS.dim,
+                fontSize: 10,
+              }}
             />
             <YAxis
               stroke={COLORS.dim}
@@ -114,6 +120,10 @@ export default function AQITrendChart({
               }}
               labelStyle={{ color: "var(--aree-muted)" }}
               itemStyle={{ color: "var(--aree-text)", fontWeight: 500 }}
+              labelFormatter={(label) => {
+                const text = String(label);
+                return text.startsWith("+") ? `Projected ${text}` : `${text} IST`;
+              }}
             />
             <ReferenceLine
               y={highThreshold}

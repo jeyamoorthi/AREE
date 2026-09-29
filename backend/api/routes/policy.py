@@ -31,7 +31,9 @@ def policy() -> PolicyResponse:
     return PolicyResponse(
         index_type=state.get("index_type"),
         docs_indexed=state.get("docs_indexed", 0),
+        files_on_disk=state.get("docs_indexed", 0),
         chunks_indexed=state.get("chunks_indexed", 0),
+        indexed=(state.get("chunks_indexed") or 0) > 0,
         embed_model=state.get("embed_model"),
         last_reindex=state.get("last_reindex"),
         store_status=state.get("store_status"),
@@ -84,7 +86,9 @@ async def upload_policy(
             },
         )
 
-    content = await file.read()
+    # Read one byte past the cap rather than the whole body, so an oversized
+    # upload is refused without first being buffered into memory in full.
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
     if not content:
         raise HTTPException(
             status_code=400,
@@ -110,16 +114,30 @@ async def upload_policy(
             detail={"error": "invalid_path", "detail": "Illegal filename."},
         )
 
+    replaced = os.path.exists(save_path)
     with open(save_path, "wb") as fh:
         fh.write(content)
 
+    # rag_state() re-lists the directory in direct mode; in streaming mode the
+    # rescan above it is what refreshes the count, so it must run first.
     engine.scan_policy_files()
     state = engine.rag_state()
+    count = state.get("docs_indexed", 0)
+
+    if engine.status().get("mode") == "direct":
+        message = ("Document saved. It is not indexed: policy retrieval runs only "
+                   "in the streaming engine, which picks it up when started.")
+    else:
+        message = "Document saved. The live policy index picks it up on the next stream update."
+    if replaced:
+        message = f"Replaced existing '{raw_name}'. " + message
 
     return PolicyUploadResponse(
         uploaded=raw_name,
         size_bytes=len(content),
         saved_to=os.path.relpath(save_path, os.path.dirname(policy_dir)),
-        docs_indexed=state.get("docs_indexed", 0),
-        message="Document ingested. The live policy index picks it up on the next stream update.",
+        docs_indexed=count,
+        files_on_disk=count,
+        replaced=replaced,
+        message=message,
     )

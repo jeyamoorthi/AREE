@@ -208,7 +208,7 @@ class ConnectionManager:
             for event in reversed(fresh):
                 await self.broadcast({
                     "type": "escalation",
-                    "station": event.get("city"),
+                    "station": event.get("city") or event.get("station"),
                     "server_time": _now(),
                     "payload": to_jsonable(event),
                 })

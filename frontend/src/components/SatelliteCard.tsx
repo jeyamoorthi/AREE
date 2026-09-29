@@ -26,6 +26,7 @@
 import { Flame, Satellite, Wind } from "lucide-react";
 
 import { Disclosure, KeyValue, Panel, Pill, ProgressBar, Stat } from "@/components/ui/Card";
+import { engineTime } from "@/lib/clock";
 import { confidenceColor, orDash, transportLabel } from "@/lib/theme";
 import type { StationDetail } from "@/types";
 
@@ -185,12 +186,17 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
                 {data.pollution_cause.replace(/_/g, " ")}
               </span>
               <span className="text-[11px] text-aree-muted">
-                confidence {((data.cause_confidence ?? 0) * 100).toFixed(0)}%
+                confidence{" "}
+                {typeof data.cause_confidence === "number"
+                  ? `${(data.cause_confidence * 100).toFixed(0)}%`
+                  : "—"}
               </span>
               {data.transport_probability !== undefined ? (
                 <span className="text-[11px] text-aree-muted">
                   · transport probability{" "}
-                  {((data.transport_probability ?? 0) * 100).toFixed(0)}%
+                  {typeof data.transport_probability === "number"
+                    ? `${(data.transport_probability * 100).toFixed(0)}%`
+                    : "—"}
                 </span>
               ) : null}
             </div>
@@ -220,7 +226,7 @@ export default function SatelliteCard({ data }: { data: StationDetail }) {
         <div className="grid gap-x-8 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
           <KeyValue label="FIRMS status" value={orDash(data.firms_status)} color={statusColor} />
           <KeyValue label="Dataset" value={orDash(data.firms_dataset)} />
-          <KeyValue label="Last NASA sync" value={`${orDash(data.firms_sync)} UTC`} />
+          <KeyValue label="Last NASA sync" value={orDash(engineTime(data.firms_sync), "Not polled")} />
           <KeyValue label="Bounding box" value={orDash(data.fire_bbox)} />
           <KeyValue
             label="Fire centroid"

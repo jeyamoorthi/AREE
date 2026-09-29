@@ -44,6 +44,7 @@ import logging
 import os
 import time
 from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FuturesTimeout
 from datetime import datetime, timedelta, timezone
 from statistics import median
 from typing import Any
@@ -73,6 +74,17 @@ MIN_STATIONS = 3
 LOCATION_TTL_SECONDS = 3600
 READING_TTL_SECONDS = 90
 MAX_SERVE_STALE_MINUTES = 30
+
+# Wall-clock budget for the CPCB pull when a composite is built on an HTTP
+# request path. Unbounded, a slow data.gov.in held /ventilation/* open for
+# minutes; past this the request falls through to OpenAQ / the last good value.
+# Kept well under the Next.js proxy's 30 s socket timeout, or the browser gets a
+# bare 500 from the proxy instead of our answer.
+REQUEST_CPCB_BUDGET_SECONDS = 18
+# OpenAQ is only attempted if at least this much of the budget is left.
+REQUEST_OPENAQ_MIN_SECONDS = 6
+# One worker: concurrent requests must not fan out into parallel OpenAQ pulls.
+_openaq_pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="openaq-fallback")
 
 _loc_cache: dict[str, Any] = {"value": None, "fetched_at": None}
 _obs_cache: dict[str, Any] = {"value": None, "fetched_at": None}
@@ -241,7 +253,8 @@ def _stale_fallback(now: datetime, reason: str) -> dict[str, Any] | None:
 
 
 def composite_pm25(now: datetime | None = None,
-                   include_stations: bool = True) -> dict[str, Any]:
+                   include_stations: bool = True,
+                   budget_s: float | None = None) -> dict[str, Any]:
     """
     One airshed PM2.5 value, with every station behind it.
 
@@ -249,8 +262,12 @@ def composite_pm25(now: datetime | None = None,
     so an operational reading is comparable to the record the decision
     threshold was calibrated on. A mean would let one failed analyser move the
     decision.
+
+    `budget_s` bounds the CPCB pull (request paths pass
+    REQUEST_CPCB_BUDGET_SECONDS). The engine and capture job omit it.
     """
     now = now or datetime.now(timezone.utc)
+    deadline = None if budget_s is None else time.monotonic() + budget_s
 
     cached, at = _obs_cache["value"], _obs_cache["fetched_at"]
     if cached is not None and at and (now - at).total_seconds() < READING_TTL_SECONDS:
@@ -267,7 +284,7 @@ def composite_pm25(now: datetime | None = None,
         from .cpcb_stream import fetch_ncr
 
         cpcb_started = time.monotonic()
-        cpcb_rows = fetch_ncr()
+        cpcb_rows = fetch_ncr(deadline=deadline)
         cpcb_stations = [
             {
                 "station": row["station"],
@@ -318,6 +335,30 @@ def composite_pm25(now: datetime | None = None,
     except Exception as exc:                                # noqa: BLE001
         log.warning("CPCB source unavailable, trying OpenAQ: %s", exc)
 
+    if deadline is not None and deadline - time.monotonic() < REQUEST_OPENAQ_MIN_SECONDS:
+        reason = (f"CPCB pull did not complete within the {budget_s:.0f} s "
+                  f"request budget")
+        fb = _stale_fallback(now, reason)
+        return fb or {"available": False, "checked_at": now, "reason": reason}
+
+    if deadline is None:
+        return _openaq_composite(now, include_stations)
+
+    # OpenAQ's own per-call timeouts run to a minute, so on a request path it is
+    # bounded by what is left of the budget. A pull that finishes late still
+    # refreshes the cache for the next caller.
+    future = _openaq_pool.submit(_openaq_composite, now, include_stations)
+    try:
+        return future.result(timeout=max(0.0, deadline - time.monotonic()))
+    except FuturesTimeout:
+        reason = (f"no ground-observation source answered within the "
+                  f"{budget_s:.0f} s request budget")
+        fb = _stale_fallback(now, reason)
+        return fb or {"available": False, "checked_at": now, "reason": reason}
+
+
+def _openaq_composite(now: datetime, include_stations: bool) -> dict[str, Any]:
+    """The OpenAQ half of composite_pm25, used when CPCB yields nothing."""
     try:
         locations = resolve_active_locations(now)
     except Exception as exc:                                # noqa: BLE001
@@ -394,6 +435,104 @@ def composite_pm25(now: datetime | None = None,
     if not include_stations:
         out.pop("stations", None)
     return out
+
+
+# --- Per-pollutant concentrations (backup for data.gov.in) -------------------
+#
+# data.gov.in is the only source of pollutant concentrations for the station
+# table, and when it is down every tile goes blank. OpenAQ mirrors the same CPCB
+# stations under the same names, but most of the NCR mirror lags by days, so a
+# reading only counts when it is at most POLLUTANT_MAX_AGE_HOURS old. A stale
+# value presented as current is worse than a blank tile.
+POLLUTANT_MAX_AGE_HOURS = 3
+
+# Molar masses (g/mol) for ppb -> µg/m³ at 25 °C and 1 atm, where one mole of
+# gas occupies 24.45 L. CPCB publishes at the same reference conditions.
+_MOLAR_MASS = {"no2": 46.0055, "so2": 64.066, "o3": 47.998, "co": 28.010,
+               "nh3": 17.031}
+_MOLAR_VOLUME_L = 24.45
+_POLLUTANTS = ("pm25", "pm10", "no2", "so2", "o3", "co", "nh3")
+
+
+def _to_cpcb_units(parameter: str, value: float, units: str) -> float | None:
+    """
+    Convert one OpenAQ reading to CPCB's units: µg/m³, except CO in mg/m³.
+
+    Returns None for a unit we do not recognise rather than guessing.
+    """
+    u = (units or "").strip().lower().replace("µ", "u").replace("μ", "u")
+    if u in ("ug/m3", "ug/m³"):
+        ug = value
+    elif u in ("ppb", "ppm") and parameter in _MOLAR_MASS:
+        ppb = value * 1000 if u == "ppm" else value
+        ug = ppb * _MOLAR_MASS[parameter] / _MOLAR_VOLUME_L
+    elif u in ("mg/m3", "mg/m³"):
+        ug = value * 1000
+    else:
+        return None
+    return ug / 1000 if parameter == "co" else ug
+
+
+def _pollutants_for_location(loc: dict, cutoff: datetime) -> dict | None:
+    """Latest fresh value of each pollutant at one location, in CPCB units."""
+    try:
+        payload = _get(f"{BASE}/locations/{loc['id']}/latest", timeout=30, retries=2)
+    except Exception:                                       # noqa: BLE001
+        return None
+
+    sensors = {s["id"]: s["parameter"] for s in loc.get("sensors") or []
+               if s.get("id") and s.get("parameter")}
+    best: dict[str, tuple[datetime, float]] = {}
+    for rec in payload.get("results", []):
+        param = sensors.get(rec.get("sensorsId"))
+        if not param or param.get("name") not in _POLLUTANTS:
+            continue
+        ts = _parse_ts((rec.get("datetime") or {}).get("utc"))
+        value = rec.get("value")
+        # Old co-located sensors are still listed; only fresh readings count.
+        if ts is None or ts < cutoff or value is None or value < 0:
+            continue
+        converted = _to_cpcb_units(param["name"], float(value), param.get("units", ""))
+        if converted is None:
+            continue
+        name = param["name"]
+        if name not in best or ts > best[name][0]:
+            best[name] = (ts, round(converted, 2))
+
+    if not best:
+        return None
+    row: dict[str, Any] = {"station": loc.get("name")}
+    row.update({name: value for name, (_, value) in best.items()})
+    row["observed_at"] = min(ts for ts, _ in best.values())
+    return row
+
+
+def fetch_ncr_pollutants(now: datetime | None = None,
+                         workers: int = 10) -> list[dict]:
+    """
+    Fresh per-pollutant concentrations for NCR stations from OpenAQ.
+
+    Rows have the same shape as cpcb_stream.pivot_stations() - station name,
+    one key per pollutant, observed_at - so the engine can join either source
+    by station name. observed_at is the OLDEST of the values used, so the age
+    the dashboard shows is never flattering.
+    """
+    now = now or datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=POLLUTANT_MAX_AGE_HOURS)
+
+    bbox = ",".join(str(v) for v in NCR_BBOX)
+    payload = _get(f"{BASE}/locations", {"bbox": bbox, "limit": 1000})
+    fresh = []
+    for loc in payload.get("results", []):
+        coords = loc.get("coordinates") or {}
+        last = _parse_ts((loc.get("datetimeLast") or {}).get("utc"))
+        if (loc.get("name") and last is not None and last >= cutoff
+                and _inside_ncr(coords.get("latitude"), coords.get("longitude"))):
+            fresh.append(loc)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        rows = list(pool.map(lambda loc: _pollutants_for_location(loc, cutoff), fresh))
+    return [r for r in rows if r is not None]
 
 
 if __name__ == "__main__":

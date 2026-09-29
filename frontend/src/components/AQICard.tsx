@@ -11,9 +11,11 @@
 
 import { AlertTriangle } from "lucide-react";
 
+import { engineTime } from "@/lib/clock";
 import { NAAQS_24H } from "@/lib/cpcb";
 import { formatDuration, formatUtcIso } from "@/lib/duration";
 import { freshness } from "@/lib/freshness";
+import { aqiSourceLabel } from "@/lib/station";
 import { KeyValue, Panel, Stat } from "@/components/ui/Card";
 import { aqiColor, orDash } from "@/lib/theme";
 import type { EngineConfig, StationDetail } from "@/types";
@@ -25,6 +27,9 @@ import type { EngineConfig, StationDetail } from "@/types";
 //   path does not use AND the wrong quantity: a PM10 value of 151 here is
 //   151 ug/m3, not an index. The unit now comes from the payload's own
 //   pollutant_source, and CO is called out because CPCB reports it in mg/m3.
+//   EXCEPT when pollutant_quantity is "sub_index": CPCB's own feed publishes
+//   per-pollutant sub-indices (see backend/ingestion/cpcb_live.py), which are
+//   unitless and must not be printed as, or compared against, a µg/m³ limit.
 const POLLUTANTS: { name: string; key: keyof StationDetail; waqiKey: string }[] = [
   { name: "PM2.5", key: "raw_pm25", waqiKey: "pm25" },
   { name: "PM10", key: "raw_pm10", waqiKey: "pm10" },
@@ -176,70 +181,86 @@ export function PollutantGrid({
    */
   showStandards?: boolean;
 }) {
+  // Concentrations and the AQI come from different feeds with different ages;
+  // say which feed and how old, so a backup source is never mistaken for CPCB.
+  const age =
+    data.pollutant_age_minutes != null ? formatDuration(data.pollutant_age_minutes * 60) : null;
+  const isIndex = data.pollutant_quantity === "sub_index";
+  const unitFor = (name: string) => (isIndex ? "sub-index" : name === "CO" ? "mg/m³" : "µg/m³");
   return (
-    <div
-      className="grid gap-px overflow-hidden rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-border shadow-[var(--aree-shadow-sm)]"
-      style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
-    >
-      {POLLUTANTS.map(({ name, key, waqiKey }) => {
-        const value = data[key] as number | null | undefined;
-        const available = value !== null && value !== undefined;
-        const dominant = data.dominant_pollutant?.toLowerCase() === waqiKey;
-        return (
-          <div
-            key={name}
-            className="bg-aree-surface-1 px-4 py-3.5 transition-colors hover:bg-aree-surface-2"
-            title={
-              available
-                ? `${name}: ${value} ${name === "CO" ? "mg/m³" : "µg/m³"}`
-                : `${name} not reported by this feed`
-            }
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="aree-eyebrow text-[10.5px]">{name}</span>
-              {dominant ? (
-                <span
-                  className="text-[9px] font-bold uppercase tracking-[0.1em] text-aree-accent"
-                  title="Pollutant leading the published index"
-                >
-                  dom
-                </span>
-              ) : null}
-            </div>
+    <div>
+      <div
+        className="grid gap-px overflow-hidden rounded-[var(--aree-radius-md)] border border-aree-border bg-aree-border shadow-[var(--aree-shadow-sm)]"
+        style={{ gridTemplateColumns: "repeat(auto-fit, minmax(112px, 1fr))" }}
+      >
+        {POLLUTANTS.map(({ name, key, waqiKey }) => {
+          const value = data[key] as number | null | undefined;
+          const available = value !== null && value !== undefined;
+          const dominant = data.dominant_pollutant?.toLowerCase() === waqiKey;
+          return (
             <div
-              className={`aree-num aree-tabular mt-2 text-xl font-bold leading-none ${
-                available ? "text-aree-text" : "text-aree-faint"
-              }`}
+              key={name}
+              className="bg-aree-surface-1 px-4 py-3.5 transition-colors hover:bg-aree-surface-2"
+              title={
+                available
+                  ? isIndex
+                    ? `${name}: CPCB sub-index ${value} (AQI scale, not a concentration)`
+                    : `${name}: ${value} ${unitFor(name)}`
+                  : `${name} not reported by this feed`
+              }
             >
-              {available ? value : "—"}
+              <div className="flex items-center gap-1.5">
+                <span className="aree-eyebrow text-[10.5px]">{name}</span>
+                {dominant ? (
+                  <span
+                    className="text-[9px] font-bold uppercase tracking-[0.1em] text-aree-accent"
+                    title="Pollutant leading the published index"
+                  >
+                    dom
+                  </span>
+                ) : null}
+              </div>
+              <div
+                className={`aree-num aree-tabular mt-2 text-xl font-bold leading-none ${
+                  available ? "text-aree-text" : "text-aree-faint"
+                }`}
+              >
+                {available ? value : "—"}
+              </div>
+              <div className="mt-1.5 text-[10.5px] text-aree-dim">
+                {available ? unitFor(name) : "not reported"}
+              </div>
+              {/* The NAAQS limits are concentrations; a sub-index is not comparable. */}
+              {showStandards && !isIndex
+                ? (() => {
+                    const standard = standardFor(waqiKey);
+                    if (!standard) return null;
+                    // Only the ENGINE's numbers are compared. "over" is arithmetic on
+                    // two published values, not a classification: the band and the
+                    // GRAP stage remain the backend's alone.
+                    const over =
+                      available && typeof value === "number" && value > standard.limit;
+                    return (
+                      <div
+                        className="mt-1 text-[10px] font-semibold"
+                        style={{ color: over ? "var(--aree-orange)" : "var(--aree-faint)" }}
+                        title={`National ambient air quality standard, 24-hour average: ${standard.limit} ${standard.unit}`}
+                      >
+                        {over ? "over " : ""}
+                        24h std {standard.limit}
+                      </div>
+                    );
+                  })()
+                : null}
             </div>
-            <div className="mt-1.5 text-[10.5px] text-aree-dim">
-              {available ? (name === "CO" ? "mg/m³" : "µg/m³") : "not reported"}
-            </div>
-            {showStandards
-              ? (() => {
-                  const standard = standardFor(waqiKey);
-                  if (!standard) return null;
-                  // Only the ENGINE's numbers are compared. "over" is arithmetic on
-                  // two published values, not a classification: the band and the
-                  // GRAP stage remain the backend's alone.
-                  const over =
-                    available && typeof value === "number" && value > standard.limit;
-                  return (
-                    <div
-                      className="mt-1 text-[10px] font-semibold"
-                      style={{ color: over ? "var(--aree-orange)" : "var(--aree-faint)" }}
-                      title={`National ambient air quality standard, 24-hour average: ${standard.limit} ${standard.unit}`}
-                    >
-                      {over ? "over " : ""}
-                      24h std {standard.limit}
-                    </div>
-                  );
-                })()
-              : null}
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      <p className="mt-1.5 text-[10.5px] text-aree-dim">
+        {data.pollutant_source
+          ? `${isIndex ? "Sub-indices" : "Concentrations"}: ${data.pollutant_source}${age ? ` · ${age} old` : ""}`
+          : "Concentrations: no source reported a value for this station"}
+      </p>
     </div>
   );
 }
@@ -263,23 +284,32 @@ export function DataSourceTransparency({
         ? "var(--aree-orange)"
         : "var(--aree-green)";
 
+  // The publisher is named from the payload; WAQI-only rows appear only when the
+  // WAQI path actually filled them (direct mode reads CAQM and leaves them null).
+  const source = aqiSourceLabel(data);
+
   return (
     <div className="grid gap-x-8 gap-y-0 grid-cols-[minmax(0,1fr)] sm:grid-cols-2">
+      <KeyValue label="AQI source" value={source} mono={false} />
       <KeyValue label="Station feed ID" value={orDash(data.feed_id)} />
+      {data.waqi_aqi !== null && data.waqi_aqi !== undefined ? (
+        <KeyValue
+          label="WAQI AQI (raw)"
+          value={orDash(data.waqi_aqi)}
+          color={aqiColor(data.waqi_aqi)}
+        />
+      ) : null}
       <KeyValue
-        label="WAQI AQI (raw)"
-        value={orDash(data.waqi_aqi)}
-        color={aqiColor(data.waqi_aqi ?? null)}
-      />
-      <KeyValue
-        label="WAQI timestamp (local)"
+        label="Reading timestamp (local)"
         value={orDash(data.waqi_timestamp_local ?? data.waqi_timestamp)}
       />
-      <KeyValue label="WAQI timestamp (UTC)" value={orDash(data.waqi_timestamp_utc)} />
-      <KeyValue label="WAQI debug.sync" value={orDash(formatUtcIso(data.feed_last_sync))} />
+      <KeyValue label="Reading timestamp (UTC)" value={orDash(data.waqi_timestamp_utc)} />
+      {data.feed_last_sync ? (
+        <KeyValue label="WAQI debug.sync" value={orDash(formatUtcIso(data.feed_last_sync))} />
+      ) : null}
       <KeyValue label="Station name (API)" value={orDash(data.station_name_api)} mono={false} />
       <KeyValue label="Reading age" value={freshnessText} color={freshnessColor} />
-      <KeyValue label="Last API poll" value={`${orDash(data.api_time)} UTC`} />
+      <KeyValue label="Last API poll" value={orDash(engineTime(data.api_time))} />
       <KeyValue label="Ingestion status" value={orDash(data.ingestion_status)} />
       <KeyValue label="Ingestion error" value={orDash(data.ingestion_error, "none")} />
     </div>

@@ -553,8 +553,10 @@ def ventilation_profile(series: list[dict], threshold: float | None,
     day = values[:24]
     bands = [
         ("< 250", 0, 250, "#c0392b"),
-        (f"250-{threshold:.0f}", 250, threshold, "#e07a3f"),
-        (f"{threshold:.0f}-800", threshold, 800, "#e8b04b"),
+        # One decimal on the threshold edge: rounding 465.9 to "466" printed a
+        # band edge that disagreed with the operating point shown beside it.
+        (f"250-{threshold:.1f}", 250, threshold, "#e07a3f"),
+        (f"{threshold:.1f}-800", threshold, 800, "#e8b04b"),
         ("> 800", 800, float("inf"), "#3f7a4e"),
     ]
     distribution = []

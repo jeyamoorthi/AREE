@@ -217,7 +217,7 @@ export interface MechanismLink {
   now?: number;
   low?: number;
   change_pct?: number | null;
-  direction?: "falling" | "steady";
+  direction?: "falling" | "rising" | "steady";
   better_when?: string;
 }
 

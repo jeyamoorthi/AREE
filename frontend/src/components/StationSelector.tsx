@@ -25,7 +25,7 @@ export interface StationSelectorProps {
 export default function StationSelector({
   value,
   onChange,
-  label = "Monitoring sensor node",
+  label = "Station",
   compact = false,
   id = "station-select",
 }: StationSelectorProps) {
@@ -52,7 +52,7 @@ export default function StationSelector({
               ? "No stations available"
               : compact
                 ? "Switch station…"
-                : "— Select a monitoring node —"}
+                : "— Select a station —"}
         </option>
         {stations.map((s) => {
           const look = freshness(s.freshness_status);
@@ -97,7 +97,7 @@ export default function StationSelector({
       {state.data ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-aree-dim">
           <span>
-            {state.data.active} active / {state.data.total} available
+            {state.data.active}/{state.data.total} stations reporting
             {state.data.aging > 0 ? ` · ${state.data.aging} aging` : ""}
             {state.data.stale > 0 ? ` · ${state.data.stale} stale` : ""}
             {state.data.unavailable > 0 ? ` · ${state.data.unavailable} unavailable` : ""}

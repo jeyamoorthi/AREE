@@ -5,7 +5,7 @@ import type { NextConfig } from "next";
  *
  * WHY
  *   `NEXT_PUBLIC_API_URL` is baked into the client bundle, so it names a host the
- *   VIEWER's browser has to resolve. Pointing it at 127.0.0.1:8102 works only while
+ *   VIEWER's browser has to resolve. Pointing it at 127.0.0.1:8000 works only while
  *   the viewer is the same machine that runs the API. Share the dashboard over a
  *   tunnel and every request goes to the visitor's own loopback, which is either
  *   nothing at all or — worse — something else of theirs.
@@ -15,11 +15,16 @@ import type { NextConfig } from "next";
  *   carries the whole application, and the API is never exposed on its own.
  *
  * SECURITY NOTE
- *   This does not add authentication — there is none — it only removes the need to
- *   publish a second origin. Anyone holding the tunnel URL can reach every endpoint
- *   behind it, including case decisions and the policy upload.
+ *   The proxy adds no authentication of its own; it only removes the need to
+ *   publish a second origin. The backend authenticates the write endpoints — case
+ *   decisions and policy upload require a bearer token (backend/api/auth.py) — but
+ *   every read endpoint behind the tunnel URL is open to anyone holding it.
+ *
+ * DEFAULT PORT
+ *   8000, matching run_backend.ps1, the README and the Docker image. Docker and
+ *   tools/demo_tunnel.ps1 set AREE_API_ORIGIN explicitly, so they do not use it.
  */
-const API_ORIGIN = process.env.AREE_API_ORIGIN ?? "http://127.0.0.1:8102";
+const API_ORIGIN = process.env.AREE_API_ORIGIN ?? "http://127.0.0.1:8000";
 
 /**
  * Hosts the dev server will serve its own JS chunks to.

@@ -60,6 +60,9 @@ TREND_HOURS = 24
 # matches the lookback the derived plume feature itself uses.
 FIRE_LOOKBACK_HOURS = 24
 
+# Slack for client clock skew before an `at` counts as "in the future".
+FUTURE_TOLERANCE = timedelta(minutes=5)
+
 
 def _parse_at(raw: Optional[str]) -> Optional[datetime]:
     if not raw:
@@ -72,7 +75,17 @@ def _parse_at(raw: Optional[str]) -> Optional[datetime]:
             detail={"error": "invalid_timestamp",
                     "detail": f"'{raw}' is not an ISO-8601 timestamp.",
                     "hint": "Example: ?at=2024-11-02T06:00:00Z"})
-    return (moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc))
+    moment = moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
+    # A replay of the future has no observations and used to surface as a 424
+    # "observed PM2.5 missing". Reject it as the input error it is. Reading the
+    # clock to VALIDATE is not the gap-filling the module docstring forbids.
+    if moment > datetime.now(timezone.utc) + FUTURE_TOLERANCE:
+        raise HTTPException(
+            status_code=422,
+            detail={"error": "timestamp_in_future",
+                    "detail": f"'{raw}' is in the future; replay needs a past moment.",
+                    "hint": "Omit ?at= for the live outlook."})
+    return moment
 
 
 def _trend(series: list[dict], key: str, hours: int = TREND_HOURS) -> dict:

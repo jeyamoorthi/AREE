@@ -68,7 +68,7 @@ export function NationalDataHealth() {
       level: feedErrors > 0 ? "bad" : unavailable > 0 ? "warn" : "ok",
       status: feedErrors > 0 ? "Errors" : unavailable > 0 ? "Partial" : "Nominal",
       detail: stations
-        ? `${stations.active} of ${stations.total} publishing an AQI`
+        ? `${stations.active}/${stations.total} stations reporting`
         : "Station list unavailable",
     },
     {
@@ -77,19 +77,20 @@ export function NationalDataHealth() {
       status: status?.rag_status?.toUpperCase() ?? "UNKNOWN",
       detail:
         status?.rag_docs_indexed !== null && status?.rag_docs_indexed !== undefined
-          ? `${status.rag_docs_indexed} documents indexed`
+          ? `${status.rag_files_on_disk ?? status.rag_docs_indexed} policy files on disk · ${status.rag_chunks_indexed ?? 0} chunks indexed`
           : "Index state not reported",
     },
     {
       name: "Policy index",
+      // Files on disk are not an index: only chunks count as indexed.
       level:
-        status?.rag_docs_indexed && status.rag_docs_indexed > 0
+        status?.rag_chunks_indexed && status.rag_chunks_indexed > 0
           ? "ok"
           : status
             ? "warn"
             : "unknown",
       status:
-        status?.rag_docs_indexed && status.rag_docs_indexed > 0 ? "Indexed" : "Empty",
+        status?.rag_chunks_indexed && status.rag_chunks_indexed > 0 ? "Indexed" : "Not indexed",
       detail: "Live document store served by the Python RAG pipeline",
     },
     {

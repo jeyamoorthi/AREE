@@ -49,7 +49,7 @@ const TABS: { id: OutlookTab; label: string; hint: string }[] = [
 ];
 
 function Workspace() {
-  const { data, stale, preset, setPreset, tab, setTab } = useOutlookData();
+  const { data, stale, preset, setPreset, tab, setTab, unknownAt } = useOutlookData();
 
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
 
@@ -137,6 +137,17 @@ function Workspace() {
           );
         })}
       </div>
+
+      {unknownAt ? (
+        <p
+          role="status"
+          className="rounded-md border px-3 py-2 text-[11.5px]"
+          style={{ borderColor: C.line, background: C.paper, color: C.body }}
+        >
+          Unknown replay time in URL (<span className="font-mono">{unknownAt}</span>) —
+          showing live. Choose a replay moment above to replace it.
+        </p>
+      ) : null}
 
       {/* Above both tabs, because both are rendering the same cached payload. */}
       {stale && data ? <StaleOutlookBanner stale={stale} issuedAt={data.generated_at} /> : null}

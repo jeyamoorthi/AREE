@@ -138,6 +138,8 @@ def system_status() -> SystemStatus:
         unavailable_stations=counts["unavailable"],
         rag_status=rag.get("store_status"),
         rag_docs_indexed=rag.get("docs_indexed"),
+        rag_files_on_disk=rag.get("docs_indexed"),
+        rag_chunks_indexed=rag.get("chunks_indexed"),
         llm_ready=llm.get("ready"),
         llm_model=llm.get("model"),
         llm_error=llm.get("last_error"),

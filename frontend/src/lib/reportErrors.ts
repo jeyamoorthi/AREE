@@ -42,7 +42,16 @@ export function reportErrorPresentation(error: Error): ReportErrorPresentation {
     };
   }
 
-  if (error instanceof NetworkError) {
+  /* api.downloadReport wraps a failed fetch in NetworkError. A raw fetch TypeError
+     ("Failed to fetch", "NetworkError when attempting to fetch resource", "Load
+     failed") or a NetworkError-named error from another module instance means the
+     same thing, so both are matched rather than falling to the generic branch. */
+  if (
+    error instanceof NetworkError ||
+    error.name === "NetworkError" ||
+    (error instanceof TypeError &&
+      /failed to fetch|networkerror|load failed|network request failed/i.test(error.message))
+  ) {
     return {
       title: "Cannot reach the engine",
       message:

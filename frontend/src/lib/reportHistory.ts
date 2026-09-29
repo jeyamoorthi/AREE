@@ -100,10 +100,34 @@ let cache: ReportRecord[] | null = null;
 /** Stable empty array: the server has no localStorage and must render the same one. */
 const EMPTY: ReportRecord[] = [];
 
+/* Another tab wrote (or cleared) the list. The `storage` event fires only in the
+   OTHER tabs, so this is how a report generated in one tab reaches the table open
+   in another. The cache is dropped and re-read from storage, which is guarded. */
+function onStorage(event: StorageEvent): void {
+  // key === null is localStorage.clear() on the origin.
+  if (event.key !== null && event.key !== STORAGE_KEY) return;
+  cache = null;
+  try {
+    publish(readReportHistory());
+  } catch {
+    // A listener threw; the next render re-reads the snapshot regardless.
+  }
+}
+
 export function subscribeReportHistory(onChange: () => void): () => void {
+  if (listeners.size === 0 && typeof window !== "undefined") {
+    try {
+      window.addEventListener("storage", onStorage);
+    } catch {
+      // No cross-tab sync; this tab still sees its own writes.
+    }
+  }
   listeners.add(onChange);
   return () => {
     listeners.delete(onChange);
+    if (listeners.size === 0 && typeof window !== "undefined") {
+      window.removeEventListener("storage", onStorage);
+    }
   };
 }
 

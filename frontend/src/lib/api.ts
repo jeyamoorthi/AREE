@@ -56,6 +56,13 @@ import type {
 const CONFIGURED_API = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "").trim();
 export const API_URL = CONFIGURED_API ? CONFIGURED_API : "";
 
+/* How the API is named in an unreachable-backend message. With the same-origin
+   default there is no host to print, and "at ." read as a broken sentence. */
+const API_WHERE = API_URL ? `at ${API_URL}` : "(same origin /api)";
+
+/** Deadline for a decision POST — long enough for the server's recompute. */
+const DECISION_TIMEOUT_MS = 20_000;
+
 /* ── the authority session ────────────────────────────────────────────────
  *
  * The backend derives the acting officer from a signed token and ignores any
@@ -326,7 +333,7 @@ async function request<T>(
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
     throw new NetworkError(
-      `Cannot reach the AREE API at ${API_URL}. Is the backend running?`,
+      `Cannot reach the AREE API ${API_WHERE}. Is the backend running?`,
     );
   }
 
@@ -344,6 +351,26 @@ async function request<T>(
 }
 
 const enc = (station: string) => encodeURIComponent(station);
+
+/**
+ * The server's filename from a Content-Disposition header, if it sent one.
+ * RFC 5987 `filename*=UTF-8''…` wins over the plain `filename=` form.
+ */
+function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const extended = /filename\*\s*=\s*(?:[\w-]+'[^']*')?([^;]+)/i.exec(header);
+  if (extended) {
+    try {
+      const name = decodeURIComponent(extended[1].trim().replace(/^"|"$/g, ""));
+      if (name) return name;
+    } catch {
+      /* Malformed encoding: fall through to the plain form. */
+    }
+  }
+  const plain = /filename\s*=\s*("([^"]*)"|[^;]+)/i.exec(header);
+  const name = (plain?.[2] ?? plain?.[1] ?? "").trim();
+  return name || null;
+}
 
 export const api = {
   health: (signal?: AbortSignal) =>
@@ -448,7 +475,7 @@ export const api = {
         body: form,
       });
     } catch {
-      throw new NetworkError(`Cannot reach the AREE API at ${API_URL}.`);
+      throw new NetworkError(`Cannot reach the AREE API ${API_WHERE}.`);
     }
 
     if (!response.ok) {
@@ -471,7 +498,15 @@ export const api = {
    */
   async downloadReport(station: string, signal?: AbortSignal): Promise<void> {
     const url = api.reportPdfUrl(station);
-    const response = await fetch(url, { signal });
+    let response: Response;
+    try {
+      response = await fetch(url, { signal });
+    } catch (err) {
+      // An abort is the caller's (or withTimeout's) to interpret; anything else
+      // means nothing answered, which reportErrors presents as a NetworkError.
+      if (err instanceof DOMException && err.name === "AbortError") throw err;
+      throw new NetworkError(`Cannot reach the AREE API ${API_WHERE}.`);
+    }
     if (!response.ok) {
       let body: ApiErrorBody | null = null;
       try {
@@ -483,16 +518,26 @@ export const api = {
     }
 
     const blob = await response.blob();
+    /* A 200 that is not a PDF (a proxy's HTML error page, say) would otherwise be
+       saved with a .pdf name and fail only when the officer opens it. */
+    if (!blob.type.toLowerCase().includes("application/pdf")) {
+      throw new Error(
+        `The server returned ${blob.type || "an unknown content type"} instead of a PDF.`,
+      );
+    }
+
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = `escalation_report_${station
-      .replace(/[^A-Za-z0-9_.-]+/g, "_")
-      .slice(0, 60)}.pdf`;
+    link.download =
+      filenameFromDisposition(response.headers.get("Content-Disposition")) ??
+      `escalation_report_${station.replace(/[^A-Za-z0-9_.-]+/g, "_").slice(0, 60)}.pdf`;
     document.body.appendChild(link);
     link.click();
     link.remove();
-    URL.revokeObjectURL(objectUrl);
+    // Revoking synchronously can cancel the download in some browsers before it
+    // has read the blob.
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
   },
   // --- PS 26082 ventilation layer -----------------------------------------
   // These endpoints do not depend on the Pathway engine, so they keep working
@@ -539,14 +584,19 @@ export const api = {
     caseId: string,
     body: { decision: "approve" | "reject"; as_of: string; reason?: string },
   ) =>
-    request<CaseRecord>(
-      `/api/cases/${enc(caseId)}/decision`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      },
-      { authenticated: true },
+    // Under a deadline: a hung POST must reject rather than leave the officer
+    // watching a spinner with no idea whether the decision was recorded.
+    withTimeout(DECISION_TIMEOUT_MS, (signal) =>
+      request<CaseRecord>(
+        `/api/cases/${enc(caseId)}/decision`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+          signal,
+        },
+        { authenticated: true },
+      ),
     ),
 
   ventilationOperatingPoint: (mode?: string, signal?: AbortSignal) =>

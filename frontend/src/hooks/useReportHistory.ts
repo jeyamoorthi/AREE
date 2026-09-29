@@ -4,7 +4,8 @@
  * Subscribe to the locally-stored report history.
  *
  * See lib/reportHistory for what is stored and the standing note that this is a
- * browser-local stand-in for durable storage the backend does not have yet.
+ * browser-local stand-in for durable storage the backend does not have yet. The
+ * subscription also listens for `storage` events, so other tabs stay in step.
  */
 
 import { useSyncExternalStore } from "react";

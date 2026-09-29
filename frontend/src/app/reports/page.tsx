@@ -25,7 +25,10 @@ import { freshness } from "@/lib/freshness";
 import { appendReportRecord, newReportId } from "@/lib/reportHistory";
 import { stationLabel } from "@/lib/station";
 import { aqiColor, bandColor, grapColor, modeColor, modeLabel, orDash } from "@/lib/theme";
-import type { ReportMetaResponse, StationDetail } from "@/types";
+import type { ReportMetaResponse, StationDetail, StationSummary } from "@/types";
+
+/** One name for the document, everywhere the UI refers to it. */
+const REPORT_TYPE = "Regulatory escalation brief · PDF";
 
 const REPORT_META_POLL_MS = 30000;
 const REPORT_META_TIMEOUT_MS = 10000;
@@ -87,16 +90,36 @@ export default function ReportsPage() {
       riskCategory: stationDetail.data?.eri_category ?? null,
       eriScore: stationDetail.data?.eri_score ?? null,
       grapStage: stationDetail.data?.grap_stage ?? meta.data?.grap_stage ?? null,
-      reportType: "Regulatory intelligence brief · 4 pages · PDF",
+      reportType: REPORT_TYPE,
     });
   }, [selected, meta.data, stationDetail.data]);
+
+  /* Downloads from the station cards and history rows are recorded too, from the
+     roster summary — the values those rows were showing when the button was pressed. */
+  const recordSummaryDownload = useCallback((summary: StationSummary) => {
+    appendReportRecord({
+      id: newReportId(),
+      station: summary.station,
+      generatedAt: new Date().toISOString(),
+      aqi: summary.aqi,
+      riskCategory: summary.eri_category,
+      eriScore: summary.eri_score,
+      grapStage: summary.grap_stage,
+      reportType: REPORT_TYPE,
+    });
+  }, []);
+
+  const summaryFor = useCallback(
+    (key: string) => stationsState.data?.stations.find((s) => s.station === key) ?? null,
+    [stationsState.data],
+  );
 
   return (
     <div className="max-w-[1400px] mx-auto space-y-8 pb-12">
       <div className="mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-aree-text mb-2">Report Centre</h1>
         <p className="text-sm text-aree-muted max-w-2xl leading-relaxed">
-          Four-page municipal escalation brief: decision snapshot, technical escalation
+          Regulatory escalation brief: decision snapshot, technical escalation
           detail, policy grounding and system transparency.
         </p>
       </div>
@@ -145,8 +168,8 @@ export default function ReportsPage() {
                     <FileText className="text-aree-forest h-4 w-4" aria-hidden />
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-aree-text">Regulatory intelligence brief</div>
-                    <div className="text-xs text-aree-muted">4 pages · PDF</div>
+                    <div className="text-sm font-medium text-aree-text">Regulatory escalation brief</div>
+                    <div className="text-xs text-aree-muted">PDF</div>
                   </div>
                 </div>
                 <p className="text-xs text-aree-dim mt-4 leading-relaxed border-t border-aree-border pt-3">
@@ -155,9 +178,12 @@ export default function ReportsPage() {
               </div>
 
               {selected ? (
+                /* Keyed on the station so a banner or stale dialog from the previous
+                   selection can never sit under the new station's name. */
                 <ReportDownload
+                  key={selected}
                   station={selected}
-                  label="Generate Report"
+                  label="Generate report"
                   onDownloaded={recordDownload}
                   freshnessStatus={stationDetail.data?.freshness_status ?? null}
                   staleSeconds={stationDetail.data?.stale_seconds ?? null}
@@ -280,7 +306,7 @@ export default function ReportsPage() {
                   </div>
                   
                   <div className="bg-aree-surface-2 p-4 rounded-lg border border-aree-border grid gap-3">
-                    <KeyValue label="Generated for" value={meta.data.generated_for} />
+                    <KeyValue label="Generated for" value={stationLabel(meta.data.generated_for)} />
                     {/* The instant the report's reading describes, zone-labelled by
                         the backend. Without it the brief is undated evidence. */}
                     <KeyValue
@@ -307,7 +333,13 @@ export default function ReportsPage() {
 
       <div className="space-y-6">
         <SectionHeader index="02">Report history</SectionHeader>
-        <ReportHistory />
+        <ReportHistory
+          stationFor={summaryFor}
+          onDownloaded={(key) => {
+            const summary = summaryFor(key);
+            if (summary) recordSummaryDownload(summary);
+          }}
+        />
       </div>
 
       <div className="space-y-6">
@@ -361,7 +393,7 @@ export default function ReportsPage() {
                         mono={false}
                         size="sm"
                       />
-                      <Stat label="ERI" value={station.eri_score ?? 0} size="sm" />
+                      <Stat label="ERI" value={station.eri_score ?? "—"} size="sm" />
                     </div>
                     <div className="flex flex-wrap items-center gap-2 pt-4 border-t border-aree-border">
                       <button
@@ -375,12 +407,15 @@ export default function ReportsPage() {
                         station={station.station}
                         variant="ghost"
                         label="PDF"
+                        freshnessStatus={station.freshness_status}
+                        staleSeconds={station.stale_seconds}
+                        onDownloaded={() => recordSummaryDownload(station)}
                       />
                       <Link
                         href={`/stations/${encodeURIComponent(station.station)}`}
                         className="ml-auto text-xs text-aree-muted hover:text-aree-forest transition-colors flex items-center gap-1"
                       >
-                        View Details &rarr;
+                        View details &rarr;
                       </Link>
                     </div>
                   </div>

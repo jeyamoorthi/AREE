@@ -10,9 +10,11 @@
  * Format an age in seconds as a compact operator-facing duration.
  *
  * 2_520   -> "42 m"
+ * 3_600   -> "1 h"        (a zero remainder is dropped, never "1 h 0 m")
  * 4_680   -> "1 h 18 m"
  * 82_547  -> "22 h 56 m"
  * 187_200 -> "2 d 4 h"
+ * 10      -> "< 1 m"      (never "0 m", which reads as "no age at all")
  */
 export function formatDuration(seconds: number | null | undefined): string | null {
   if (seconds === null || seconds === undefined || !Number.isFinite(seconds)) {
@@ -27,9 +29,9 @@ export function formatDuration(seconds: number | null | undefined): string | nul
   const minutes = totalMinutes % 60;
 
   // Beyond a day, minutes stop being useful — days and hours read better.
-  if (days > 0) return `${days} d ${hours} h`;
-  if (hours > 0) return `${hours} h ${minutes} m`;
-  return `${minutes} m`;
+  if (days > 0) return hours > 0 ? `${days} d ${hours} h` : `${days} d`;
+  if (hours > 0) return minutes > 0 ? `${hours} h ${minutes} m` : `${hours} h`;
+  return minutes > 0 ? `${minutes} m` : "< 1 m";
 }
 
 /** Same value with a trailing "behind", for staleness copy. */

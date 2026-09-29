@@ -107,6 +107,12 @@ def test_outlook_rejects_a_malformed_timestamp(http):
     assert status in (400, 422), f"expected a validation error, got {status}"
 
 
+def test_outlook_rejects_a_future_timestamp(http):
+    status, body = http("GET", "/api/aree/outlook?at=2999-01-01T00:00:00Z")
+    assert status == 422
+    assert body.get("error") == "timestamp_in_future"
+
+
 # --- the case workflow ------------------------------------------------------
 
 def test_outlook_proposes_a_case_without_creating_one(http):

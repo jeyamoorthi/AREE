@@ -49,7 +49,7 @@ import {
 } from "lucide-react";
 
 import EvidencePanel, { type CaseEvidence } from "@/components/EvidencePanel";
-import { api, auth, errorMessage } from "@/lib/api";
+import { ApiError, TimeoutError, api, auth, errorMessage } from "@/lib/api";
 import { COLORS } from "@/lib/theme";
 import type { CaseRecord, OutlookDecision, OutlookMode, OutlookRisk } from "@/types";
 
@@ -445,6 +445,12 @@ export default function CaseAuthorisation({
   const [authError, setAuthError] = useState<string | null>(null);
   const [demoRegister, setDemoRegister] = useState(false);
   const [record, setRecord] = useState<CaseRecord | null>(null);
+  /* Set when the server answered 409 already_decided: someone else (or an earlier
+     attempt whose response was lost) recorded the decision first. */
+  const [alreadyDecided, setAlreadyDecided] = useState(false);
+  const usernameId = useId();
+  const passwordId = useId();
+  const reviewId = useId();
 
   /* The pending decision. Non-null means the confirmation dialog is open and NOTHING
      has been sent yet — clicking Approve or Reject now only sets this. */
@@ -530,7 +536,8 @@ export default function CaseAuthorisation({
   const decided =
     record?.status === "APPROVED" ||
     record?.status === "REJECTED" ||
-    decision.case_decided;
+    decision.case_decided ||
+    alreadyDecided;
   const status = record?.status ?? decision.case_status;
 
   /* STEP 1. Opens the dialog and remembers which way. No request is made here, and
@@ -579,7 +586,33 @@ export default function CaseAuthorisation({
       setNote("");
       onDecided();
     } catch (err) {
-      setError(errorMessage(err));
+      if (err instanceof ApiError && err.status === 409 && err.body?.error === "already_decided") {
+        /* Not a failure to retry: the case is final. Show the stored record instead
+           of the form, and let the page refresh its own view of the case. */
+        setPending(null);
+        setReasonChoice("");
+        setNote("");
+        setAlreadyDecided(true);
+        void api
+          .case(caseId)
+          .then(setRecord)
+          .catch(() => {
+            /* The decided banner still renders from the 409 alone. */
+          });
+        onDecided();
+      } else if (err instanceof ApiError && err.status === 401) {
+        // The token expired or was rejected. It is no use to anyone now, and
+        // retrying with it would fail the same way.
+        auth.signOut();
+        setPending(null);
+        setAuthError("Your sign-in has expired. Sign in again to record the decision.");
+      } else if (err instanceof TimeoutError) {
+        setError(
+          "The server did not confirm the decision in time. Retry — a decision that was in fact recorded is refused as a duplicate, not stored twice.",
+        );
+      } else {
+        setError(errorMessage(err));
+      }
     } finally {
       inFlight.current = false;
       setSubmitting(false);
@@ -589,6 +622,7 @@ export default function CaseAuthorisation({
   /* ── decided: the record, not the form ── */
   if (decided) {
     const approved = status === "APPROVED";
+    const known = status === "APPROVED" || status === "REJECTED";
     const act = record?.actions?.find(
       (a) => a.action === "APPROVED" || a.action === "REJECTED",
     );
@@ -611,7 +645,11 @@ export default function CaseAuthorisation({
             className="text-[13px] font-bold uppercase tracking-wide"
             style={{ color: S.ink }}
           >
-            {approved ? "Approved by authority" : "Rejected by authority"}
+            {approved
+              ? "Approved by authority"
+              : known
+                ? "Rejected by authority"
+                : "Decided by authority"}
           </span>
           {act ? (
             <span className="text-[11.5px]" style={{ color: C.body }}>
@@ -621,6 +659,16 @@ export default function CaseAuthorisation({
             </span>
           ) : null}
         </div>
+
+        {alreadyDecided ? (
+          <p
+            role="status"
+            className="mt-1.5 text-[11.5px] font-semibold"
+            style={{ color: C.body }}
+          >
+            This case was already decided — the stored record is shown below.
+          </p>
+        ) : null}
 
         {act?.reason ? (
           <p className="mt-1.5 text-[11.5px] leading-snug" style={{ color: C.body }}>
@@ -672,22 +720,27 @@ export default function CaseAuthorisation({
             Awaiting authority approval
           </span>
         </span>
-        {!open ? (
-          <button
-            type="button"
-            onClick={() => setOpen(true)}
-            aria-expanded={open}
-            aria-label={`Review the evidence behind case ${caseId}`}
-            className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
-            style={{ borderColor: tone.border, color: tone.ink, background: tone.bg }}
-          >
-            Review evidence <ChevronRight className="h-3.5 w-3.5" />
-          </button>
-        ) : null}
+        {/* One persistent disclosure button, so aria-expanded reports both states
+            instead of a control that only exists while collapsed. */}
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-controls={reviewId}
+          className="flex items-center gap-1 rounded-md border px-3 py-1.5 text-[11.5px] font-semibold transition"
+          style={{ borderColor: tone.border, color: tone.ink, background: tone.bg }}
+        >
+          {open ? "Hide evidence" : "Review evidence"}
+          <span className="sr-only"> for case {caseId}</span>
+          <ChevronRight
+            className={`h-3.5 w-3.5 transition-transform ${open ? "rotate-90" : ""}`}
+            aria-hidden
+          />
+        </button>
       </div>
 
       {open ? (
-        <>
+        <div id={reviewId}>
           {/* The basis, restated at the point of decision. An approval screen that
               does not show what is being approved is a button, not a decision. */}
           <dl
@@ -760,7 +813,12 @@ export default function CaseAuthorisation({
                 The acting officer is taken from your session, not from this page.
               </p>
               <div className="mt-2 grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                <label htmlFor={usernameId} className="sr-only">
+                  Operator ID
+                </label>
                 <input
+                  id={usernameId}
+                  name="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   placeholder="Operator ID"
@@ -768,7 +826,12 @@ export default function CaseAuthorisation({
                   className="rounded border px-2 py-1.5 text-[12px]"
                   style={{ borderColor: C.line, color: C.ink }}
                 />
+                <label htmlFor={passwordId} className="sr-only">
+                  Password
+                </label>
                 <input
+                  id={passwordId}
+                  name="password"
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -784,14 +847,17 @@ export default function CaseAuthorisation({
                   type="button"
                   disabled={signingIn || !username.trim() || !password}
                   onClick={() => void signIn()}
-                  className="rounded-md px-4 py-1.5 text-[12px] font-bold text-white transition disabled:opacity-50"
-                  style={{ background: C.ink }}
+                  className="rounded-md px-4 py-1.5 text-[12px] font-bold transition disabled:opacity-50"
+                  // The page background is the inverse of --aree-text in both themes,
+                  // so the label stays legible where a fixed white did not (dark mode).
+                  style={{ background: C.ink, color: "var(--aree-bg)" }}
                 >
                   {signingIn ? "Signing in…" : "Sign in"}
                 </button>
               </div>
               {authError ? (
                 <p
+                  role="alert"
                   className="mt-1.5 text-[11.5px] font-semibold"
                   style={{ color: C.redInk }}
                 >
@@ -862,7 +928,7 @@ export default function CaseAuthorisation({
               </span>
             )}
           </div>
-        </>
+        </div>
       ) : (
         <p className="mt-1.5 text-[11.5px]" style={{ color: C.body }}>
           {decision.recommendation.next_step}

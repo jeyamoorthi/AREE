@@ -13,7 +13,8 @@
    publication delay, so "06:30" beside a forecast issued at 09:30 reads as three
    hours staler than it is.
 
-   Ticks once a minute so "12 min ago" does not freeze while the reader waits.
+   Ticks once a minute so "12 min ago" does not freeze while the reader waits. The
+   ticking age sits outside the live regions, so it is not re-announced.
    ========================================================================== */
 
 import { useEffect, useState } from "react";
@@ -59,14 +60,21 @@ export default function StaleOutlookBanner({
         background: "color-mix(in srgb, var(--aree-amber) 9%, transparent)",
         borderColor: "color-mix(in srgb, var(--aree-amber) 40%, transparent)",
       }}
-      role="status"
-      aria-live="polite"
     >
+      {/* Only what changes with the STATE is inside a live region. The age ticks every
+          minute, and inside the region it re-announced the whole banner each time. */}
       <p className="text-[12.5px] font-bold" style={{ color: "var(--aree-text)" }}>
-        Showing the last live forecast — issued {istHour(issuedAt)} IST, received{" "}
-        {ago(now - stale.savedAt)}
+        <span role="status" aria-live="polite">
+          Showing the last live forecast — issued {istHour(issuedAt)} IST
+        </span>
+        , received {ago(now - stale.savedAt)}
       </p>
-      <p className="mt-1 max-w-[80ch] text-[12px] leading-snug" style={{ color: "var(--aree-body)" }}>
+      <p
+        className="mt-1 max-w-[80ch] text-[12px] leading-snug"
+        style={{ color: "var(--aree-body)" }}
+        role="status"
+        aria-live="polite"
+      >
         {stale.failed
           ? "The live backend is restarting and restoring its observation history. "
           : "The live backend is waking up. "}

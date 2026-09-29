@@ -6,7 +6,7 @@
 <p align="center"><i>Delhi NCR · SIH PS 26082 — Air Pollution–Weather Coupled Forecasting · Team Devengers</i></p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
+  <img src="https://img.shields.io/badge/Python-3.12+-blue?style=for-the-badge&logo=python&logoColor=white" alt="Python"/>
   <img src="https://img.shields.io/badge/FastAPI-API-009688?style=for-the-badge&logo=fastapi&logoColor=white" alt="FastAPI"/>
   <img src="https://img.shields.io/badge/React_19_/_Next.js_16-Dashboard-000000?style=for-the-badge&logo=next.js&logoColor=white" alt="Next.js"/>
   <img src="https://img.shields.io/badge/Open--Meteo-Weather-FF7F0E?style=for-the-badge" alt="Open-Meteo"/>
@@ -1356,11 +1356,23 @@ OPENAQ_API_KEY=…        openaq.org    (NCR composite)
 
 ### Local — works on Windows, no Pathway needed
 
+Python **3.12+** is required (the numpy pin needs it); CI and the Docker image use
+3.13, which is the tested version.
+
 ```bash
 python -m venv venv
 venv\Scripts\activate                 # Linux/macOS: source venv/bin/activate
 pip install -r backend/requirements.txt
-python -m uvicorn backend.api.main:api --port 8077
+python -m uvicorn backend.api.main:api --port 8000     # or: .\run_backend.ps1
+```
+
+**Replay data.** The full store `data/aree.db` is gitignored, so a fresh clone has
+none and the replay presets have nothing to replay. `run_backend.ps1` seeds it from
+the committed 1 MB fixture on first run, exactly as the Docker entrypoint does; when
+starting uvicorn yourself, copy it once (never over an existing store):
+
+```bash
+mkdir -p data && cp -n backend/tests/fixtures/aree_test.db data/aree.db
 ```
 
 ```bash
@@ -1371,7 +1383,7 @@ npx next dev --port 3077
 
 → **http://localhost:3077**. The frontend proxies `/api` to the backend through
 `next.config.ts`, so the API is same-origin and no `NEXT_PUBLIC_API_URL` is needed.
-Set `AREE_API_ORIGIN` only if the backend is not on `127.0.0.1:8102`.
+Set `AREE_API_ORIGIN` only if the backend is not on `127.0.0.1:8000`.
 
 The engine reports `mode: "direct"`; the RAG panel reports itself unavailable rather
 than faking output, and the Gemini explainer reports `ready: false` — both are optional
@@ -1402,7 +1414,7 @@ export AREE_OPERATORS='ncr.officer:authority:pbkdf2_sha256$...;corpus.admin:admi
 export AREE_JWT_SECRET='a-long-random-string'
 
 # 3. sign in
-curl -sX POST localhost:8077/api/auth/token \
+curl -sX POST localhost:8000/api/auth/token \
      -H 'Content-Type: application/json' \
      -d '{"username":"ncr.officer","password":"CHANGE-ME"}'
 ```

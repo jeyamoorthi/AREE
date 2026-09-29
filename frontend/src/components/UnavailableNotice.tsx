@@ -43,15 +43,19 @@ import type { CaptureStatus, ReadinessResponse } from "@/types";
    to the normal, working case. */
 const READY_POLL_MS = 3000;
 
+/* Theme tokens, not literals: the pale fills this used to hard-code were a white
+   slab in the dark theme. The tints are mixed from the semantic ramp, so they
+   follow whichever palette is active. */
 const C = {
-  body: "#44403a",
-  muted: "#7d776c",
-  redInk: "#b91c1c",
-  redBg: "#fdf2f0",
-  redLine: "#f0d5cd",
-  amberInk: "#8a6d1f",
-  amberBg: "#fdf8ec",
-  amberLine: "#f0e6c8",
+  body: "var(--aree-body)",
+  muted: "var(--aree-muted)",
+  redInk: "var(--aree-red)",
+  redBg: "color-mix(in srgb, var(--aree-red) 7%, var(--aree-surface-1))",
+  redLine: "color-mix(in srgb, var(--aree-red) 30%, var(--aree-border))",
+  // Pulled toward the text colour: plain amber is ~3:1 on a pale fill.
+  amberInk: "color-mix(in srgb, var(--aree-amber) 65%, var(--aree-text))",
+  amberBg: "color-mix(in srgb, var(--aree-amber) 8%, var(--aree-surface-1))",
+  amberLine: "color-mix(in srgb, var(--aree-amber) 30%, var(--aree-border))",
 };
 
 export default function UnavailableNotice({
@@ -138,7 +142,9 @@ export default function UnavailableNotice({
           {restoring && !warming ? (
             <>
               The forecast needs a continuous record of recent observations, and{" "}
-              {holes > 0 ? `${holes} hour${holes === 1 ? "" : "s"} are` : "some hours are"}{" "}
+              {holes > 0
+                ? `${holes} hour${holes === 1 ? " is" : "s are"}`
+                : "some hours are"}{" "}
               being restored from archive. This usually takes a minute or two
               after a restart, and the page will load as soon as it completes.
             </>

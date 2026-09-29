@@ -89,8 +89,11 @@ def test_no_token_is_rejected(http):
 
 
 def test_malformed_token_is_rejected(http):
-    status, _ = http("GET", "/api/auth/whoami", token="not-a-jwt")
+    status, body = http("GET", "/api/auth/whoami", token="not-a-jwt")
     assert status == 401
+    # Generic wording: decoder internals stay in the server log.
+    assert body.get("error") == "invalid_token"
+    assert body.get("detail") == "Token is malformed or its signature is invalid."
 
 
 def test_token_signed_with_the_wrong_key_is_rejected(http):

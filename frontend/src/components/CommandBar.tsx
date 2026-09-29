@@ -6,6 +6,7 @@
  */
 
 import Link from "next/link";
+import { useSyncExternalStore } from "react";
 import {
   Clock,
   History,
@@ -21,6 +22,26 @@ import { useSystemStatus } from "@/components/providers/LiveDataProvider";
 import { useOutlookMode } from "@/components/providers/OutlookModeProvider";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import { istClock, istDateTime } from "@/lib/clock";
+
+const noopSubscribe = () => () => {};
+
+function detectMac(): boolean {
+  const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+  const platform = nav.userAgentData?.platform || nav.platform || nav.userAgent || "";
+  return /mac|iphone|ipad|ipod/i.test(platform);
+}
+
+/**
+ * The palette shortcut as this machine spells it: "⌘K" on a Mac, "Ctrl K" elsewhere.
+ *
+ * The server cannot know the platform, so the server snapshot is the non-Mac
+ * spelling and the real one is adopted after hydration — no mismatch warning, and
+ * no setState-in-an-effect to get there.
+ */
+export function useShortcutLabel(): string {
+  const mac = useSyncExternalStore(noopSubscribe, detectMac, () => false);
+  return mac ? "⌘K" : "Ctrl K";
+}
 
 /**
  * Light / dark switch.
@@ -68,28 +89,44 @@ export default function CommandBar({
   const status = statusState.data;
   const { mode: pageMode, asOf } = useOutlookMode();
 
-  const offline = Boolean(statusState.error) && !status;
-  const engineDown = Boolean(status && !status.engine_loaded);
-  const live = Boolean(status?.engine_loaded);
+  const shortcut = useShortcutLabel();
 
-  /* Nothing is known yet: no status, and no error either. The dot and its word are
-     omitted until one of the two arrives. The counts and the clock beside them
-     already render their own "—", which states absence without asserting health. */
-  const stateKnown = Boolean(status) || Boolean(statusState.error);
+  /* THE LATEST POLL DECIDES, NOT THE LAST GOOD ONE.
+     usePolling keeps the last payload when a later request fails, so testing
+     `error && !status` meant a backend that went away after the first answer left
+     this pill green and LIVE for as long as the tab stayed open. Any error on the
+     latest poll now outranks the cached status: with nothing cached it is OFFLINE,
+     with something cached it is a lost connection, and the cached figures are
+     dimmed and dated rather than presented as current. */
+  const failed = Boolean(statusState.error);
+  const offline = failed && !status;
+  const lost = failed && Boolean(status);
+  /* Before the first answer nothing is known. A neutral CONNECTING, not a green
+     LIVE it has not earned and not a red OFFLINE it has no evidence for. */
+  const connecting = !status && !failed;
+  const engineDown = !failed && Boolean(status && !status.engine_loaded);
+  const live = !failed && Boolean(status?.engine_loaded);
 
-  const indicatorColor = offline
+  const indicatorColor = offline || lost
     ? "var(--aree-red)"
-    : engineDown
-      ? "var(--aree-yellow)"
-      : "var(--aree-green)";
+    : connecting
+      ? "var(--aree-dim)"
+      : engineDown
+        ? "var(--aree-yellow)"
+        : "var(--aree-green)";
 
   const indicatorLabel = offline
-    ? "OFFLINE"
-    : engineDown
-      ? "ENGINE DOWN"
-      : "LIVE";
+    ? "Offline"
+    : lost
+      ? "Connection lost"
+      : connecting
+        ? "Connecting"
+        : engineDown
+          ? "Engine offline"
+          : "Live";
 
   const clock = istClock(status?.server_time);
+  const lostDetail = lost ? `Connection lost · last update ${clock ?? "unknown"}` : null;
 
   // The page may be reconstructing a past moment while the engine behind it is live.
   // That is a different question from "is the server up", and the header used to answer
@@ -98,7 +135,9 @@ export default function CommandBar({
 
   return (
     <header
-      className="sticky top-0 z-30 flex h-20 items-center justify-between gap-2 border-b border-aree-border bg-aree-bg/85 px-4 sm:h-[70px] sm:gap-3 sm:px-6 backdrop-blur-md transition-colors"
+      /* Height is --aree-commandbar-height (80px below sm, 70px above), the same
+         token the sticky critical alert offsets itself by, so the two cannot drift. */
+      className="sticky top-0 z-30 flex h-[var(--aree-commandbar-height)] items-center justify-between gap-2 border-b border-aree-border bg-aree-bg/85 px-4 sm:gap-3 sm:px-6 backdrop-blur-md transition-colors"
       aria-label="Command bar"
     >
       {/* Left: Mobile Menu Trigger + compact brand (both below lg only) + Search.
@@ -137,6 +176,7 @@ export default function CommandBar({
             onClick={onOpenSearch}
             className="flex h-8 min-w-0 flex-1 items-center justify-start gap-2.5 rounded-lg border border-aree-border bg-aree-surface-1 px-3 py-1.5 text-xs text-aree-muted shadow-2xs transition-all hover:border-aree-border-strong hover:bg-aree-surface-2 hover:text-aree-text cursor-pointer sm:w-[190px] sm:flex-none md:w-[240px] lg:w-[280px]"
             aria-label="Search station, policy, or event"
+            aria-keyshortcuts="Control+K Meta+K"
           >
             <Search className="h-3.5 w-3.5 text-aree-dim" aria-hidden="true" />
             {/* Two labels, one box. Below md the full phrase does not fit, and hiding
@@ -150,7 +190,7 @@ export default function CommandBar({
               Search station, policy, event…
             </span>
             <kbd className="hidden sm:inline-flex ml-auto shrink-0 items-center rounded border border-aree-border bg-aree-surface-3 px-1.5 py-0.5 font-mono text-[10px] text-aree-dim">
-              Ctrl K
+              {shortcut}
             </kbd>
           </button>
         )}
@@ -212,42 +252,41 @@ export default function CommandBar({
           aria-live="polite"
         >
           {/* Status Dot + Label */}
-          {stateKnown ? (
-            <>
-              <span className="flex items-center gap-1.5">
-                <span
-                  className={`h-2 w-2 rounded-full ${live ? "aree-live-dot" : ""}`}
-                  style={{ backgroundColor: indicatorColor }}
-                  aria-hidden="true"
-                />
-                <span
-                  className="hidden text-[11px] font-bold tracking-wider sm:inline"
-                  style={{ color: indicatorColor }}
-                >
-                  {indicatorLabel}
-                </span>
-                <span className="sr-only">{indicatorLabel}</span>
-              </span>
-
-              <span className="hidden h-3.5 w-px bg-aree-border sm:block" aria-hidden="true" />
-            </>
-          ) : null}
-
-          {/* Active / Known stations count */}
-          <span
-            className="aree-num text-aree-body text-[11px] font-semibold"
-            title="Active stations / Known stations"
-          >
-            {status ? `${status.active_stations}/${status.known_stations}` : "—/—"}
-            <span className="hidden sm:inline"> ONLINE</span>
+          <span className="flex items-center gap-1.5" title={lostDetail ?? undefined}>
+            <span
+              className={`h-2 w-2 rounded-full ${live ? "aree-live-dot" : ""}`}
+              style={{ backgroundColor: indicatorColor }}
+              aria-hidden="true"
+            />
+            <span
+              className="hidden text-[11px] font-bold tracking-wider uppercase sm:inline"
+              style={{ color: indicatorColor }}
+              aria-hidden="true"
+            >
+              {indicatorLabel}
+            </span>
+            <span className="sr-only">{lostDetail ?? indicatorLabel}</span>
           </span>
 
-          {/* IST Server Clock */}
+          <span className="hidden h-3.5 w-px bg-aree-border sm:block" aria-hidden="true" />
+
+          {/* Stations reporting / known. Dimmed when the figure is a cached one. */}
+          <span
+            className={`aree-num text-aree-body text-[11px] font-semibold ${lost ? "opacity-50" : ""}`}
+            title="Stations reporting / known stations"
+          >
+            {status ? `${status.active_stations}/${status.known_stations}` : "—/—"}
+            <span className="hidden sm:inline"> reporting</span>
+          </span>
+
+          {/* IST Server Clock — or, once the connection is lost, when it last spoke. */}
           <span className="hidden h-3.5 w-px bg-aree-border xl:block" aria-hidden="true" />
 
-          <span className="aree-num text-aree-muted text-[11px] font-medium hidden xl:flex items-center gap-1">
+          <span
+            className={`aree-num text-aree-muted text-[11px] font-medium hidden xl:flex items-center gap-1 ${lost ? "opacity-60" : ""}`}
+          >
             <Clock className="h-3 w-3 text-aree-dim" aria-hidden="true" />
-            {clock ?? "—"}
+            {lost ? `Last update ${clock ?? "—"}` : (clock ?? "—")}
           </span>
         </div>
         )}

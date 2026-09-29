@@ -22,7 +22,7 @@
  *   (preset 0), and the URL is applied immediately afterwards.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useSyncExternalStore } from "react";
 
 export interface PresetLike {
   label: string;
@@ -30,14 +30,23 @@ export interface PresetLike {
   at?: string;
 }
 
+/**
+ * Returns the `?at=` from the address bar when it matches no preset, else null. The
+ * page is then showing live while the URL still names another moment, and it has to
+ * say so rather than let the two disagree silently.
+ */
 export function useSyncPresetToUrl(
   presets: readonly PresetLike[],
   preset: number,
   setPreset: (index: number) => void,
-): void {
+): string | null {
   // Guards the first effect run: without it, mounting would immediately overwrite the
   // incoming ?at= with the default preset's (absent) value.
   const applied = useRef(false);
+  // The unrecognised `at`, kept in the URL until the reader picks a moment themselves.
+  const unknownRef = useRef<string | null>(null);
+  // The preset in force when the URL was read; moving off it is the reader's choice.
+  const mountedPreset = useRef(preset);
 
   // 1. URL -> state, once on mount.
   useEffect(() => {
@@ -49,17 +58,28 @@ export function useSyncPresetToUrl(
 
     const index = presets.findIndex((p) => p.at === at);
     if (index >= 0 && index !== preset) {
+      mountedPreset.current = index;
       setPreset(index);
+    } else if (index < 0) {
+      // An `at` that matches no preset is left alone rather than silently rounded to
+      // the nearest one: quietly showing a different moment than the URL names is
+      // exactly the class of substitution this project is careful to avoid elsewhere.
+      // Left alone means the URL too — effect 2 must not delete it — and the page is
+      // told, so it can say it is showing live instead.
+      unknownRef.current = at;
     }
-    // An `at` that matches no preset is left alone rather than silently rounded to the
-    // nearest one: quietly showing a different moment than the URL names is exactly the
-    // class of substitution this project is careful to avoid elsewhere.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // 2. State -> URL, on every change after mount.
   useEffect(() => {
     if (!applied.current) return;
+
+    if (unknownRef.current !== null) {
+      // Still on the moment we fell back to: keep the reader's URL as they wrote it.
+      if (preset === mountedPreset.current) return;
+      unknownRef.current = null;
+    }
 
     const at = presets[preset]?.at;
     const url = new URL(window.location.href);
@@ -72,4 +92,18 @@ export function useSyncPresetToUrl(
       window.history.replaceState(null, "", url.toString());
     }
   }, [presets, preset]);
+
+  /* Read from the address bar rather than held in state, so reporting it is not a
+     setState inside the mount effect. Once the reader picks a replay the URL is
+     rewritten, and picking Live afterwards finds no `at` left to report. */
+  const urlAt = useSyncExternalStore(
+    noopSubscribe,
+    () => new URLSearchParams(window.location.search).get("at"),
+    () => null,
+  );
+  return urlAt !== null && preset === 0 && !presets.some((p) => p.at === urlAt)
+    ? urlAt
+    : null;
 }
+
+const noopSubscribe = () => () => {};

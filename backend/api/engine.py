@@ -404,4 +404,9 @@ def station_state(station: str) -> Dict[str, Any]:
 def generate_report(station: str, state: Dict[str, Any]) -> bytes:
     _require()
     from report_generator import generate_escalation_report
-    return generate_escalation_report(station, state, carbon_state())
+    try:
+        policy = rag_state()
+    except Exception:                                       # noqa: BLE001
+        policy = None       # the report degrades to per-station rag fields
+    return generate_escalation_report(station, state, carbon_state(),
+                                      policy_state=policy)
