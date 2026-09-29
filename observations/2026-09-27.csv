@@ -32,3 +32,90 @@ Anand Lok,2026-09-27T21:00:00Z,16.1,28.5587,77.21886,1,live:OpenAQ v3 (CPCB / DP
 NASA GSFC Rutgers Calib. N8,2026-09-27T21:00:00Z,11.1,28.31733,76.91603,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
 "Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T21:00:00Z,9.7,28.40240847053802,77.08477464826682,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
 "Santushti Apartments, Vasant Kunj",2026-09-27T21:00:00Z,6.0,28.5266,77.1493,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
+GK1 (Oberoi Terrace),2026-09-27T09:00:00Z,22.4,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T10:00:00Z,14.1,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T11:00:00Z,12.7,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T14:00:00Z,7.6,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T15:00:00Z,9.4,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T16:00:00Z,19.8,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T19:00:00Z,19.3,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T20:00:00Z,27.6,28.5500047,77.2431058,1,openaq:hourly
+GK1 (Oberoi Terrace),2026-09-27T22:00:00Z,33.6,28.5500047,77.2431058,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T04:00:00Z,13.1,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T05:00:00Z,13.3,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T06:00:00Z,16.0,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T08:00:00Z,15.7,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T09:00:00Z,16.4,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T10:00:00Z,15.0,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T11:00:00Z,14.8,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T14:00:00Z,11.8,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T15:00:00Z,12.6,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T16:00:00Z,11.5,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T19:00:00Z,10.7,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T20:00:00Z,11.3,28.31733,76.91603,1,openaq:hourly
+NASA GSFC Rutgers Calib. N8,2026-09-27T22:00:00Z,14.4,28.31733,76.91603,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T04:00:00Z,9.8,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T05:00:00Z,16.4,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T06:00:00Z,31.8,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T08:00:00Z,21.9,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T09:00:00Z,24.1,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T10:00:00Z,24.2,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T11:00:00Z,18.2,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T14:00:00Z,18.2,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T15:00:00Z,16.1,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T16:00:00Z,14.3,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T19:00:00Z,7.2,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T20:00:00Z,6.0,28.5266,77.1493,1,openaq:hourly
+"Santushti Apartments, Vasant Kunj",2026-09-27T22:00:00Z,17.2,28.5266,77.1493,1,openaq:hourly
+Air Check,2026-09-27T04:00:00Z,35.5,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T05:00:00Z,40.3,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T06:00:00Z,25.5,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T08:00:00Z,26.3,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T09:00:00Z,25.2,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T10:00:00Z,13.3,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T11:00:00Z,11.8,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T14:00:00Z,4.5,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T15:00:00Z,17.2,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T16:00:00Z,17.6,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T19:00:00Z,9.1,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T20:00:00Z,21.4,28.623056,77.234167,1,openaq:hourly
+Air Check,2026-09-27T22:00:00Z,37.7,28.623056,77.234167,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T04:00:00Z,42.9,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T05:00:00Z,40.3,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T06:00:00Z,38.1,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T08:00:00Z,38.6,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T09:00:00Z,35.0,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T10:00:00Z,32.4,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T11:00:00Z,32.0,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T14:00:00Z,33.5,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T15:00:00Z,31.5,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T16:00:00Z,34.8,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T19:00:00Z,35.3,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T20:00:00Z,40.4,28.583491,77.431714,1,openaq:hourly
+"Sector 1, Noida extension",2026-09-27T22:00:00Z,41.8,28.583491,77.431714,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T04:00:00Z,35.2,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T05:00:00Z,33.6,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T06:00:00Z,24.1,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T08:00:00Z,27.8,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T09:00:00Z,27.7,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T10:00:00Z,30.5,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T11:00:00Z,24.6,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T14:00:00Z,25.2,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T15:00:00Z,23.2,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T16:00:00Z,19.8,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T19:00:00Z,5.8,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T20:00:00Z,9.7,28.40240847053802,77.08477464826682,1,openaq:hourly
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-09-27T22:00:00Z,30.1,28.40240847053802,77.08477464826682,1,openaq:hourly
+Anand Lok,2026-09-27T04:00:00Z,17.2,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T05:00:00Z,19.6,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T06:00:00Z,20.1,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T08:00:00Z,9.3,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T09:00:00Z,11.7,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T10:00:00Z,8.8,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T11:00:00Z,5.7,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T14:00:00Z,10.3,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T15:00:00Z,5.6,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T16:00:00Z,14.1,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T19:00:00Z,16.2,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T20:00:00Z,16.1,28.5587,77.21886,1,openaq:hourly
+Anand Lok,2026-09-27T22:00:00Z,21.4,28.5587,77.21886,1,openaq:hourly
