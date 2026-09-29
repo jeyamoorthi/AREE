@@ -122,6 +122,12 @@ def system_status() -> SystemStatus:
     except Exception:  # noqa: BLE001
         llm = {}
 
+    pollutant_sources = []
+    try:
+        pollutant_sources = engine.pollutant_sources()
+    except Exception:  # noqa: BLE001 - status must never fail
+        pollutant_sources = []
+
     return SystemStatus(
         engine_loaded=True,
         engine_error=None,
@@ -143,6 +149,7 @@ def system_status() -> SystemStatus:
         llm_ready=llm.get("ready"),
         llm_model=llm.get("model"),
         llm_error=llm.get("last_error"),
+        pollutant_sources=pollutant_sources,
         server_time=now,
     )
 

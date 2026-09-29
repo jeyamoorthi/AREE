@@ -217,6 +217,11 @@ def multi_window_cache() -> Dict[str, Any]:
     return getattr(_require(), "_multi_window_cache", {})
 
 
+def pollutant_sources() -> List[Dict[str, Any]]:
+    """Last outcome of each per-pollutant source; empty where the engine keeps none."""
+    return list(getattr(_require(), "pollutant_source_status", {}).values())
+
+
 def rag_state() -> Dict[str, Any]:
     _require()
     if _status.get("mode") == "direct":

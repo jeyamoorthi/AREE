@@ -352,6 +352,27 @@ def _from_openaq(now: datetime) -> list[dict]:
     return ncr_observations.fetch_ncr_pollutants(now)
 
 
+def _cpcb_live_route() -> dict:
+    from ingestion import cpcb_live
+    return dict(cpcb_live.last_route)
+
+
+# Last outcome per pollutant source, published by /api/system/status. A blank
+# tile on the hosted dashboard is otherwise explainable only from the host's
+# logs, which is how "works locally, not in production" went undiagnosed.
+pollutant_source_status: dict[str, dict] = {}
+
+
+def _record_source(source: str, now: datetime, detail=None, **fields) -> None:
+    entry = {"source": source, "at": _iso(now), **fields}
+    if detail:
+        try:
+            entry["route"] = detail()
+        except Exception:                                   # noqa: BLE001
+            pass
+    pollutant_source_status[source] = entry
+
+
 # Tried in order; each fills only the stations the ones before it left empty.
 #
 # data.gov.in's quantity is recorded as "concentration" because that is what
@@ -360,9 +381,10 @@ def _from_openaq(now: datetime) -> list[dict]:
 # measured on CPCB's copy while data.gov.in was down, and a unit is not
 # relabelled on inference alone.
 _POLLUTANT_SOURCES = (
-    ("CPCB CAAQMS (airquality.cpcb.gov.in)", "sub_index", _from_cpcb_live),
-    ("CPCB CAAQMS via data.gov.in", "concentration", _from_data_gov_in),
-    ("OpenAQ v3 (CPCB mirror)", "concentration", _from_openaq),
+    ("CPCB CAAQMS (airquality.cpcb.gov.in)", "sub_index", _from_cpcb_live,
+     _cpcb_live_route),
+    ("CPCB CAAQMS via data.gov.in", "concentration", _from_data_gov_in, None),
+    ("OpenAQ v3 (CPCB mirror)", "concentration", _from_openaq, None),
 )
 
 
@@ -388,16 +410,21 @@ def _attach_pollutants(stations: list[dict], on_progress=None) -> int:
     """
     now = datetime.now(timezone.utc)
     matched = 0
-    for source, quantity, fetch in _POLLUTANT_SOURCES:
+    for source, quantity, fetch, detail in _POLLUTANT_SOURCES:
         pending = [st for st in stations if not st.get("pollutants_available")]
         if not pending:
             break
         try:
-            found = _join_pollutants(pending, fetch(now), source, now,
+            rows = fetch(now)
+            found = _join_pollutants(pending, rows, source, now,
                                      quantity=quantity)
         except Exception as exc:                            # noqa: BLE001
             log.warning("pollutants from %s unavailable: %s", source, exc)
+            _record_source(source, now, detail, ok=False,
+                           error=f"{type(exc).__name__}: {exc}"[:500])
             continue
+        _record_source(source, now, detail, ok=True, rows=len(rows),
+                       stations_filled=found)
         if found:
             log.info("pollutants: %d stations filled from %s", found, source)
             matched += found

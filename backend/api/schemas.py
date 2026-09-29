@@ -133,6 +133,10 @@ class SystemStatus(BaseModel):
     llm_ready: Optional[bool] = None
     llm_model: Optional[str] = None
     llm_error: Optional[str] = None
+    #: Last outcome of each per-pollutant source (direct mode): ok, error, how
+    #: many stations it filled, and for CPCB which route - direct or relay -
+    #: answered. Empty until the first enrichment has run.
+    pollutant_sources: List[Dict[str, Any]] = Field(default_factory=list)
     server_time: str
 
 

@@ -262,6 +262,73 @@ def test_cpcb_live_feed_pivots_to_ncr_station_rows(monkeypatch):
     assert row["observed_at"] == datetime(2026, 9, 29, 14, 30, tzinfo=timezone.utc)
 
 
+def test_cpcb_live_falls_back_to_the_relay_when_direct_fails(monkeypatch):
+    import requests as _requests
+    from ingestion import cpcb_live
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return _CPCB_LIVE_PAYLOAD
+
+    def fake_get(url, *a, **k):
+        if url == cpcb_live.FEED_URL:
+            raise _requests.ConnectTimeout("connect timed out")
+        assert url == cpcb_live.RELAY_URL
+        return _Resp()
+
+    monkeypatch.setattr(cpcb_live, "RELAY_URL", "https://relay.example/cpcb-feed")
+    monkeypatch.setattr(cpcb_live.requests, "get", fake_get)
+    monkeypatch.setitem(cpcb_live._cache, "value", None)
+
+    rows = cpcb_live.fetch_ncr()
+    assert [r["station"] for r in rows] == ["Teri Gram, Gurugram - HSPCB"]
+    assert cpcb_live.last_route["via"] == "relay"
+    assert "ConnectTimeout" in cpcb_live.last_route["errors"]["direct"]
+
+
+def test_cpcb_live_rejects_a_relay_error_page(monkeypatch):
+    from ingestion import cpcb_live
+
+    class _Resp:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"error": "cpcb_feed_unavailable"}
+
+    monkeypatch.setattr(cpcb_live.requests, "get", lambda *a, **k: _Resp())
+    monkeypatch.setitem(cpcb_live._cache, "value", None)
+
+    with pytest.raises(RuntimeError, match="not the CPCB station feed"):
+        cpcb_live.fetch_ncr()
+    assert cpcb_live.last_route["via"] is None
+
+
+def test_each_pollutant_source_outcome_is_published(monkeypatch):
+    import fallback_engine as fe
+    from ingestion import cpcb_live, cpcb_stream, ncr_observations
+
+    def down(*_a, **_k):
+        raise RuntimeError("503 Service Temporarily Unavailable")
+
+    now = datetime.now(timezone.utc)
+    monkeypatch.setattr(fe, "pollutant_source_status", {})
+    monkeypatch.setattr(cpcb_live, "fetch_ncr", down)
+    monkeypatch.setattr(cpcb_stream, "fetch_ncr", down)
+    monkeypatch.setattr(ncr_observations, "fetch_ncr_pollutants", lambda _now=None: [
+        {"station": "A", "pm25": 42.0, "observed_at": now}])
+
+    fe._attach_pollutants([{"station": "A"}])
+    status = {s["source"]: s for s in fe.pollutant_source_status.values()}
+    cpcb = status["CPCB CAAQMS (airquality.cpcb.gov.in)"]
+    assert cpcb["ok"] is False and "503" in cpcb["error"] and "route" in cpcb
+    assert status["OpenAQ v3 (CPCB mirror)"]["ok"] is True
+    assert status["OpenAQ v3 (CPCB mirror)"]["stations_filled"] == 1
+
+
 def test_cpcb_live_comes_first_and_is_labelled_a_sub_index(monkeypatch):
     import fallback_engine as fe
     from ingestion import cpcb_live, cpcb_stream, ncr_observations

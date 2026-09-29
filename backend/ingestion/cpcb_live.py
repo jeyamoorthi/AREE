@@ -32,11 +32,22 @@ WHAT THE NUMBERS ARE: SUB-INDICES, NOT CONCENTRATIONS
     dashboard labels it as such. Inverting the breakpoints back to ug/m3 is not
     done, for the reason caqm_stream gives: it would fabricate a precision the
     source never published.
+
+WHY THERE IS A RELAY
+    The hosted backend (Render, Singapore) got nothing from this feed while the
+    same request succeeded from a machine in India and from a server outside
+    India - so it is not a blanket geo-block, and it is not the code. The
+    frontend's host serves the same bytes at /relay/cpcb-feed
+    (frontend/src/app/relay/cpcb-feed/route.ts), and this module falls back to
+    it when the direct read fails. The relay takes no parameters: it can only
+    ever fetch this one public feed. `last_route` records which path answered
+    and why the other did not, and /api/system/status publishes it.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timezone
 from typing import Any, Iterator
 
@@ -47,8 +58,19 @@ from .cpcb_stream import REQUEST_HEADERS, pivot_stations
 log = logging.getLogger("aree.cpcb_live")
 
 FEED_URL = "https://airquality.cpcb.gov.in/caaqms/iit_rss_feed_with_coordinates"
+# Empty string disables the relay.
+RELAY_URL = os.getenv("AREE_CPCB_RELAY_URL",
+                      "https://aree.vercel.app/relay/cpcb-feed")
 SOURCE = "CPCB CAAQMS (airquality.cpcb.gov.in)"
 QUANTITY = "sub_index"
+
+# (connect, read). A host that cannot reach CPCB tends to fail at connect, so
+# that half is kept short: it is paid on every uncached pull before the relay.
+TIMEOUT = (10, 30)
+
+# Which route answered the last pull ("direct" / "relay", None when neither),
+# and the error from each route that failed on the way.
+last_route: dict[str, Any] = {}
 
 # Same NCR domain as cpcb_stream.fetch_ncr and caqm_stream, so all three
 # sources describe one airshed.
@@ -85,6 +107,31 @@ def _records(payload: dict) -> Iterator[dict]:
                     }
 
 
+def _download() -> dict:
+    """The feed's JSON, direct from CPCB or, failing that, via the relay."""
+    routes = [("direct", FEED_URL)] + ([("relay", RELAY_URL)] if RELAY_URL else [])
+    errors: dict[str, str] = {}
+    for name, url in routes:
+        try:
+            r = requests.get(url, headers=REQUEST_HEADERS, timeout=TIMEOUT)
+            r.raise_for_status()
+            payload = r.json()
+            # An error page served with a 200 must not pass for "no stations".
+            if not isinstance(payload, dict) or "country" not in payload:
+                raise ValueError("response is not the CPCB station feed")
+        except Exception as exc:                            # noqa: BLE001
+            errors[name] = f"{type(exc).__name__}: {exc}"[:300]
+            log.warning("CPCB live feed: %s route failed - %s", name, errors[name])
+            continue
+        last_route.clear()
+        last_route.update(via=name, errors=errors)
+        return payload
+
+    last_route.clear()
+    last_route.update(via=None, errors=errors)
+    raise RuntimeError("; ".join(f"{k}: {v}" for k, v in errors.items()))
+
+
 def fetch_ncr(now: datetime | None = None) -> list[dict]:
     """Every NCR station in the feed, one row per station, pollutants as keys.
 
@@ -96,11 +143,8 @@ def fetch_ncr(now: datetime | None = None) -> list[dict]:
     if cached is not None and at and (now - at).total_seconds() < _TTL_SECONDS:
         return cached
 
-    r = requests.get(FEED_URL, headers=REQUEST_HEADERS, timeout=30)
-    r.raise_for_status()
-
     inside = [
-        st for st in pivot_stations(_records(r.json()))
+        st for st in pivot_stations(_records(_download()))
         if st["lat"] is not None and st["lon"] is not None
         and NCR_LAT[0] <= st["lat"] <= NCR_LAT[1]
         and NCR_LON[0] <= st["lon"] <= NCR_LON[1]
