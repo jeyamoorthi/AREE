@@ -1,0 +1,7 @@
+station_id,timestamp,pm25,latitude,longitude,n_stations,source
+"Sector 1, Noida extension",2026-10-01T00:00:00Z,80.1,28.583491,77.431714,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
+Air Check,2026-10-01T00:00:00Z,79.7,28.623056,77.234167,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
+GK1 (Oberoi Terrace),2026-10-01T00:00:00Z,77.6,28.5500047,77.2431058,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
+Anand Lok,2026-10-01T00:00:00Z,68.1,28.5587,77.21886,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
+"Uptitude Cloud Pvt Ltd - Sector 62, GGN",2026-10-01T00:00:00Z,63.7,28.40240847053802,77.08477464826682,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
+"Santushti Apartments, Vasant Kunj",2026-10-01T00:00:00Z,55.2,28.5266,77.1493,1,live:OpenAQ v3 (CPCB / DPCC / IMD / UPPCB / HSPCB / RSPCB)
