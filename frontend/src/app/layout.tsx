@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 
 import AppShell from "@/components/AppShell";
 import { THEME_CHROME_COLORS, THEME_STORAGE_KEY } from "@/lib/themeMode";
@@ -90,6 +91,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="bg-aree-bg text-aree-body flex min-h-full flex-col">
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOTSTRAP }} />
         <AppShell>{children}</AppShell>
+        <Analytics />
       </body>
     </html>
   );
